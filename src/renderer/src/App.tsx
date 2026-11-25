@@ -1,7 +1,26 @@
 import { ChevronLeft, ChevronRight, PanelLeft, Search, SearchX } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import {
+  contentOf,
+  currentAccount,
+  type GithubProfile,
+  type SessionSettings
+} from '../../shared/model'
+import { AccountDialog } from './components/AccountDialog'
+import { AccountSwitcher } from './components/AccountSwitcher'
 import { ConfirmDialog, NewProjectDialog, SearchDialog } from './components/Dialogs'
-import { EmptyPage, HomePage, InboxPage, ItemPage, ProjectPage, PullRequestsPage } from './components/Pages'
+import {
+  AccountsPage,
+  BotsPage,
+  CustomizePage,
+  EmptyPage,
+  HomePage,
+  ItemPage,
+  ProjectPage,
+  PullRequestsPage,
+  WorkItemsPage
+} from './components/Pages'
+import { SessionPage } from './components/SessionPage'
 import { Sidebar } from './components/Sidebar'
 import { useNavigation, type View } from './navigation'
 import { useWorkspace } from './useWorkspace'
@@ -9,14 +28,18 @@ import { useWorkspace } from './useWorkspace'
 type OpenDialog =
   | { kind: 'new-project' }
   | { kind: 'search' }
+  | { kind: 'add-account' }
+  | { kind: 'edit-account'; accountId: string }
+  | { kind: 'delete-account'; accountId: string }
   | { kind: 'delete-project'; projectId: string }
   | { kind: 'delete-item'; itemId: string }
+  | { kind: 'delete-session'; sessionId: string }
 
 const now = () => new Date().toISOString()
 
 export function App() {
   const { workspace, error, dispatch } = useWorkspace()
-  const { view, go, back, forward, canGoBack, canGoForward } = useNavigation()
+  const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
 
@@ -41,6 +64,9 @@ export function App() {
     )
   }
 
+  const account = currentAccount(workspace)
+  // Show only the current account, so that the accounts stay apart.
+  const content = contentOf(workspace, account.id)
   const closeDialog = () => setDialog(null)
   const openNewProject = () => setDialog({ kind: 'new-project' })
   const goFromDialog = (next: View) => {
@@ -48,12 +74,26 @@ export function App() {
     go(next)
   }
 
+  const openAddAccount = () => setDialog({ kind: 'add-account' })
+
+  const addAccount = (label: string, github: GithubProfile | null) => {
+    dispatch({ type: 'account-added', id: crypto.randomUUID(), label, github })
+    closeDialog()
+    reset()
+  }
+
+  const switchAccount = (id: string) => {
+    if (id === account.id) return
+    dispatch({ type: 'account-switched', id })
+    // The history belongs to the other account.
+    reset()
+  }
+
   const addProject = (name: string) => {
     const id = crypto.randomUUID()
     dispatch({ type: 'project-added', id, name, at: now() })
     closeDialog()
-    // From Home, stay on Home so that a typed request is not lost.
-    if (view.kind !== 'home') go({ kind: 'project', projectId: id })
+    go({ kind: 'project', projectId: id })
   }
 
   const addItem = (projectId: string, request: { title: string; description: string }) => {
@@ -62,23 +102,58 @@ export function App() {
     go({ kind: 'item', itemId: id })
   }
 
+  const addSession = (prompt: string, settings: SessionSettings) => {
+    const id = crypto.randomUUID()
+    dispatch({ type: 'session-added', id, prompt, settings, at: now() })
+    go({ kind: 'session', sessionId: id })
+  }
+
   const renderPage = () => {
     switch (view.kind) {
       case 'home':
         return (
-          <HomePage projects={workspace.projects} onNewProject={openNewProject} onAddItem={addItem} />
+          <HomePage
+            key={account.id}
+            sessions={content.sessions}
+            githubLogin={account.github?.login ?? null}
+            onStart={addSession}
+          />
         )
-      case 'inbox':
-        return <InboxPage />
       case 'pulls':
         return <PullRequestsPage />
+      case 'items':
+        return <WorkItemsPage content={content} onGo={go} />
+      case 'bots':
+        return <BotsPage />
+      case 'customize':
+        return <CustomizePage />
+      case 'accounts':
+        return (
+          <AccountsPage
+            workspace={workspace}
+            onAdd={openAddAccount}
+            onSwitch={switchAccount}
+            onEdit={(accountId) => setDialog({ kind: 'edit-account', accountId })}
+            onDelete={(accountId) => setDialog({ kind: 'delete-account', accountId })}
+          />
+        )
+      case 'session': {
+        const session = content.sessions.find((candidate) => candidate.id === view.sessionId)
+        if (!session) break
+        return (
+          <SessionPage
+            session={session}
+            onDelete={() => setDialog({ kind: 'delete-session', sessionId: session.id })}
+          />
+        )
+      }
       case 'project': {
-        const project = workspace.projects.find((candidate) => candidate.id === view.projectId)
+        const project = content.projects.find((candidate) => candidate.id === view.projectId)
         if (!project) break
         return (
           <ProjectPage
             project={project}
-            items={workspace.workItems.filter((item) => item.projectId === project.id)}
+            items={content.workItems.filter((item) => item.projectId === project.id)}
             onAddItem={addItem}
             onGo={go}
             onDelete={() => setDialog({ kind: 'delete-project', projectId: project.id })}
@@ -86,8 +161,8 @@ export function App() {
         )
       }
       case 'item': {
-        const item = workspace.workItems.find((candidate) => candidate.id === view.itemId)
-        const project = workspace.projects.find((candidate) => candidate.id === item?.projectId)
+        const item = content.workItems.find((candidate) => candidate.id === view.itemId)
+        const project = content.projects.find((candidate) => candidate.id === item?.projectId)
         if (!item || !project) break
         return (
           <ItemPage
@@ -110,10 +185,43 @@ export function App() {
       case 'new-project':
         return <NewProjectDialog onClose={closeDialog} onCreate={addProject} />
       case 'search':
-        return <SearchDialog workspace={workspace} onClose={closeDialog} onGo={goFromDialog} />
+        return <SearchDialog content={content} onClose={closeDialog} onGo={goFromDialog} />
+      case 'add-account':
+        return <AccountDialog onClose={closeDialog} onSave={addAccount} />
+      case 'edit-account': {
+        const { accountId } = dialog
+        return (
+          <AccountDialog
+            account={workspace.accounts.find((candidate) => candidate.id === accountId)}
+            onClose={closeDialog}
+            onSave={(label, github) => {
+              dispatch({ type: 'account-edited', id: accountId, label, github })
+              closeDialog()
+            }}
+          />
+        )
+      }
+      case 'delete-account': {
+        const { accountId } = dialog
+        const target = workspace.accounts.find((candidate) => candidate.id === accountId)
+        const { projects, workItems, sessions } = contentOf(workspace, accountId)
+        return (
+          <ConfirmDialog
+            title={`Remove ${target?.label ?? 'account'}?`}
+            body={`This also deletes its projects (${projects.length}), work items (${workItems.length}) and sessions (${sessions.length}). You cannot undo this. The GitHub CLI stays signed in.`}
+            confirmLabel="Remove account"
+            onClose={closeDialog}
+            onConfirm={() => {
+              dispatch({ type: 'account-deleted', id: accountId })
+              closeDialog()
+              if (accountId === account.id) reset()
+            }}
+          />
+        )
+      }
       case 'delete-project': {
-        const project = workspace.projects.find((candidate) => candidate.id === dialog.projectId)
-        const count = workspace.workItems.filter((item) => item.projectId === dialog.projectId).length
+        const project = content.projects.find((candidate) => candidate.id === dialog.projectId)
+        const count = content.workItems.filter((item) => item.projectId === dialog.projectId).length
         return (
           <ConfirmDialog
             title={`Delete ${project?.name ?? 'project'}?`}
@@ -128,7 +236,7 @@ export function App() {
         )
       }
       case 'delete-item': {
-        const item = workspace.workItems.find((candidate) => candidate.id === dialog.itemId)
+        const item = content.workItems.find((candidate) => candidate.id === dialog.itemId)
         return (
           <ConfirmDialog
             title={`Delete ${item?.title ?? 'work item'}?`}
@@ -138,6 +246,22 @@ export function App() {
             onConfirm={() => {
               dispatch({ type: 'item-deleted', id: dialog.itemId })
               goFromDialog(item ? { kind: 'project', projectId: item.projectId } : { kind: 'home' })
+            }}
+          />
+        )
+      }
+      case 'delete-session': {
+        const { sessionId } = dialog
+        const session = content.sessions.find((candidate) => candidate.id === sessionId)
+        return (
+          <ConfirmDialog
+            title={`Delete ${session?.title ?? 'session'}?`}
+            body="You cannot undo this."
+            confirmLabel="Delete session"
+            onClose={closeDialog}
+            onConfirm={() => {
+              dispatch({ type: 'session-deleted', id: sessionId })
+              goFromDialog({ kind: 'home' })
             }}
           />
         )
@@ -187,7 +311,14 @@ export function App() {
       {sidebarOpen && (
         <aside className="sidebar">
           {toolbar}
-          <Sidebar workspace={workspace} view={view} onGo={go} onNewProject={openNewProject} />
+          <Sidebar content={content} view={view} onGo={go} onNewProject={openNewProject} />
+          <AccountSwitcher
+            accounts={workspace.accounts}
+            current={account}
+            onSwitch={switchAccount}
+            onAdd={openAddAccount}
+            onManage={() => go({ kind: 'accounts' })}
+          />
         </aside>
       )}
       <main className="main">

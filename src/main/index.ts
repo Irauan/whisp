@@ -3,6 +3,9 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import iconIco from '../../resources/icon.ico?asset'
 import iconPng from '../../resources/icon.png?asset'
 import { isWorkspace } from '../shared/model'
+import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
+import { listGithubAccounts, listIssues } from './github'
+import { listRepositoryFiles } from './repository'
 import { WorkspaceFile } from './workspace-file'
 
 if (process.env.AETHER_DATA_DIR) app.setPath('userData', process.env.AETHER_DATA_DIR)
@@ -20,9 +23,9 @@ function createWindow(): void {
     minHeight: 520,
     show: false,
     icon: process.platform === 'win32' ? iconIco : iconPng,
-    backgroundColor: '#060807',
+    backgroundColor: '#0a0515',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#060807', symbolColor: '#9aa8a0', height: 44 },
+    titleBarOverlay: { color: '#0a0515', symbolColor: '#a89cbd', height: 44 },
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -42,11 +45,25 @@ function createWindow(): void {
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+function asText(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('The value must be text.')
+  return value
+}
+
 ipcMain.handle('workspace:load', () => file.load())
 ipcMain.handle('workspace:save', (_event, workspace: unknown) => {
   if (!isWorkspace(workspace)) throw new Error('Refused to save data that is not a workspace.')
   return file.save(workspace)
 })
+ipcMain.handle('github:accounts', () => listGithubAccounts())
+ipcMain.handle('folder:choose', () => chooseFolder())
+ipcMain.handle('folders:choose', () => chooseFolders())
+ipcMain.handle('files:choose', () => chooseFiles())
+ipcMain.handle('folder:inspect', (_event, folder: unknown) => inspectFolder(asText(folder)))
+ipcMain.handle('repository:files', (_event, folder: unknown) => listRepositoryFiles(asText(folder)))
+ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
+  listIssues(asText(folder), login === null ? null : asText(login))
+)
 
 // Finish the saves in progress before the app exits.
 let settled = false

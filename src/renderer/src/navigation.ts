@@ -2,10 +2,14 @@ import { useCallback, useState } from 'react'
 
 export type View =
   | { kind: 'home' }
-  | { kind: 'inbox' }
   | { kind: 'pulls' }
+  | { kind: 'items' }
+  | { kind: 'bots' }
+  | { kind: 'customize' }
+  | { kind: 'accounts' }
   | { kind: 'project'; projectId: string }
   | { kind: 'item'; itemId: string }
+  | { kind: 'session'; sessionId: string }
 
 export interface History {
   entries: View[]
@@ -27,17 +31,21 @@ export function step(history: History, offset: number): History {
   return index < 0 || index >= history.entries.length ? history : { ...history, index }
 }
 
+const start: History = { entries: [{ kind: 'home' }], index: 0 }
+
 export function useNavigation() {
-  const [history, setHistory] = useState<History>({ entries: [{ kind: 'home' }], index: 0 })
+  const [history, setHistory] = useState<History>(start)
   const go = useCallback((view: View) => setHistory((current) => push(current, view)), [])
   const back = useCallback(() => setHistory((current) => step(current, -1)), [])
   const forward = useCallback(() => setHistory((current) => step(current, 1)), [])
+  const reset = useCallback(() => setHistory(start), [])
   const view: View = history.entries[history.index] ?? { kind: 'home' }
   return {
     view,
     go,
     back,
     forward,
+    reset,
     canGoBack: history.index > 0,
     canGoForward: history.index < history.entries.length - 1
   }

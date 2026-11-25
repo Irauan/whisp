@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { emptyWorkspace, isWorkspace, type Workspace } from '../shared/model'
+import { emptyWorkspace, readWorkspace, type Workspace } from '../shared/model'
 
 export class WorkspaceFile {
   private pending: Promise<void> = Promise.resolve()
@@ -21,7 +21,8 @@ export class WorkspaceFile {
     } catch {
       // The check below handles unreadable data.
     }
-    if (isWorkspace(data)) return data
+    const workspace = readWorkspace(data)
+    if (workspace) return workspace
     // Keep the unreadable file, so that the next save cannot destroy it.
     await rename(this.path, `${this.path}.unreadable-${Date.now()}`)
     return emptyWorkspace

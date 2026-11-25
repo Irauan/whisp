@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { Workspace } from '../../../shared/model'
+import type { AccountContent } from '../../../shared/model'
 import type { View } from '../navigation'
 
-function Modal(props: { label: string; className?: string; onClose(): void; children: ReactNode }) {
+export function Modal(props: { label: string; className?: string; onClose(): void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -84,13 +84,13 @@ export function ConfirmDialog(props: {
 }
 
 export function SearchDialog(props: {
-  workspace: Workspace
+  content: AccountContent
   onClose(): void
   onGo(view: View): void
 }) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
-  const { projects, workItems } = props.workspace
+  const { projects, workItems, sessions } = props.content
 
   const results: { key: string; title: string; note: string; view: View }[] = [
     ...projects.map((project) => ({
@@ -104,6 +104,12 @@ export function SearchDialog(props: {
       title: item.title,
       note: projects.find((project) => project.id === item.projectId)?.name ?? '',
       view: { kind: 'item', itemId: item.id } as const
+    })),
+    ...sessions.map((session) => ({
+      key: session.id,
+      title: session.title,
+      note: 'Session',
+      view: { kind: 'session', sessionId: session.id } as const
     }))
   ]
     .filter((result) => result.title.toLowerCase().includes(needle))
@@ -119,8 +125,8 @@ export function SearchDialog(props: {
         }}
       >
         <input
-          aria-label="Search projects and work items"
-          placeholder="Search projects and work items"
+          aria-label="Search projects, work items and sessions"
+          placeholder="Search projects, work items and sessions"
           value={query}
           autoFocus
           onChange={(event) => setQuery(event.target.value)}

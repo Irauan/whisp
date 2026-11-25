@@ -1,5 +1,5 @@
-import icon from '../../../../resources/icon.svg?inline'
+import icon from '../../../../resources/icon.webp'
 
-export function Mark({ size = 72 }: { size?: number }) {
-  return <img src={icon} width={size} height={size} alt="" />
+export function Mark({ size }: { size: number }) {
+  return <img className="mark" src={icon} width={size} height={size} alt="" />
 }
