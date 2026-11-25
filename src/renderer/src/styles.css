@@ -1,15 +1,15 @@
 :root {
   color-scheme: dark;
   scrollbar-color: var(--line) transparent;
-  --canvas: #08080f;
-  --sidebar: #12111b;
-  --raised: #0e0e17;
-  --selected: #232232;
-  --hover: #191925;
-  --line: #2f2e3f;
-  --text: #eeeef2;
-  --muted: #a0a0ad;
-  --accent: #b297fc;
+  --canvas: #070709;
+  --sidebar: #101013;
+  --raised: #0d0d0f;
+  --selected: #212126;
+  --hover: #18181b;
+  --line: #2d2d33;
+  --text: #eeeef1;
+  --muted: #9d9ea6;
+  --accent: #ac99ff;
   --fill: #6030f0;
   --on-fill: #fff;
   --project: #c05a94;
