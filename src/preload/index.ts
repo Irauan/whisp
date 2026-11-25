@@ -1,10 +1,23 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { AgentRun } from '../shared/agent'
 import type { AetherBridge } from '../shared/bridge'
 
 const bridge: AetherBridge = {
   platform: process.platform,
   loadWorkspace: () => ipcRenderer.invoke('workspace:load'),
-  saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace)
+  saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace),
+  chooseFolder: () => ipcRenderer.invoke('folder:choose'),
+  listAgents: () => ipcRenderer.invoke('agents:list'),
+  getAgentRun: (itemId) => ipcRenderer.invoke('agent:get', itemId),
+  sendToAgent: (message) => ipcRenderer.invoke('agent:send', message),
+  cancelAgent: (itemId) => ipcRenderer.invoke('agent:cancel', itemId),
+  answerAgent: (itemId, choiceId) => ipcRenderer.invoke('agent:answer', itemId, choiceId),
+  forgetAgentRun: (itemId) => ipcRenderer.invoke('agent:forget', itemId),
+  onAgentRun: (callback) => {
+    const listener = (_event: IpcRendererEvent, run: AgentRun) => callback(run)
+    ipcRenderer.on('agent:run', listener)
+    return () => ipcRenderer.removeListener('agent:run', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('aether', bridge)

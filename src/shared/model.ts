@@ -12,6 +12,8 @@ export type StageId = (typeof STAGES)[number]['id']
 export interface Project {
   id: string
   name: string
+  /** The folder where agents work on this project. */
+  path?: string
   createdAt: string
 }
 
@@ -37,7 +39,8 @@ export interface Workspace {
 }
 
 export type Action =
-  | { type: 'project-added'; id: string; name: string; at: string }
+  | { type: 'project-added'; id: string; name: string; path?: string; at: string }
+  | { type: 'project-folder-set'; id: string; path: string }
   | { type: 'project-deleted'; id: string }
   | {
       type: 'item-added'
@@ -59,8 +62,20 @@ export function reduce(state: Workspace, action: Action): Workspace {
         ...state,
         projects: [
           ...state.projects,
-          { id: action.id, name: action.name, createdAt: action.at }
+          {
+            id: action.id,
+            name: action.name,
+            ...(action.path ? { path: action.path } : {}),
+            createdAt: action.at
+          }
         ]
+      }
+    case 'project-folder-set':
+      return {
+        ...state,
+        projects: state.projects.map((project) =>
+          project.id === action.id ? { ...project, path: action.path } : project
+        )
       }
     case 'project-deleted':
       return {

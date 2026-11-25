@@ -19,7 +19,12 @@ const contentSecurityPolicy: Plugin = {
 }
 
 export default defineConfig({
-  main: {},
+  main: {
+    // The ACP library is an ES module only, and the main process is CommonJS,
+    // so it goes into the bundle. The Claude Code adapter stays outside: it
+    // runs as its own program.
+    build: { externalizeDeps: { exclude: ['@agentclientprotocol/sdk'] } }
+  },
   preload: {
     // A sandboxed preload script must be CommonJS.
     build: { rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } } }

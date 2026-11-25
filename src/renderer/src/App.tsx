@@ -48,9 +48,9 @@ export function App() {
     go(next)
   }
 
-  const addProject = (name: string) => {
+  const addProject = (name: string, path?: string) => {
     const id = crypto.randomUUID()
-    dispatch({ type: 'project-added', id, name, at: now() })
+    dispatch({ type: 'project-added', id, name, path, at: now() })
     closeDialog()
     // From Home, stay on Home so that a typed request is not lost.
     if (view.kind !== 'home') go({ kind: 'project', projectId: id })
@@ -60,6 +60,16 @@ export function App() {
     const id = crypto.randomUUID()
     dispatch({ type: 'item-added', id, projectId, ...request, at: now() })
     go({ kind: 'item', itemId: id })
+  }
+
+  const chooseFolder = async (projectId: string) => {
+    const path = await window.aether.chooseFolder()
+    if (path) dispatch({ type: 'project-folder-set', id: projectId, path })
+  }
+
+  // The agent conversations live outside the workspace, so they go separately.
+  const forgetRuns = (itemIds: string[]) => {
+    for (const itemId of itemIds) void window.aether.forgetAgentRun(itemId).catch(() => undefined)
   }
 
   const renderPage = () => {
@@ -81,6 +91,7 @@ export function App() {
             items={workspace.workItems.filter((item) => item.projectId === project.id)}
             onAddItem={addItem}
             onGo={go}
+            onChooseFolder={() => void chooseFolder(project.id)}
             onDelete={() => setDialog({ kind: 'delete-project', projectId: project.id })}
           />
         )
@@ -95,6 +106,7 @@ export function App() {
             project={project}
             onMove={(stage) => dispatch({ type: 'item-moved', id: item.id, stage, at: now() })}
             onGo={go}
+            onChooseFolder={() => void chooseFolder(project.id)}
             onDelete={() => setDialog({ kind: 'delete-item', itemId: item.id })}
           />
         )
@@ -121,6 +133,9 @@ export function App() {
             confirmLabel="Delete project"
             onClose={closeDialog}
             onConfirm={() => {
+              forgetRuns(
+                workspace.workItems.filter((item) => item.projectId === dialog.projectId).map((item) => item.id)
+              )
               dispatch({ type: 'project-deleted', id: dialog.projectId })
               goFromDialog({ kind: 'home' })
             }}
@@ -136,6 +151,7 @@ export function App() {
             confirmLabel="Delete work item"
             onClose={closeDialog}
             onConfirm={() => {
+              forgetRuns([dialog.itemId])
               dispatch({ type: 'item-deleted', id: dialog.itemId })
               goFromDialog(item ? { kind: 'project', projectId: item.projectId } : { kind: 'home' })
             }}

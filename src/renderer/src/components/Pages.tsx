@@ -1,7 +1,8 @@
-import { Check, GitPullRequest, Hand, Trash2 } from 'lucide-react'
+import { Check, FolderOpen, GitPullRequest, Hand, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { STAGES, type Project, type StageId, type WorkItem } from '../../../shared/model'
 import type { View } from '../navigation'
+import { AgentPanel } from './AgentPanel'
 import { Composer } from './Composer'
 import { Mark } from './Mark'
 
@@ -39,7 +40,7 @@ export function InboxPage() {
     <EmptyPage
       icon={<Hand size={36} />}
       title="No raised hands"
-      body="Questions from your sessions will appear here. Aether cannot run sessions yet."
+      body="Questions from your agents will appear here. For now, each work item shows its own."
     />
   )
 }
@@ -59,6 +60,7 @@ export function ProjectPage(props: {
   items: WorkItem[]
   onAddItem(projectId: string, request: Request): void
   onGo(view: View): void
+  onChooseFolder(): void
   onDelete(): void
 }) {
   const { project, items } = props
@@ -70,6 +72,15 @@ export function ProjectPage(props: {
           <Trash2 size={18} />
         </button>
       </header>
+      <p className="folder">
+        <FolderOpen size={16} />
+        <span className={project.path ? 'folder-path' : 'folder-path muted'}>
+          {project.path ?? 'No folder. Agents need one to work on this project.'}
+        </span>
+        <button type="button" className="bar-button" onClick={props.onChooseFolder}>
+          {project.path ? 'Change' : 'Choose folder'}
+        </button>
+      </p>
       <Composer
         key={project.id}
         projects={[project]}
@@ -111,6 +122,7 @@ export function ItemPage(props: {
   project: Project
   onMove(stage: StageId): void
   onGo(view: View): void
+  onChooseFolder(): void
   onDelete(): void
 }) {
   const { item, project } = props
@@ -151,10 +163,7 @@ export function ItemPage(props: {
         ))}
       </ol>
 
-      <section className="panel">
-        <h2>Sessions</h2>
-        <p className="muted">No sessions yet. Aether cannot run sessions yet.</p>
-      </section>
+      <AgentPanel key={item.id} item={item} project={project} onChooseFolder={props.onChooseFolder} />
       <section className="panel">
         <h2>Pull request and Actions</h2>
         <p className="muted">Nothing linked. GitHub is not connected yet.</p>

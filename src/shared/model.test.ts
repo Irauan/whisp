@@ -46,6 +46,13 @@ describe('reduce', () => {
     expect(next.workItems[0]?.history).toHaveLength(1)
   })
 
+  it('keeps the folder of a project', () => {
+    const added = reduce(emptyWorkspace, { type: 'project-added', id: 'p1', name: 'One', path: '/code/one', at })
+    expect(added.projects[0]?.path).toBe('/code/one')
+    const moved = reduce(added, { type: 'project-folder-set', id: 'p1', path: '/code/two' })
+    expect(moved.projects[0]?.path).toBe('/code/two')
+  })
+
   it('deletes the work items of a deleted project', () => {
     expect(reduce(seeded(), { type: 'project-deleted', id: 'p1' })).toEqual(emptyWorkspace)
   })
