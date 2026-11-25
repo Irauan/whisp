@@ -1,15 +1,17 @@
 :root {
   color-scheme: dark;
   scrollbar-color: var(--line) transparent;
-  --canvas: #0a0515;
-  --sidebar: #150c26;
-  --raised: #110a20;
-  --selected: #26173d;
-  --hover: #1d1232;
-  --line: #33224f;
-  --text: #ece7f5;
-  --muted: #9d91b3;
-  --accent: #b45cff;
+  --canvas: #08080f;
+  --sidebar: #12111b;
+  --raised: #0e0e17;
+  --selected: #232232;
+  --hover: #191925;
+  --line: #2f2e3f;
+  --text: #eeeef2;
+  --muted: #a0a0ad;
+  --accent: #b297fc;
+  --fill: #6030f0;
+  --on-fill: #fff;
   --project: #c05a94;
   --danger: #e5786d;
   --strip: 44px;
@@ -270,7 +272,7 @@ button:disabled {
 }
 
 .stage-spec {
-  background: #9d91b3;
+  background: var(--muted);
 }
 
 .stage-test {
@@ -435,8 +437,8 @@ button:disabled {
   width: 34px;
   height: 34px;
   padding: 0;
-  color: var(--canvas);
-  background: var(--accent);
+  color: var(--on-fill);
+  background: var(--fill);
   border-radius: 50%;
 }
 
@@ -809,9 +811,9 @@ button:disabled {
 }
 
 .stage[aria-current] {
-  color: var(--canvas);
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--on-fill);
+  background: var(--fill);
+  border-color: var(--fill);
 }
 
 .panel {
@@ -942,8 +944,8 @@ fieldset {
 }
 
 .button.primary {
-  color: var(--canvas);
-  background: var(--accent);
+  color: var(--on-fill);
+  background: var(--fill);
 }
 
 .button.danger {

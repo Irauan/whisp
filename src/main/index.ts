@@ -31,9 +31,9 @@ function createWindow(): void {
     minHeight: 520,
     show: false,
     icon: process.platform === 'win32' ? iconIco : iconPng,
-    backgroundColor: '#0a0515',
+    backgroundColor: '#08080f',
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0a0515', symbolColor: '#a89cbd', height: 44 },
+    titleBarOverlay: { color: '#08080f', symbolColor: '#a0a0ad', height: 44 },
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
