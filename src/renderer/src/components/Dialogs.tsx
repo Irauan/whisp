@@ -25,15 +25,23 @@ export function Modal(props: { label: string; className?: string; onClose(): voi
   )
 }
 
-export function NewProjectDialog(props: { onClose(): void; onCreate(name: string): void }) {
+export function NewProjectDialog(props: { onClose(): void; onCreate(name: string, path?: string): void }) {
   const [name, setName] = useState('')
+  const [path, setPath] = useState<string | undefined>()
   const trimmed = name.trim()
+  const chooseFolder = async () => {
+    const chosen = await window.aether.chooseFolder()
+    if (!chosen) return
+    setPath(chosen)
+    // Name the project after its folder unless the user typed a name.
+    if (!trimmed) setName(chosen.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
+  }
   return (
     <Modal label="New project" onClose={props.onClose}>
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          if (trimmed) props.onCreate(trimmed)
+          if (trimmed) props.onCreate(trimmed, path)
         }}
       >
         <h2>New project</h2>
@@ -46,7 +54,16 @@ export function NewProjectDialog(props: { onClose(): void; onCreate(name: string
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <p className="muted">A project does not need a repository.</p>
+        <div className="field">
+          Folder
+          <div className="folder-field">
+            <span className={path ? 'folder-path' : 'folder-path muted'}>{path ?? 'None'}</span>
+            <button type="button" className="button" onClick={() => void chooseFolder()}>
+              Choose
+            </button>
+          </div>
+        </div>
+        <p className="muted">Agents work in this folder. You can choose it later.</p>
         <div className="dialog-actions">
           <button type="button" className="button" onClick={props.onClose}>
             Cancel

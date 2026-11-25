@@ -26,6 +26,8 @@ export interface Project {
   id: string
   accountId: string
   name: string
+  /** The folder where agents work on this project. */
+  path?: string
   createdAt: string
 }
 
@@ -122,7 +124,8 @@ export type Action =
   | { type: 'account-edited'; id: string; label: string; github: GithubProfile | null }
   | { type: 'account-switched'; id: string }
   | { type: 'account-deleted'; id: string }
-  | { type: 'project-added'; id: string; name: string; at: string }
+  | { type: 'project-added'; id: string; name: string; path?: string; at: string }
+  | { type: 'project-folder-set'; id: string; path: string }
   | { type: 'project-deleted'; id: string }
   | {
       type: 'item-added'
@@ -206,9 +209,17 @@ export function reduce(state: Workspace, action: Action): Workspace {
             id: action.id,
             accountId: state.currentAccountId,
             name: action.name,
+            ...(action.path ? { path: action.path } : {}),
             createdAt: action.at
           }
         ]
+      }
+    case 'project-folder-set':
+      return {
+        ...state,
+        projects: state.projects.map((project) =>
+          project.id === action.id ? { ...project, path: action.path } : project
+        )
       }
     case 'project-deleted':
       return {

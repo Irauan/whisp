@@ -1,3 +1,4 @@
+import type { AgentInfo, AgentRun } from './agent'
 import type { Attachment, GithubProfile, Workspace } from './model'
 
 export type GithubAccounts =
@@ -10,6 +11,14 @@ export interface FolderInfo {
   exists: boolean
   /** Null when the folder is not a Git repository with a commit. */
   branch: string | null
+}
+
+export interface AgentMessage {
+  itemId: string
+  agentId: string
+  /** The project folder, where the agent works. */
+  cwd: string
+  text: string
 }
 
 export interface AetherBridge {
@@ -26,4 +35,13 @@ export interface AetherBridge {
   listRepositoryFiles(folder: string): Promise<Listing>
   /** Lists the open issues and pull requests of the repository in the folder. */
   listIssues(folder: string, githubLogin: string | null): Promise<Listing>
+  listAgents(): Promise<AgentInfo[]>
+  getAgentRun(itemId: string): Promise<AgentRun>
+  /** Resolves when the agent finishes the turn. */
+  sendToAgent(message: AgentMessage): Promise<void>
+  cancelAgent(itemId: string): Promise<void>
+  answerAgent(itemId: string, choiceId: string | null): Promise<void>
+  forgetAgentRun(itemId: string): Promise<void>
+  /** Calls back with each change of any run. Returns a function that stops it. */
+  onAgentRun(callback: (run: AgentRun) => void): () => void
 }

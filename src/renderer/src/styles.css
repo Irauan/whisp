@@ -951,8 +951,260 @@ fieldset {
   background: var(--danger);
 }
 
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Project folder */
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: -8px 0 16px;
+  color: var(--muted);
+}
+
+.folder > svg {
+  flex: none;
+}
+
+.folder-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, 'Cascadia Code', Menlo, monospace;
+  font-size: 12px;
+}
+
+.folder .folder-path:not(.muted) {
+  color: var(--text);
+}
+
+.folder-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Agent */
+
+.agent-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.agent-panel .agent-head h2 {
+  margin: 0;
+}
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--muted);
+  border-radius: 7px;
+}
+
+.picker:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.picker select {
+  max-width: 260px;
+  appearance: none;
+  background: none;
+  border: 0;
+  text-overflow: ellipsis;
+}
+
+.picker option {
+  background: var(--sidebar);
+}
+
+.agent-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transcript {
+  display: grid;
+  gap: 10px;
+}
+
+.msg {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg.user {
+  justify-self: end;
+  max-width: 85%;
+  padding: 8px 12px;
+  background: var(--selected);
+  border-radius: 12px 12px 4px 12px;
+}
+
+.msg.thought {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.msg.thought summary {
+  cursor: pointer;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  color: var(--muted);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tool > svg {
+  flex: none;
+}
+
+.tool-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, 'Cascadia Code', Menlo, monospace;
+  font-size: 12px;
+}
+
+.tool-done {
+  color: var(--accent);
+}
+
+.tool-failed {
+  color: var(--danger);
+}
+
+.plan ul {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--line);
+}
+
+.plan li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.plan li > svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.plan li.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.error-notice {
+  color: var(--danger);
+}
+
+.question {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.start {
+  justify-self: start;
+}
+
+.agent-composer {
+  max-width: none;
+}
+
+.agent-composer .hint {
+  min-width: 0;
+  margin-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer .send {
+  flex: none;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .twist svg {
     transition: none;
+  }
+
+  .spin {
+    animation: none;
   }
 }

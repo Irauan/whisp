@@ -12,7 +12,10 @@ async function choose(options: OpenDialogOptions): Promise<string[]> {
 }
 
 export async function chooseFolder(): Promise<string | null> {
-  const [folder] = await choose({ title: 'Choose a folder', properties: ['openDirectory'] })
+  const [folder] = await choose({
+    title: 'Choose a folder',
+    properties: ['openDirectory', 'createDirectory']
+  })
   return folder ?? null
 }
 

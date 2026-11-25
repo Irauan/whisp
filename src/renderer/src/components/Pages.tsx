@@ -1,4 +1,14 @@
-import { Blocks, Bot, Check, CircleDot, GitPullRequest, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  Blocks,
+  Bot,
+  Check,
+  CircleDot,
+  FolderOpen,
+  GitPullRequest,
+  Pencil,
+  Plus,
+  Trash2
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import {
   contentOf,
@@ -12,6 +22,7 @@ import {
   type Workspace
 } from '../../../shared/model'
 import type { View } from '../navigation'
+import { AgentPanel } from './AgentPanel'
 import { Avatar, githubNote } from './Avatar'
 import { Composer } from './Composer'
 import { Mark } from './Mark'
@@ -200,6 +211,7 @@ export function ProjectPage(props: {
   items: WorkItem[]
   onAddItem(projectId: string, request: Request): void
   onGo(view: View): void
+  onChooseFolder(): void
   onDelete(): void
 }) {
   const { project, items } = props
@@ -211,6 +223,15 @@ export function ProjectPage(props: {
           <Trash2 size={18} />
         </button>
       </header>
+      <p className="folder">
+        <FolderOpen size={16} />
+        <span className={project.path ? 'folder-path' : 'folder-path muted'}>
+          {project.path ?? 'No folder. Agents need one to work on this project.'}
+        </span>
+        <button type="button" className="bar-button" onClick={props.onChooseFolder}>
+          {project.path ? 'Change' : 'Choose folder'}
+        </button>
+      </p>
       <Composer
         key={project.id}
         projectId={project.id}
@@ -228,6 +249,7 @@ export function ItemPage(props: {
   project: Project
   onMove(stage: StageId): void
   onGo(view: View): void
+  onChooseFolder(): void
   onDelete(): void
 }) {
   const { item, project } = props
@@ -268,10 +290,7 @@ export function ItemPage(props: {
         ))}
       </ol>
 
-      <section className="panel">
-        <h2>Sessions</h2>
-        <p className="muted">No sessions yet. Aether cannot run sessions yet.</p>
-      </section>
+      <AgentPanel key={item.id} item={item} project={project} onChooseFolder={props.onChooseFolder} />
       <section className="panel">
         <h2>Pull request and Actions</h2>
         <p className="muted">Nothing linked. Aether cannot read pull requests yet.</p>
