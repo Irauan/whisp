@@ -136,12 +136,12 @@ describe('G22 and S6: locked paths', () => {
       'src/main/index.ts',
       'tests/architecture/check-lock.test.ts',
       'tests/architecture/fixtures/g-composition-root/src/main/index.ts',
-      'scripts/check-lock.mjs',
+      'scripts/zone-coverage.mjs',
       'docs/milestones/m0-gates/plan.md',
       'tests/acceptance-notes.md',
       'tests/locks.json.bak',
       'tests/simulated-agent-notes.md',
-      '.claude/agents/builder.md'
+      'docs/agents/builder.md'
     ]) {
       expect(edit(path).block, path).toBe(false)
     }

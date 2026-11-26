@@ -8,7 +8,15 @@
 // files from git objects at the head, so it does not read the working tree. The rule is for
 // text files.
 //
-// Pull request check (`--base <ref>`). It walks the commits of base..head, oldest first.
+// Pull request check (`--base <ref>`). When the base is a milestone branch, the PR is a story
+// PR and the check walks its commits. When the base is another branch (`main`), the PR is a
+// milestone PR with squashed stories: the check then runs only the hash check and the known
+// violations rule against the fork point.
+//
+// The CI job runs the copy of this file from the base branch, so a PR cannot weaken the check
+// that judges it. So this file imports Node modules only, and it takes the repository with `--repo`.
+//
+// The story walk goes through the commits of base..head, oldest first.
 // - The first commit that changes a file outside `tests/` is the first code commit.
 // - Before it, a commit can add locked files and their entries.
 // - From it on (the commit itself included), no commit can change a locked file or its entry.
@@ -19,7 +27,8 @@
 // - The known violations of the head must not exceed the ones of the fork point, and no
 //   commit after the first code commit raises them.
 // - At the head, each hash in tests/locks.json must match its file, and each file under
-//   tests/acceptance/ and tests/simulated-agent/ must have an entry.
+//   tests/acceptance/ and tests/simulated-agent/ must have an entry. Two such files whose
+//   names differ only in case fail.
 //
 // Merge commits: a story can merge its milestone branch. A merge commit changes a file only
 // when the merged content equals the content of no parent. A file that arrives from the base
@@ -229,10 +238,32 @@ function checkHashes(git, head, problems) {
       problems.add(lockedChanged(file, `the hash in ${LOCKS_FILE} is stale`))
     }
   }
-  for (const file of git.lockedFolderFiles(head)) {
+  const files = git.lockedFolderFiles(head)
+  for (const file of files) {
     if (!(file in entries)) problems.add(lockedChanged(file, `it has no entry in ${LOCKS_FILE}`))
   }
+  // Windows and macOS hold one of two names that differ only in case. A checkout there would
+  // read one file for two entries, and a lock could cover the wrong one.
+  const byLowerCase = new Map()
+  for (const file of files) {
+    const key = file.toLowerCase()
+    byLowerCase.set(key, [...(byLowerCase.get(key) ?? []), file])
+  }
+  for (const same of byLowerCase.values()) {
+    if (same.length < 2) continue
+    for (const file of same) {
+      problems.add(lockedChanged(file, `it differs only in case from ${same.filter((other) => other !== file).join(', ')}`))
+    }
+  }
 }
+
+/**
+ * A story PR targets a milestone branch. Its commits are the ones of the story, so the check
+ * walks them. A milestone PR targets `main` and holds squashed stories: each commit has the
+ * tests and the code of one story, so a walk would count each new entry as a change after code.
+ */
+export const isStoryBase = (base) =>
+  /^milestone\//.test(base.replace(/^refs\/(remotes\/origin|heads)\//, '').replace(/^origin\//, ''))
 
 function checkKnownGrowth(git, from, head, problems, where) {
   const before = git.known(from)
@@ -269,6 +300,12 @@ export function checkLock({ repo = ROOT, base, head = 'HEAD' } = {}) {
   }
   const forkPoint = git.text(['merge-base', baseSha, headSha], { allowFailure: true })?.trim()
   if (!forkPoint) throw new Error(`The head ${head} and the base ${base} share no history.`)
+
+  if (!isStoryBase(base)) {
+    checkKnownGrowth(git, forkPoint, headSha, problems, 'at the fork point')
+    checkHashes(git, headSha, problems)
+    return { problems: [...problems], approvals }
+  }
 
   const baseLocks = git.locks(baseSha).entries
   const lines = git

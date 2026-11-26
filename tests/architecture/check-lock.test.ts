@@ -665,10 +665,10 @@ describe('a push with no pull request', () => {
   it('checks a merge commit against its first parent', () => {
     const repo = new Repo()
     repo.commit('Base', { 'tests/architecture/known-violations.json': list })
-    repo.switch('milestone', true)
+    repo.switch('side', true)
     repo.commit('Grow', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2], [RULE, 'src/z.tsx', 1]) })
     repo.switch(BASE)
-    repo.git('merge', '-q', '--no-ff', '-m', 'Merge the milestone', 'milestone')
+    repo.git('merge', '-q', '--no-ff', '-m', 'Merge the milestone', 'side')
     const result = repo.check()
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/z.tsx\``)
     expect(result.status).toBe(1)

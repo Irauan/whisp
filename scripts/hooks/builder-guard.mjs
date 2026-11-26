@@ -1,7 +1,13 @@
 // The builder guard: a PreToolUse hook of the builder role (.claude/agents/builder.md).
 // It blocks Edit and Write on two kinds of path:
 // - the locked paths: tests/acceptance/**, tests/simulated-agent/** and tests/locks.json
+// - the files that make the lock and the guard: scripts/check-lock.mjs, scripts/hooks/**,
+//   .github/workflows/**, .claude/agents/** and .claude/settings.json
 // - the real Aether data folder: %APPDATA%\aether\** (and AETHER_DATA_DIR when it is set)
+//
+// A change of .github/workflows/ci.yml stays an accepted gap: the builder cannot edit it
+// here, but a PR from another source can. The reviewer checks each change under
+// .github/workflows/.
 //
 // The hook gets the call as JSON on stdin. Exit code 2 blocks the call and sends stderr to the
 // agent. Exit code 0 allows it. The guard blocks a call that it cannot read.
@@ -9,6 +15,7 @@
 // It does not cover writes through Bash. The reviewer checks the diff of each story.
 //
 // A path is judged after these steps, so that a variation does not pass:
+// - A leading `~` is the home folder.
 // - Relative paths resolve against the folder of the call.
 // - Windows ignores a trailing dot or space in a name and reads `name:stream` as a stream of
 //   `name`. The guard removes both from each segment.
@@ -23,7 +30,20 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const GUARDED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const LOCKED_FOLDERS = ['acceptance', 'simulated-agent']
+// Each pair is two folder names in a row. A folder blocks everything below it. A file blocks
+// the file only.
+const PROTECTED_FOLDERS = [
+  ['tests', 'acceptance'],
+  ['tests', 'simulated-agent'],
+  ['scripts', 'hooks'],
+  ['.github', 'workflows'],
+  ['.claude', 'agents']
+]
+const PROTECTED_FILES = [
+  ['tests', 'locks.json'],
+  ['scripts', 'check-lock.mjs'],
+  ['.claude', 'settings.json']
+]
 
 /** Removes what Windows ignores in a name, segment by segment. */
 function cleanSegments(path) {
@@ -64,12 +84,20 @@ function canonical(path, cwd) {
 function lockedPath(path) {
   const parts = path.split('/')
   for (let i = 0; i < parts.length - 1; i++) {
-    if (parts[i] !== 'tests') continue
-    const next = parts[i + 1]
-    if (LOCKED_FOLDERS.includes(next)) return `tests/${next}/**`
-    if (next === 'locks.json' && i + 2 === parts.length) return 'tests/locks.json'
+    for (const [first, second] of PROTECTED_FOLDERS) {
+      if (parts[i] === first && parts[i + 1] === second) return `${first}/${second}/**`
+    }
+    for (const [first, second] of PROTECTED_FILES) {
+      if (parts[i] === first && parts[i + 1] === second && i + 2 === parts.length) return `${first}/${second}`
+    }
   }
   return null
+}
+
+/** The home folder for a path that starts with `~`, as the shell expands it. */
+function expandHome(path) {
+  if (path === '~' || path.startsWith('~/') || path.startsWith('~\\')) return join(homedir(), path.slice(1))
+  return path
 }
 
 /** The data folders of the real app: the Electron folder, and the folder of AETHER_DATA_DIR. */
@@ -91,12 +119,12 @@ export function decide({ toolName, toolInput, cwd = process.cwd(), env = process
   if (typeof target !== 'string' || target === '') {
     return { block: true, reason: `Blocked: the ${toolName} call has no path, so the builder guard cannot check it.` }
   }
-  const path = canonical(target, cwd)
+  const path = canonical(expandHome(target), cwd)
   const locked = lockedPath(path)
   if (locked) {
     return {
       block: true,
-      reason: `Blocked: ${target} is a locked path (${locked}). The builder never changes a locked file. Dispute the test with the coordinator.`
+      reason: `Blocked: ${target} is a locked path (${locked}). The builder never changes a locked file. Dispute a test with the coordinator. The files of the lock, the hooks, the workflows and the roles belong to the coordinator.`
     }
   }
   for (const folder of dataFolders(env, cwd)) {

@@ -92,14 +92,22 @@ jobs:
       - name: Check the Node version
         run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
       # The check uses only Node and git, so the job runs no npm ci.
+      # On a pull request, the job runs the copy of the script from the base branch.
+      # So a PR cannot weaken the check that judges it. When the base has no copy yet,
+      # the job runs the copy of the PR and says so.
       - name: Check the test lock
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ -n "$BASE_REF" ]; then
-            npm run lock -- --base "origin/$BASE_REF"
-          else
+          if [ -z "$BASE_REF" ]; then
             npm run lock
+          elif git cat-file -e "origin/$BASE_REF:scripts/check-lock.mjs" 2>/dev/null; then
+            git show "origin/$BASE_REF:scripts/check-lock.mjs" > "$RUNNER_TEMP/check-lock.mjs"
+            echo "lock: runs the copy of scripts/check-lock.mjs from origin/$BASE_REF"
+            node "$RUNNER_TEMP/check-lock.mjs" --repo . --base "origin/$BASE_REF"
+          else
+            echo "lock: origin/$BASE_REF has no scripts/check-lock.mjs yet, so the job runs the copy of the PR"
+            node scripts/check-lock.mjs --base "origin/$BASE_REF"
           fi
 
   acceptance:

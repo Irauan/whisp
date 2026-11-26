@@ -31,7 +31,7 @@ You are the test author. Your input is files: the brief, the plan, the architect
 
 ### A builder disputes a test of the current story
 
-Decision of the coordinator, 2026-11-26:
+User decision, 2026-11-26, in the brief of m0-gates (`docs/milestones/m0-gates/brief.md`, approach, test lock):
 
 - A builder can dispute a test that you added in the current story, after the first code commit.
 - That test is locked from the first code commit. The builder never changes it.
