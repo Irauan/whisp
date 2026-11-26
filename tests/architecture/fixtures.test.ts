@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   ACCEPTANCE_RULE,
-  blankComments,
   FIXTURES,
   findDisabledAcceptanceTests,
   ROOT,
@@ -80,14 +79,23 @@ describe('lint fixtures', () => {
     )
     const only = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/only.spec.ts`
     const skip = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/skip.spec.ts`
-    // The skip fixture ends with calls after a comment, with a string key and with the paren on
-    // the next line. It also holds comments with calls inside, which must not count.
-    const skipLines = [4, 8, 14, 19, 22, 24, 26, 31, 36]
+    // The skip fixture also holds calls after a comment, with a string key, with the paren on the
+    // next line, after two regex literals that look like comments, with optional chaining, and
+    // as a bare alias. It holds comments with calls inside (lines 33 and 34), which must not count.
+    const skipLines = [4, 8, 14, 19, 22, 24, 26, 31, 36, 40, 41, 43, 46, 47, 48]
     expect(found).toEqual([`${only}:4`, `${only}:8`, ...skipLines.map((line) => `${skip}:${line}`)])
   })
 
-  it('G10: the scan of an acceptance test leaves comments out and keeps strings', () => {
-    expect(blankComments("a // b\nc /* d\ne */ f 'x // y' g")).toBe("a     \nc     \n     f 'x // y' g")
+  it('G10: a spec that swc cannot parse fails the scan and names the file', () => {
+    expect(() => findDisabledAcceptanceTests([`${FIXTURES}/g10-unparsable/acceptance`])).toThrow(
+      `${FIXTURES}/g10-unparsable/acceptance/broken.spec.ts`
+    )
+  })
+
+  it('G10: the position of a hit counts a line after multi-byte text', () => {
+    const [hit] = findDisabledAcceptanceTests([`${FIXTURES}/g10-position/acceptance`])
+    // The line before the hit holds multi-byte characters. The column counts characters.
+    expect(hit).toMatchObject({ file: `${FIXTURES}/g10-position/acceptance/utf8.spec.ts`, line: 2, column: 32 })
   })
 
   it('the acceptance tests of the repository have no .only, .skip or .fixme', () => {

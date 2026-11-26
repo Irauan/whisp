@@ -34,3 +34,15 @@ test.skip
 /* test.only('y', async () => {}) */
 const url = 'http://example.test/a' // The string holds two slashes. They start no comment.
 test.skip('after a string with two slashes', async () => {}) // Counts.
+
+// A regex literal can look like the start of a block comment or of a line comment.
+const clean = (p: string) => p.replace(/^\/*/, '')
+test.skip('after a regex that looks like a block comment', async () => {})
+test.only('also after it', async () => {})
+const web = /https?:\/\//
+test.skip('after a regex that looks like a line comment', async () => {})
+
+// Other shapes of the same call.
+test?.skip('with optional chaining', async () => {})
+test.describe.configure({ mode: 'serial' }).skip
+const alias = test.skip

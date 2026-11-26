@@ -8,6 +8,7 @@
 // This gate reads only the lint entries and keeps the others as they are.
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -63,51 +64,46 @@ export function runOxlint(targets, { ignoreFixtures = true } = {}) {
 
 export const ACCEPTANCE_RULE = 'playwright(no-focused-or-disabled-tests)'
 
-// `.only`, `.skip` and `.fixme` on anything: `test.only`, `test.describe.skip`, `test.skip(cond)`,
-// `test['skip'](...)`, a call with its `(` on the next line, or an alias of `test`. The oxlint
-// rules of vitest and jest know a test function only when it comes from their own package, so
-// they miss the `test` of a Playwright fixture.
-const DISABLING_CALL = /\.\s*(only|skip|fixme)\s*\(|\[\s*(['"`])(only|skip|fixme)\2\s*\]\s*\(/g
+// The oxlint rules of vitest and jest know a test function only when it comes from their own
+// package, so they miss the `test` of a Playwright fixture. This scan parses each acceptance
+// spec with swc and walks the syntax tree. It flags each member access with the property
+// `only`, `skip` or `fixme`, on any object: `test.only(...)`, `test.describe.skip(...)`,
+// `test['skip'](...)`, `test?.fixme(...)`, a call with its paren on the next line, and a bare
+// alias such as `const skipped = test.skip`. Comments and regex literals are not code, so the
+// tree has none of them. A spec that swc cannot parse fails the gate with the file name.
+const DISABLING = new Set(['only', 'skip', 'fixme'])
 
-/**
- * Replaces each comment with spaces and keeps the newlines, so that offsets and lines stay the
- * same. Text inside a string or a template is code for this scan: a `//` in a string starts
- * no comment.
- */
-export function blankComments(source) {
-  let out = ''
-  let i = 0
-  while (i < source.length) {
-    const two = source.slice(i, i + 2)
-    const char = source[i]
-    if (two === '//') {
-      const end = source.indexOf('\n', i)
-      const stop = end === -1 ? source.length : end
-      out += ' '.repeat(stop - i)
-      i = stop
-    } else if (two === '/*') {
-      const end = source.indexOf('*/', i + 2)
-      const stop = end === -1 ? source.length : end + 2
-      out += source.slice(i, stop).replace(/[^\r\n]/g, ' ')
-      i = stop
-    } else if (char === "'" || char === '"' || char === '`') {
-      let j = i + 1
-      while (j < source.length && source[j] !== char) j += source[j] === '\\' ? 2 : 1
-      out += source.slice(i, j + 1)
-      i = j + 1
-    } else {
-      out += char
-      i += 1
+/** The name of the property of a member expression, or null when it is not a plain name. */
+function propertyName(property) {
+  if (property.type === 'Identifier') return property.value
+  if (property.type !== 'Computed') return null
+  const key = property.expression
+  if (key.type === 'StringLiteral') return key.value
+  if (key.type === 'TemplateLiteral' && key.expressions.length === 0) return key.quasis[0]?.cooked ?? null
+  return null
+}
+
+/** Finds the member accesses of `only`, `skip` and `fixme` in the syntax tree of one file. */
+function findDisablingAccesses(node, found = []) {
+  if (Array.isArray(node)) {
+    for (const item of node) findDisablingAccesses(item, found)
+  } else if (node && typeof node === 'object') {
+    if (node.type === 'MemberExpression') {
+      const name = propertyName(node.property)
+      if (name !== null && DISABLING.has(name)) found.push({ name, span: node.property.span })
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'span') findDisablingAccesses(value, found)
     }
   }
-  return out
+  return found
 }
 
 function walkSpecs(folder, found = []) {
   for (const entry of readdirSync(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name)
     if (entry.isDirectory()) walkSpecs(path, found)
-    else if (/\.(ts|tsx|mts|js|mjs)$/.test(entry.name)) found.push(path)
+    else if (/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) found.push(path)
   }
   return found
 }
@@ -116,8 +112,12 @@ function walkSpecs(folder, found = []) {
  * Finds the tests that a run leaves out or runs alone, in acceptance test files.
  * @param {string[]} folders Folders to scan, relative to the repository root.
  * @returns {{ rule: string, file: string, line: number, column: number, message: string }[]}
+ * @throws When swc cannot parse a file. The message names the file.
  */
 export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
+  // The architecture gate imports this file and needs no swc here, so swc loads on first use.
+  // A missing @swc/core throws: the scan never passes without a parser.
+  const swc = createRequire(import.meta.url)('@swc/core')
   const found = []
   for (const folder of folders) {
     let files
@@ -128,15 +128,30 @@ export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
       throw error
     }
     for (const path of files) {
-      const code = blankComments(readFileSync(path, 'utf8'))
-      for (const match of code.matchAll(DISABLING_CALL)) {
-        const before = code.slice(0, match.index).split('\n')
+      const file = relative(ROOT, path).replaceAll('\\', '/')
+      const source = readFileSync(path, 'utf8')
+      let tree
+      try {
+        const typescript = /\.(ts|tsx|mts|cts)$/.test(path)
+        tree = swc.parseSync(source, {
+          syntax: typescript ? 'typescript' : 'ecmascript',
+          tsx: path.endsWith('.tsx'),
+          jsx: path.endsWith('.jsx'),
+          target: 'es2023'
+        })
+      } catch (error) {
+        throw new Error(`The swc parser cannot read ${file}, so the scan for .only and .skip cannot run.\n${error.message}`)
+      }
+      const bytes = Buffer.from(source, 'utf8')
+      for (const { name, span } of findDisablingAccesses(tree.body)) {
+        // swc counts bytes from 1 in each file. Turn the offset into a line and a column.
+        const before = bytes.subarray(0, span.start - 1).toString('utf8').split('\n')
         found.push({
           rule: ACCEPTANCE_RULE,
-          file: relative(ROOT, path).replaceAll('\\', '/'),
+          file,
           line: before.length,
           column: (before.at(-1)?.length ?? 0) + 1,
-          message: `".${match[1] ?? match[3]}" in an acceptance test runs a test alone or leaves one out`
+          message: `".${name}" in an acceptance test runs a test alone or leaves one out`
         })
       }
     }
