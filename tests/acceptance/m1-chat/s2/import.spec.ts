@@ -137,6 +137,18 @@ async function switchWorkspace(page: Page, from: string, to: string): Promise<vo
   await menu.getByRole('button', { name: to, exact: true }).click()
 }
 
+/** Opens the settings of the current workspace through the workspace menu, and checks its name. */
+async function openSettings(page: Page, current: string) {
+  await page.getByRole('button', { name: new RegExp(`^${current}`) }).first().click()
+  const menu = page.getByRole('group', { name: 'Workspaces' })
+  await expect(menu, 'The workspace menu "Workspaces" does not open.').toBeVisible()
+  await menu.getByRole('button', { name: 'Workspace settings', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Workspace settings' })
+  await expect(dialog, `The dialog "Workspace settings" of ${current} does not open.`).toBeVisible()
+  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(current)
+  return dialog
+}
+
 /** Checks that the sidebar lists the drafts of one workspace, and no draft of the other. */
 async function sidebarShows(page: Page, drafts: Draft[], account: Draft['account']): Promise<void> {
   for (const draft of drafts) {
@@ -273,5 +285,67 @@ test.describe('A17: the first start imports the old profile', () => {
 
     expect(await readFiles(aether.dataDir, OLD_FILES), 'A17: the second start changed the old files.').toEqual(before)
     expectImported(await aether.readDatabase(), DRAFTS)
+  })
+
+  test('A17: after the import, a switch of the workspace and an edit of its root leave workspace.json and runs/ byte-equal', async ({
+    aether
+  }) => {
+    // Decision 0005: the old files stay unchanged, also after a change of the imported data.
+    await writeOldProfile(aether, DRAFTS)
+    const before = await readFiles(aether.dataDir, OLD_FILES)
+    const roots = rootsOf(aether)
+    const edited = join(aether.root, 'roots', 'client-edited')
+    await mkdir(edited, { recursive: true })
+
+    const page = await aether.start()
+    await answerRootDialog(page, roots)
+    await switchWorkspace(page, WORKSPACES.personal, WORKSPACES.client)
+    await sidebarShows(page, DRAFTS, 'client')
+
+    // Edit the root of "Client Example" in its settings.
+    const settings = await openSettings(page, WORKSPACES.client)
+    const root = settings.getByRole('textbox', { name: 'Root', exact: true })
+    await expect(root, 'The workspace settings do not show the root that the import dialog saved.').toHaveValue(
+      roots[WORKSPACES.client]!
+    )
+    await root.fill(edited)
+    await settings.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(settings).toBeHidden()
+    await aether.stop()
+
+    expect(await readFiles(aether.dataDir, OLD_FILES), 'A17: a switch and an edit of a root changed the old files.').toEqual(
+      before
+    )
+    const data = await aether.readDatabase()
+    const rows = data.holding(WORKSPACES.client)
+    expect(rows, `A17: the database must hold one workspace "${WORKSPACES.client}".\n${data.describe()}`).toHaveLength(1)
+    expect(
+      holdsPath(rows[0]!, edited),
+      `A17: the workspace "${WORKSPACES.client}" must keep the edited root ${edited}.\n${data.describe()}`
+    ).toBe(true)
+    expect(
+      holdsPath(rows[0]!, roots[WORKSPACES.client]!),
+      `A17: the workspace "${WORKSPACES.client}" still holds its old root.\n${data.describe()}`
+    ).toBe(false)
+  })
+
+  test('A17: the GitHub account of an old account carries over to its workspace', async ({ aether }) => {
+    await writeOldProfile(aether, DRAFTS)
+    const page = await aether.start()
+    await answerRootDialog(page, rootsOf(aether))
+
+    // "Personal" had no GitHub account. Its settings do not show the one of "Client Example".
+    const personal = await openSettings(page, WORKSPACES.personal)
+    await expect(personal.getByText('@example-user-one', { exact: true })).toHaveCount(0)
+    await personal.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(personal).toBeHidden()
+
+    // "Client Example" had the GitHub account example-user-one.
+    await switchWorkspace(page, WORKSPACES.personal, WORKSPACES.client)
+    const client = await openSettings(page, WORKSPACES.client)
+    await expect(
+      client.getByText('@example-user-one', { exact: true }),
+      'A17: the settings of "Client Example" do not show its GitHub account @example-user-one.'
+    ).toBeVisible()
   })
 })

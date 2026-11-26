@@ -13,6 +13,11 @@
 //   imported workspace, named "Root of <workspace name>", and a button "Save roots".
 // - The workspace menu: the switcher button shows the name of the current workspace. Its menu
 //   is a `group` named "Workspaces", with one button per workspace, named by the workspace.
+// - The workspace settings: the menu has a button "Workspace settings". It opens a `dialog`
+//   named "Workspace settings" for the current workspace. The dialog has a text field "Name"
+//   with the name of the workspace, a text field "Root" with its root, the GitHub account of
+//   the workspace as the text "@<login>", a button "Save" that saves and closes it, and a
+//   button "Cancel" that closes it.
 // - The messages of A18: an element with role `alert`.
 import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

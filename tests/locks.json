@@ -24,11 +24,11 @@
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
-    "sha256": "f8cd2b159990dc58f09e09fb7286fad9f584793e8d97fd275b8533dadb59e252",
+    "sha256": "d158031b7d329e58a863a1731abb1432ab6daab08eaf22adf726b1a5bccaf8fb",
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s2/import.spec.ts": {
-    "sha256": "35015d303a1ddc129449cd15b6594ce6dbba63b9d7fa07c6e4f1fcec35521872",
+    "sha256": "d83b23a6ecb9f4ccfb3f8cabbfc07e3b506b12fe14f958a596f93af24d9d6165",
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s2/unreadable-files.spec.ts": {
