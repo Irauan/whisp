@@ -58,7 +58,10 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 ### Roles and settings
 
 - `.claude/agents/test-author.md`, `builder.md`, `reviewer.md`, `validator.md`. Each sets `model`, `effort` and its tools, from `docs/models.md`.
-- The builder has deny rules for `tests/acceptance/**`, `tests/simulated-agent/**`, `tests/locks.json` and `tests/architecture/known-violations.json`.
+- From S6 on, the builder has deny rules for `tests/acceptance/**`, `tests/simulated-agent/**` and `tests/locks.json`.
+- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked. S2 to S5 create these paths as normal story work.
+- The builder can remove an entry from `tests/architecture/known-violations.json` when its change fixes that violation. The builder never adds an entry. The lock check fails a PR that grows the list. User decision, 2026-11-26.
+- The reviewer checks by hand, in every story, that the diff changes no locked file. The deny rules do not cover writes through `Bash`.
 - `.claude/settings.json` sets `worktree.baseRef` to `head`.
 - `docs/models.md` says when each model and effort fits. The test author, the reviewer and the validator rank above the builder.
 - `CLAUDE.md` holds short rules for every session, with links. It stays under 200 lines.
