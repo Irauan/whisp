@@ -7,6 +7,26 @@
     "sha256": "98162db78ffe5186868c2108e85087e04fa743e391fb2efea6bce64cee61df13",
     "story": "m0-gates/s5"
   },
+  "tests/acceptance/m0-gates/s8/fake-gh.cs": {
+    "sha256": "2b0e09cf756653e0e893b1101d083b6a24ed656e2284ce1d1a08cab36b8bf80a",
+    "story": "m0-gates/s8"
+  },
+  "tests/acceptance/m0-gates/s8/fixture.ts": {
+    "sha256": "ba79154e045057cff86eb707730f141f2650baae4061ee5282367c3c72f6d957",
+    "story": "m0-gates/s8"
+  },
+  "tests/acceptance/m0-gates/s8/github-accounts.spec.ts": {
+    "sha256": "bfec79cc6175411097ebceab695902a18c2b7a9cc12399128697bae2df5defb3",
+    "story": "m0-gates/s8"
+  },
+  "tests/acceptance/m0-gates/s8/invoke-guard.spec.ts": {
+    "sha256": "a75747e5dd94fa687869b704532df93590e09fc657746f171bea582d6f5b983f",
+    "story": "m0-gates/s8"
+  },
+  "tests/architecture/contracts.test.ts": {
+    "sha256": "5a17578af85187b9f72d69464b765573cdf4469471a35056a30a32b1aa893e0d",
+    "story": "m0-gates/s8"
+  },
   "tests/simulated-agent/agent.mjs": {
     "sha256": "2a56a52920ecaee2a2c5e5ad5b681b973c193f5e079ee9aa7006227bb3755996",
     "story": "m0-gates/s4"
