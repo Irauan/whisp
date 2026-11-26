@@ -65,6 +65,9 @@ Does not apply. The milestone adds no screen.
 - The test lock: `tests/locks.json` holds the SHA-256 of each locked test file. CI checks the commits of each story PR:
   - The commits before the first code commit can add locked tests and their lock entries.
   - No later commit can change a locked file or its entry.
+  - Exception: when the builder disputes a test that the test author added in the same story, the test author changes it in a new commit with the trailer `Locked-Test-Change:`, after the coordinator approves. A change of meaning goes to the user. User decision, 2026-11-26.
+  - The lock job runs the copy of `scripts/check-lock.mjs` from the base branch, so a PR cannot weaken the check that judges it. User decision, 2026-11-26.
+  - A milestone PR to `main` holds squashed stories. For it, the lock job checks only the hashes and the known violations.
   - A test that is locked on the base branch changes only in a commit with the trailer `Locked-Test-Change:` and a reason. The coordinator adds it only for the test author. It reports each such change in the evidence. A change of meaning goes to the user.
 - The builder role has deny rules for `tests/acceptance/**`, `tests/locks.json` and `tests/simulated-agent/**`.
 - GitHub rulesets protect `main` and `milestone/*`:
@@ -163,6 +166,7 @@ Does not apply. The milestone adds no screen.
 ## Accepted gaps
 
 - CI cannot tell the test author from the builder. Reason: one GitHub account for all agents, from `docs/process.md`. The deny rules and the reviewer reduce the risk.
+- A PR can still change the `lock` job in `ci.yml`. Reason: a fix needs a `pull_request_target` workflow, and the user chose not to add it now. The reviewer checks each change under `.github/workflows/`. User decision, 2026-11-26.
 - Before the lock story merges, only the reviewer guards the tests. Reason: the lock is built in this milestone, and S1 to S5 add no locked acceptance test of product behavior.
 
 ## Budget
