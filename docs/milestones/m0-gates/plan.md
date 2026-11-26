@@ -175,7 +175,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] S4 Simulated agent. PR #3, squash merge by the user.
 - [x] S5 App test. PR #5, squash merge by the user.
 - [x] Demo of the walking skeleton to the user: CI run 45821001386 on `641fee1`, five jobs green.
-- [ ] S6 Test lock
+- [x] S6 Test lock. PR #6, squash merge by the user (`7d4a4f9`), before the re-review ended; the re-review then passed.
 - [ ] S7 Branch protection
 - [ ] S8 Trial: contracts and GitHub accounts
 - [ ] Step 7: milestone validation, with one red PR per gate
