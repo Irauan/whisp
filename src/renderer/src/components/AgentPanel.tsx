@@ -133,7 +133,7 @@ export function AgentPanel(props: { item: WorkItem; project: Project; onChooseFo
       {busy && !run.question && (
         <p className="agent-status muted">
           <LoaderCircle size={14} className="spin" />
-          {run.status === 'starting' ? 'Starting the agent' : 'Working'}
+          {run.status === 'starting' ? 'Starting the agent' : 'Busy'}
         </p>
       )}
       {error && (
