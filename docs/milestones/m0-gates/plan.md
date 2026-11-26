@@ -24,10 +24,13 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 - `.oxlintrc.json` sets the rules for promises, restricted imports, restricted globals (`localStorage`, `sessionStorage`), raw HTML, `.only` and `.skip`. tsgolint gives the type-aware rules.
 - `.dependency-cruiser.cjs` uses the swc parser. It holds the rules of "Dependencies" in `docs/architecture.md`, for the current and the target layout.
 - `tests/architecture/` holds the vitest tests that run the tools on the fixtures, and the tests for the slice shape, the contract registry and the migrations.
-- `tests/architecture/known-violations.json` lists each current violation as `{ rule, file }`. One test compares the tool output with the list:
+- `tests/architecture/known-violations.json` lists each current violation as `{ rule, file, count }`. One test compares the tool output with the list:
   - An occurrence that is not listed fails.
-  - A listed entry with no occurrence fails.
-- The list can only shrink. The lock check fails when a PR adds an entry.
+  - More occurrences than `count` fail.
+  - Fewer occurrences than `count` fail until the change lowers `count` or removes the entry.
+  - User decision, 2026-11-26: the count closes the gap where a new violation in a listed file passed.
+- The list can only shrink. The lock check fails when a PR adds an entry or raises a count.
+- Each `src` source file belongs to at least one zone config. A test in `tests/architecture/` checks this.
 
 ### Simulated agent
 
@@ -100,7 +103,7 @@ S1 to S7 change no product behavior, so they skip step 3. Their fixtures are uni
 | Story | Content | Checks | Depends on |
 |---|---|---|---|
 | S1 Roles and rules | Role definitions, `docs/models.md`, `CLAUDE.md`, `.claude/settings.json` | G22 | — |
-| S2 CI, typecheck and lint | Workflow, zone tsconfigs, oxlint with tsgolint, known violations list for lint | G1 (first four jobs), G2, G3, G4, G6, G10 | S1 |
+| S2 CI, typecheck and lint | Workflow, zone tsconfigs, oxlint with tsgolint, known violations list for lint | G1 (jobs `typecheck`, `lint`, `unit`), G2, G3, G4, G6, G10 | S1 |
 | S3 Architecture tests | dependency-cruiser with swc, fixtures, known violations for imports | G5, G7, G8, G9 | S2 |
 | S4 Simulated agent | Program, control pipe, gates, five scenarios. `host.test.ts` moves to it. | G12 (slice level) | S2 |
 | S5 App test | Playwright, temporary data folder, `acceptance` job | G1, G11, G12 | S4 |
