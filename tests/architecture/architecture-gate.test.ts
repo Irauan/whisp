@@ -104,6 +104,15 @@ describe('the other import rules', () => {
     )
   }, 60_000)
 
+  it('fails on product code that imports from tests, and lets tests import the simulated agent', () => {
+    // The fixture has a test file under src and a test file under tests/ that import
+    // tests/simulated-agent. Only the product file fails.
+    const { diagnostics } = runDepcruise({ cwd: fixture('g-product-tests'), targets: ['src', 'tests'] })
+    expect(diagnostics.map((d) => `${d.rule} ${d.file}`)).toEqual([
+      'product-imports-no-tests src/main/product.ts'
+    ])
+  }, 60_000)
+
   it('passes on the valid imports of the target layout', () => {
     expect(found('g-imports-ok')).toEqual([])
   }, 60_000)

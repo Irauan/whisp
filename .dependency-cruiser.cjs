@@ -112,6 +112,14 @@ module.exports = {
       to: { path: '^src/providers/' }
     },
     {
+      name: 'product-imports-no-tests',
+      comment:
+        'Product code under src never imports from tests/. A test file (*.test.ts, *.test.tsx) and the files under tests/ may import tests/simulated-agent.',
+      severity: 'error',
+      from: { path: '^src/', pathNot: '\\.test\\.tsx?$' },
+      to: { path: '^tests/' }
+    },
+    {
       name: 'domain-imports-no-node-electron-react',
       comment: 'The domain imports nothing from Electron, Node or React.',
       severity: 'error',
