@@ -30,7 +30,7 @@ export function useSuggestions(mention: Mention | null, sources: Sources): Sugge
       trigger === '@'
         ? window.aether.listRepositoryFiles(folder)
         : window.aether.listIssues(folder, githubLogin)
-    request
+    void request
       .catch((cause: unknown): Listing => ({ ok: false, reason: String(cause) }))
       .then((listing) => {
         if (active) setLoaded({ key, listing })
