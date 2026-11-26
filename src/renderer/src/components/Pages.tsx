@@ -42,7 +42,7 @@ export function PullRequestsPage() {
     <EmptyPage
       icon={<GitPullRequest size={36} />}
       title="No pull requests"
-      body="Pull requests of your work items will appear here. Aether cannot read pull requests yet."
+      body="Pull requests will appear here. Aether cannot read pull requests yet."
     />
   )
 }
