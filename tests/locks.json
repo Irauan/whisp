@@ -8,7 +8,7 @@
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/github-accounts.spec.ts": {
-    "sha256": "bfec79cc6175411097ebceab695902a18c2b7a9cc12399128697bae2df5defb3",
+    "sha256": "64f41567ce44ff473fd51be0c8a3b936d0089a093e7bbe460e2e2238f3d4e935",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/invoke-guard.spec.ts": {
