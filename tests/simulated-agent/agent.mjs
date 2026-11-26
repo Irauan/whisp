@@ -107,9 +107,13 @@ socket.on('connect', () => void report({ type: 'hello', pid: process.pid }))
 
 /** Waits at a gate. Returns 'cancelled' when the client cancels the turn first. */
 async function waitAtGate(name, signal) {
+  // Listen before the first await. A cancel that came earlier, or that comes while the report
+  // is on its way, would fire its event with no listener, and the wait would never end.
+  const cancelled = signal.aborted
+    ? Promise.resolve('cancelled')
+    : new Promise((resolve) => signal.addEventListener('abort', () => resolve('cancelled'), { once: true }))
   await report({ type: 'gate', name, state: 'waiting' })
   const entry = gate(name)
-  const cancelled = new Promise((resolve) => signal.addEventListener('abort', () => resolve('cancelled'), { once: true }))
   const outcome = await Promise.race([entry.promise.then(() => 'passed'), cancelled])
   if (outcome === 'passed') await report({ type: 'gate', name, state: 'passed' })
   return outcome
