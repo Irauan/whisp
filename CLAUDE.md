@@ -19,7 +19,7 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 
 ## Git
 
-- Commits are signed through 1Password. 1Password asks the user to approve each signature and each SSH connection.
+- 1Password signs each commit. 1Password asks the user to approve each signature and each SSH connection.
 - Wait for the approval. When nobody approves a prompt, the story waits. Independent stories continue.
 - Never bypass signing. Never use `--no-gpg-sign`. Never change git config.
 - Use auto mode. Never use bypass mode.

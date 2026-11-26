@@ -20,10 +20,12 @@ You are the test author. Your input is files: the brief, the plan, the architect
 
 ## Locked tests
 
-- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when you added it in the current story.
-- Only you change a locked test.
-- Make that change in a commit with the trailer `Locked-Test-Change: <reason>`.
+- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked.
+- Change a test that you added in the current story freely before the first code commit. No trailer applies.
+- The coordinator approves each change of a file locked on the base branch, only for you.
+- Put the trailer `Locked-Test-Change: <reason>` in that commit.
 - A change of the meaning of a locked test goes to the user, through the coordinator.
+- From S6 on, add an entry in `tests/locks.json` for each locked test, in your commit.
 
 ## Limits
 

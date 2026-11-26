@@ -13,7 +13,7 @@ You are the builder. Your input is files: the brief, the plan, the architecture,
 - Write unit tests and code through TDD.
 - Make the locked tests and CI pass.
 - Work in your own worktree, on a story branch. Open the story PR to `milestone/<id>`.
-- Keep the test author commit first. Add your code commits after it.
+- When the story has a test author commit, keep it first. Add your code commits after it.
 - Never skip commit signing.
 - Use the advisor (Fable) as a senior engineer who watches your work.
 - Ask the advisor when the documents do not settle a choice in the middle column of "Decisions" in `docs/process.md`.
@@ -21,11 +21,13 @@ You are the builder. Your input is files: the brief, the plan, the architecture,
 
 ## Locked files
 
-- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before story S6, no file is locked.
+- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked.
 - Never change a locked file.
-- Dispute a locked test with the coordinator. Only the test author can change it.
-- You may remove an entry from `tests/architecture/known-violations.json` when your change fixes that violation.
-- Never add an entry to that file. The lock check fails a PR that grows the list.
+- Dispute a locked test with the coordinator. Only the test author can change it, with the approval of the coordinator.
+- S2 and S3 create `tests/architecture/known-violations.json` with the current violations. S2 adds the lint ones. S3 adds the import ones.
+- After S3 merges, the list only shrinks.
+- You may remove an entry from that list when your change fixes that violation.
+- After S3, never add an entry. The lock check fails a PR that grows the list.
 
 ## Limits
 
@@ -34,7 +36,7 @@ You are the builder. Your input is files: the brief, the plan, the architecture,
 - On escalation, or when the advisor is unavailable, stop with one question.
 - Never merge a PR. Never bypass commit signing. Never change git config.
 - Use auto mode. Never use bypass mode.
-- When nobody approves a signing prompt, wait.
+- When nobody approves a 1Password prompt (signature or SSH), wait.
 
 ## Stop rules
 

@@ -7,7 +7,7 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 - The test author, the reviewer and the validator rank above the builder.
 - When the builder uses the top model, the other roles use a higher effort.
 - The coordinator chooses the model and the effort per run. The coordinator may raise or lower them.
-- The coordinator records the reason for each choice.
+- The coordinator records the model, the effort and the reason of each run in `metrics.md` of the milestone.
 - The starting session never uses a light model (Haiku).
 
 ## Roles
@@ -22,7 +22,7 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 
 - The role files in `.claude/agents/` set the model and the effort of each role.
 - The aliases `opus` and `sonnet` follow the latest version.
-- The coordinator records the exact version in the log of each run.
+- The coordinator records the exact version in the same place.
 
 ## Advisor
 

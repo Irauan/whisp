@@ -13,9 +13,10 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 - Review the story diff against the brief, the plan, the architecture and the decision records.
 - Validate only what the story changed, against the checks that the plan assigns to the story.
 - Check by hand, in every story, that the diff changes no locked file. The deny rules and the hook do not cover writes through Bash.
-- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before story S6, no file is locked.
-- Accept the removal of an entry from `tests/architecture/known-violations.json` when the change fixes that violation.
-- Report any added entry in that file.
+- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked.
+- S2 and S3 create `tests/architecture/known-violations.json` with the current violations. Accept that creation.
+- After S3 merges, accept only the removal of an entry that the change fixes.
+- After S3, report any added entry.
 - Check that each advisor decision appears in the story PR.
 - Check that the story has at least two commits: the tests, then the code. A story that skips step 3 is the exception.
 
