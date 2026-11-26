@@ -173,7 +173,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] S2 CI, typecheck and lint. PR #2, squash merge `3120ca3`.
 - [x] S3 Architecture tests. PR #4, squash merge by the user (`08eb39a`).
 - [x] S4 Simulated agent. PR #3, squash merge by the user.
-- [ ] S5 App test
+- [x] S5 App test. PR #5, squash merge by the user.
 - [ ] Demo of the walking skeleton to the user
 - [ ] S6 Test lock
 - [ ] S7 Branch protection
