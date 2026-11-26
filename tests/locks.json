@@ -23,6 +23,18 @@
     "sha256": "0ef779ef12644af5fab80616d11ac32f07c6be764406260d73cb874abfcede7e",
     "story": "m1-chat/s1"
   },
+  "tests/acceptance/m1-chat/s2/fixture.ts": {
+    "sha256": "f8cd2b159990dc58f09e09fb7286fad9f584793e8d97fd275b8533dadb59e252",
+    "story": "m1-chat/s2"
+  },
+  "tests/acceptance/m1-chat/s2/import.spec.ts": {
+    "sha256": "35015d303a1ddc129449cd15b6594ce6dbba63b9d7fa07c6e4f1fcec35521872",
+    "story": "m1-chat/s2"
+  },
+  "tests/acceptance/m1-chat/s2/unreadable-files.spec.ts": {
+    "sha256": "9035305b8bb175053ac002be676fae564d54833aa120f6c1d619c04f2c6c68fc",
+    "story": "m1-chat/s2"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "5a17578af85187b9f72d69464b765573cdf4469471a35056a30a32b1aa893e0d",
     "story": "m0-gates/s8"
