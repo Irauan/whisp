@@ -1,0 +1,41 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node",
+      "electron-vite/node"
+    ],
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": [
+    "electron.vite.config.ts",
+    "vitest.config.mts",
+    "src/*.ts",
+    "src/*.mts",
+    "src/**/*.mts",
+    "src/**/*.cts",
+    "src/app/*.ts",
+    "src/main",
+    "src/preload",
+    "src/app/main",
+    "src/app/preload",
+    "src/building-blocks/**/*.ts",
+    "src/providers",
+    "src/features/**/*.controller.ts",
+    "src/features/**/*.handler.ts",
+    "src/features/**/*.store.ts",
+    "src/**/*.test.ts",
+    "tests/architecture/*.ts",
+    "tests/simulated-agent"
+  ],
+  "exclude": [
+    "tests/architecture/fixtures",
+    "src/renderer/**/*.test.ts",
+    "src/app/renderer/**/*.test.ts",
+    "src/**/*.ui.ts"
+  ]
+}

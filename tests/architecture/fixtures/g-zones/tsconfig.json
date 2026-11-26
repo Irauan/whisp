@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "noEmit": true, "types": [], "lib": ["ES2023"] },
+  "include": ["src/covered.ts"]
+}
