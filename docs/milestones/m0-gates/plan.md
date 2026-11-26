@@ -60,7 +60,11 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 - `.claude/agents/test-author.md`, `builder.md`, `reviewer.md`, `validator.md`. Each sets `model`, `effort` and its tools, from `docs/models.md`.
 - From S6 on, the builder has deny rules for `tests/acceptance/**`, `tests/simulated-agent/**` and `tests/locks.json`.
 - A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked. S2 to S5 create these paths as normal story work.
-- The builder can remove an entry from `tests/architecture/known-violations.json` when its change fixes that violation. The builder never adds an entry. The lock check fails a PR that grows the list. User decision, 2026-11-26.
+- S2 and S3 create `tests/architecture/known-violations.json` with the current violations: S2 for lint, S3 for imports. After S3 merges, the list only shrinks.
+- The builder can remove an entry from that list when its change fixes that violation. After S3, the builder never adds an entry. The lock check fails a PR that grows the list. User decision, 2026-11-26.
+- The coordinator approves each change of a file locked on the base branch, and only for the test author. The commit then carries the trailer `Locked-Test-Change: <reason>`.
+- The coordinator records the model, the effort and the reason of each agent run in `metrics.md` of the milestone.
+- The coordinator passes worktree isolation in each builder dispatch. The builder file does not set it.
 - The reviewer checks by hand, in every story, that the diff changes no locked file. The deny rules do not cover writes through `Bash`.
 - `.claude/settings.json` sets `worktree.baseRef` to `head`.
 - `docs/models.md` says when each model and effort fits. The test author, the reviewer and the validator rank above the builder.
