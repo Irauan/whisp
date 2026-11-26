@@ -137,6 +137,18 @@ describe('readOldProfile', () => {
     ])
   })
 
+  it('skips an attachment that the database cannot hold, and imports the draft and the other attachments', () => {
+    const good = { kind: 'file', ref: 'C:\\notes.txt', label: 'notes.txt' }
+    const bad = [{ kind: '', ref: 'x', label: 'x' }, { ref: 'x', label: 'x' }, null, 'text', 5, { kind: 'file', ref: 1, label: 'x' }]
+    const result = read(profile({ sessions: [session({}, { attachments: [bad[0], good, ...bad.slice(1)] })] }))
+    expect(result?.drafts).toHaveLength(1)
+    expect(result?.drafts[0]?.attachments).toEqual([good])
+  })
+
+  it('refuses a file whose attachments are not a list', () => {
+    expect(read(profile({ sessions: [session({}, { attachments: 'none' })] }))).toBeNull()
+  })
+
   it('gives a draft of version 3 without files no attachments', () => {
     const old = session({}, { attachments: undefined })
     expect(read(profile({ version: 3, sessions: [old] }))?.drafts[0]?.attachments).toEqual([])

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, renameSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { Migration } from './migrations'
 import { err, ok, type Result } from './result'
@@ -52,20 +52,39 @@ function freePath(path: string, label: string, now: Date): string {
 }
 
 /**
- * Opens the file, turns foreign keys on and reads the header and the schema. A file that is not a
- * database fails at the header. A file with a good header and a damaged schema fails at the schema.
+ * Opens the file, turns foreign keys on and reads the header, where `user_version` lives. A file
+ * that is not a database fails here. The caller then checks the version, and only after that the
+ * schema: a newer database must be refused even when this SQLite cannot parse its schema.
  */
-function connect(path: string): DatabaseSync {
+function connect(path: string): { sqlite: DatabaseSync; version: number } {
   const sqlite = new DatabaseSync(path)
   try {
     sqlite.exec('PRAGMA foreign_keys = ON')
-    sqlite.prepare('PRAGMA user_version').get()
-    sqlite.prepare('SELECT count(*) FROM sqlite_master').get()
-    return sqlite
+    return { sqlite, version: versionOf(sqlite) }
   } catch (cause) {
     sqlite.close()
     throw cause
   }
+}
+
+/** Reads the schema. A file with a good header and a damaged schema fails here. */
+function readSchema(sqlite: DatabaseSync): void {
+  try {
+    sqlite.prepare('SELECT count(*) FROM sqlite_master').get()
+  } catch (cause) {
+    sqlite.close()
+    throw cause
+  }
+}
+
+/**
+ * Connects, and reads the schema when the version is not newer than `latest`.
+ * A newer version returns before the schema read, so that the caller can refuse it.
+ */
+function attempt(path: string, latest: number): { sqlite: DatabaseSync; version: number } {
+  const connected = connect(path)
+  if (connected.version <= latest) readSchema(connected.sqlite)
+  return connected
 }
 
 const versionOf = (sqlite: DatabaseSync): number => Number(sqlite.prepare('PRAGMA user_version').get()?.user_version ?? 0)
@@ -107,16 +126,59 @@ class SqliteDatabase implements Database {
   }
 }
 
-/** Runs one migration and sets `user_version` in the same transaction. */
+/**
+ * Runs one migration and sets `user_version` in the same transaction.
+ *
+ * Foreign keys are off during the migration, and the pragma works only outside a transaction.
+ * A migration that rebuilds a table then does not delete the rows of the tables that refer to it
+ * through `ON DELETE CASCADE`. Before the commit, `foreign_key_check` must report no row.
+ */
 function apply(sqlite: DatabaseSync, migration: Migration): void {
-  sqlite.exec('BEGIN IMMEDIATE')
+  sqlite.exec('PRAGMA foreign_keys = OFF')
   try {
-    sqlite.exec(migration.sql)
-    sqlite.exec(`PRAGMA user_version = ${Math.trunc(migration.version)}`)
-    sqlite.exec('COMMIT')
-  } catch (cause) {
-    if (sqlite.isTransaction) sqlite.exec('ROLLBACK')
-    throw cause
+    sqlite.exec('BEGIN IMMEDIATE')
+    try {
+      sqlite.exec(migration.sql)
+      const broken = sqlite.prepare('PRAGMA foreign_key_check').all()
+      if (broken.length > 0) {
+        throw new Error(`The migration ${migration.version} leaves ${broken.length} rows that break a foreign key.`)
+      }
+      sqlite.exec(`PRAGMA user_version = ${Math.trunc(migration.version)}`)
+      sqlite.exec('COMMIT')
+    } catch (cause) {
+      if (sqlite.isTransaction) sqlite.exec('ROLLBACK')
+      throw cause
+    }
+  } finally {
+    sqlite.exec('PRAGMA foreign_keys = ON')
+  }
+}
+
+/** The files that SQLite keeps next to a database file. */
+const COMPANIONS = ['-journal', '-wal', '-shm']
+
+/**
+ * Reads the companion files before the first open. SQLite deletes a journal that it cannot use,
+ * and it deletes the wal and shm files when it closes, also for a file that is not a database.
+ */
+function readCompanions(path: string): Map<string, Buffer> {
+  const found = new Map<string, Buffer>()
+  for (const suffix of COMPANIONS) {
+    if (existsSync(path + suffix)) found.set(suffix, readFileSync(path + suffix))
+  }
+  return found
+}
+
+/**
+ * Renames the unreadable file, and keeps its companions next to it, so that Aether loses none
+ * of the bytes. The new database starts without them.
+ */
+function moveAside(path: string, target: string, companions: Map<string, Buffer>): void {
+  renameSync(path, target)
+  for (const suffix of COMPANIONS) {
+    rmSync(path + suffix, { force: true })
+    const bytes = companions.get(suffix)
+    if (bytes) writeFileSync(target + suffix, bytes)
   }
 }
 
@@ -138,23 +200,25 @@ export function openDatabase(
   now: () => Date = () => new Date()
 ): Result<Opened, OpenError> {
   const inMemory = path === MEMORY
-  let sqlite: DatabaseSync
+  const latest = migrations.at(-1)?.version ?? 0
+  let connected: { sqlite: DatabaseSync; version: number }
   let keptAside: string | null = null
+  const companions = inMemory ? new Map<string, Buffer>() : readCompanions(path)
   try {
     try {
-      sqlite = connect(path)
+      connected = attempt(path, latest)
     } catch (cause) {
       if (inMemory || !isUnreadable(cause)) throw cause
       keptAside = freePath(path, 'unreadable', now())
-      renameSync(path, keptAside)
-      sqlite = connect(path)
+      moveAside(path, keptAside, companions)
+      connected = attempt(path, latest)
     }
   } catch (cause) {
     return err('database-failed', `Aether could not open its database. ${describe(cause)}`)
   }
 
-  const latest = migrations.at(-1)?.version ?? 0
-  const from = versionOf(sqlite)
+  let { sqlite } = connected
+  const from = connected.version
   if (from > latest) {
     sqlite.close()
     return err('database-newer', `The database has version ${from}. This Aether knows version ${latest}. Update Aether.`)
@@ -166,14 +230,30 @@ export function openDatabase(
     if (pending.length > 0 && !inMemory && hasObjects(sqlite)) {
       // The copy needs a closed file, so that it holds each change.
       sqlite.close()
-      backup = freePath(path, `before-version-${from}`, now())
-      copyFileSync(path, backup)
-      sqlite = connect(path)
+      const copy = freePath(path, `before-version-${from}`, now())
+      try {
+        copyFileSync(path, copy)
+      } catch (cause) {
+        // A partial copy is not a backup. The original file is untouched.
+        rmSync(copy, { force: true })
+        throw cause
+      }
+      backup = copy
+      sqlite = attempt(path, latest).sqlite
     }
     for (const migration of pending) apply(sqlite, migration)
   } catch (cause) {
     if (sqlite.isOpen) sqlite.close()
-    if (backup) copyFileSync(backup, path)
+    if (backup) {
+      try {
+        copyFileSync(backup, path)
+      } catch (restore) {
+        return err(
+          'database-failed',
+          `Aether could not update its database, and could not restore the copy ${backup}. ${describe(cause)} ${describe(restore)}`
+        )
+      }
+    }
     return err('database-failed', `Aether could not update its database. ${describe(cause)}`)
   }
   return ok({ database: new SqliteDatabase(sqlite), keptAside })

@@ -46,7 +46,8 @@ export function modeOf(mode: string, permissions: string): Mode {
   return 'ask'
 }
 
-const attachmentSchema = z.looseObject({ kind: z.string(), ref: z.string(), label: z.string() })
+/** An attachment that the database can hold: a kind that is not empty, and a reference and a label. */
+const attachmentSchema = z.looseObject({ kind: z.string().min(1), ref: z.string(), label: z.string() })
 
 const draftSchema = z.looseObject({
   accountId: z.string(),
@@ -59,7 +60,8 @@ const draftSchema = z.looseObject({
     mode: z.string().default('interactive'),
     permissions: z.string().default('ask'),
     model: z.string().default('default'),
-    attachments: z.array(attachmentSchema).default([])
+    // The import skips an attachment that is not valid. A bad attachment never blocks the file.
+    attachments: z.array(z.unknown()).default([])
   }),
   createdAt: z.string().optional()
 })
@@ -158,7 +160,10 @@ export function readOldProfile(text: string): OldProfile | null {
         mode: modeOf(settings.mode, settings.permissions),
         folder: settings.folder,
         model: settings.model,
-        attachments: settings.attachments.map(({ kind, ref, label }) => ({ kind, ref, label })),
+        attachments: settings.attachments.flatMap((item) => {
+          const parsed = attachmentSchema.safeParse(item)
+          return parsed.success ? [{ kind: parsed.data.kind, ref: parsed.data.ref, label: parsed.data.label }] : []
+        }),
         createdAt: createdAt ?? null
       }))
   }

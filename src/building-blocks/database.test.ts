@@ -127,6 +127,20 @@ describe('openDatabase', () => {
     database.close()
   })
 
+  it('moves the journal, the wal and the shm file of an unreadable database with it', async () => {
+    const text = Buffer.from('This is not a SQLite database. '.repeat(64))
+    await writeFile(path, text)
+    const suffixes = ['-journal', '-wal', '-shm']
+    for (const suffix of suffixes) await writeFile(path + suffix, `old ${suffix}`)
+
+    const { database, keptAside } = opened([first])
+    database.close()
+    expect((await readFile(keptAside!)).equals(text)).toBe(true)
+    for (const suffix of suffixes) expect(await readFile(keptAside! + suffix, 'utf8')).toBe(`old ${suffix}`)
+    // The new database starts without the old companions.
+    expect((await names()).filter((name) => name.startsWith('aether.db-'))).toEqual([])
+  })
+
   it('gives each kept file its own name', async () => {
     await writeFile(path, 'not a database, first')
     opened([first]).database.close()
@@ -145,6 +159,71 @@ describe('openDatabase', () => {
     const result = openDatabase(folder, [first], now)
     expect(result).toMatchObject({ ok: false, error: { code: 'database-failed' } })
     expect(await names()).toEqual([])
+  })
+})
+
+describe('openDatabase: newer version', () => {
+  it('refuses a newer version before it reads the schema, also when the schema is damaged', async () => {
+    const plain = new DatabaseSync(path)
+    plain.exec('CREATE TABLE future (id INTEGER PRIMARY KEY, note TEXT); PRAGMA user_version = 7')
+    plain.close()
+    const good = await readFile(path)
+    // Keep the header, where `user_version` is. Damage the page of the schema.
+    const damaged = Buffer.concat([good.subarray(0, 100), Buffer.alloc(good.length - 100, 0xff)])
+    await writeFile(path, damaged)
+
+    const result = openDatabase(path, [first], now)
+    expect(result).toMatchObject({ ok: false, error: { code: 'database-newer' } })
+    expect((await readFile(path)).equals(damaged)).toBe(true)
+    expect(await names()).toEqual(['aether.db'])
+  })
+})
+
+describe('openDatabase: foreign keys in a migration', () => {
+  const parentAndChild: Migration = {
+    version: 1,
+    name: 'parent-and-child',
+    sql: `CREATE TABLE parent (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+          CREATE TABLE child (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES parent (id) ON DELETE CASCADE);`
+  }
+  const rebuild: Migration = {
+    version: 2,
+    name: 'rebuild-parent',
+    sql: `CREATE TABLE parent_new (id TEXT PRIMARY KEY, name TEXT NOT NULL, note TEXT);
+          INSERT INTO parent_new (id, name) SELECT id, name FROM parent;
+          DROP TABLE parent;
+          ALTER TABLE parent_new RENAME TO parent;`
+  }
+  const orphan: Migration = {
+    version: 2,
+    name: 'orphan',
+    sql: "DELETE FROM parent WHERE id = 'p1';"
+  }
+
+  function seeded() {
+    const old = opened([parentAndChild]).database
+    old.prepare('INSERT INTO parent (id, name) VALUES (?, ?)').run('p1', 'One')
+    old.prepare('INSERT INTO child (id, parent_id) VALUES (?, ?)').run('c1', 'p1')
+    old.close()
+  }
+
+  it('keeps the child rows when a migration rebuilds the parent table', () => {
+    seeded()
+    const { database } = opened([parentAndChild, rebuild])
+    expect(database.prepare('SELECT id FROM child').all()).toEqual([{ id: 'c1' }])
+    expect(database.prepare('SELECT id, name FROM parent').all()).toEqual([{ id: 'p1', name: 'One' }])
+    // Foreign keys are on again after the migration.
+    expect(database.prepare('PRAGMA foreign_keys').get()).toMatchObject({ foreign_keys: 1 })
+    expect(() => database.prepare('INSERT INTO child (id, parent_id) VALUES (?, ?)').run('c2', 'missing')).toThrow()
+    database.close()
+  })
+
+  it('fails a migration that leaves a row that breaks a foreign key, and restores the copy', async () => {
+    seeded()
+    const before = await readFile(path)
+    const result = openDatabase(path, [parentAndChild, orphan], now)
+    expect(result).toMatchObject({ ok: false, error: { code: 'database-failed' } })
+    expect((await readFile(path)).equals(before)).toBe(true)
   })
 })
 

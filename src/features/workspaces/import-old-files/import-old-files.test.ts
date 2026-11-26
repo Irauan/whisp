@@ -144,6 +144,25 @@ describe('importOldFilesHandler', () => {
     expect(new ImportStore(database).imported()).toBe(false)
   })
 
+  it('skips an invalid attachment, so that the first load of the sessions still works', async () => {
+    const withBad = {
+      ...oldProfile,
+      sessions: [
+        {
+          ...draft('s1', 'personal', 'plan', 'all'),
+          settings: {
+            ...draft('s1', 'personal', 'plan', 'all').settings,
+            attachments: [{ kind: '', ref: 'x', label: 'x' }, { kind: 'file', ref: 'C:\\a.txt', label: 'a.txt' }]
+          }
+        }
+      ]
+    }
+    await writeFile(file, JSON.stringify(withBad))
+    expect(run()).toMatchObject({ ok: true, value: { status: 'imported', sessions: 1 } })
+    const row = database.prepare('SELECT attachments FROM sessions').get()
+    expect(JSON.parse(String(row?.attachments))).toEqual([{ kind: 'file', ref: 'C:\\a.txt', label: 'a.txt' }])
+  })
+
   it('keeps no old project and no old work item in the database', async () => {
     await writeFile(file, JSON.stringify(oldProfile))
     run()

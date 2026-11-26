@@ -117,6 +117,20 @@ describe('composeMain', () => {
     })
   })
 
+  it('loads the sessions of an old file that has an invalid attachment', async () => {
+    const profile = oldProfile()
+    const [draft] = profile.sessions
+    draft!.settings = { ...draft!.settings, attachments: [{ kind: '', ref: 'x', label: 'x' }] as never }
+    await writeFile(join(dataDir, 'workspace.json'), JSON.stringify(profile))
+    const { call } = start()
+    const { workspaces } = await snapshotOf(call)
+    const [client] = workspaces.filter((workspace) => workspace.name === 'Client Example')
+    expect(await call('sessions.list', { workspaceId: client!.id })).toMatchObject({
+      ok: true,
+      value: { sessions: [{ title: 'Review the invoice export', attachments: [] }] }
+    })
+  })
+
   it('never writes workspace.json or runs/: they stay byte-equal after the import and after each change', async () => {
     const old = await writeOldFiles()
     const conversation = await readFile(join(dataDir, 'runs', 'work-item-1.json'))
