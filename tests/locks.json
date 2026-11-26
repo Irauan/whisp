@@ -15,6 +15,14 @@
     "sha256": "a75747e5dd94fa687869b704532df93590e09fc657746f171bea582d6f5b983f",
     "story": "m0-gates/s8"
   },
+  "tests/acceptance/m1-chat/s1/coming-soon.spec.ts": {
+    "sha256": "7948b4ef5a682f5d0fbe17ae095026ae65f4cb1b2dc1cbf0ef19161fccf93d94",
+    "story": "m1-chat/s1"
+  },
+  "tests/acceptance/m1-chat/s1/fixture.ts": {
+    "sha256": "0ef779ef12644af5fab80616d11ac32f07c6be764406260d73cb874abfcede7e",
+    "story": "m1-chat/s1"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "5a17578af85187b9f72d69464b765573cdf4469471a35056a30a32b1aa893e0d",
     "story": "m0-gates/s8"
