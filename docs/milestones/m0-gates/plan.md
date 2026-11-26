@@ -127,21 +127,37 @@ S1 to S7 change no product behavior, so they skip step 3. Their fixtures are uni
 
 ## User steps
 
-| Step | Who | State on 2026-11-25 |
+| Step | Who | State on 2026-11-26 |
 |---|---|---|
-| Push `14ffcf5` and merge `aether-first-version` to `main` | The user | Not done. `14ffcf5` is local only. |
-| Select the `Irauan` account in `gh` | The user | Not done. `Irauan-LettrLabs` is active, with read access only. |
-| Permit the squash merge to `milestone/*` in the auto mode settings (user settings, not project settings) | The user | Not done |
-| Update local Node to 24.15 or later | The user | Not done. Local Node is 24.11. |
+| Push `14ffcf5` and merge `aether-first-version` to `main` | The user | Done. `main` is at `0912869`. |
+| Select the `Irauan` account in `gh` | The user | Done |
+| Permit the squash merge to `milestone/*` in the auto mode settings (user settings, not project settings) | The user | Not done. User settings have no `autoMode` key. The first story merge waits for it. |
+| Update local Node to 24.15 or later | The user | Done. Local Node is 24.22.3. |
+| Turn on the advisor with `/advisor fable` in the coordinator session | The user | Not done. Subagents inherit the advisor from the coordinator. |
 | Approve the application of the rulesets in S7 | The user | When S7 runs |
 | Be present for the 1Password prompts in S8 | The user | When S8 runs |
+
+## Coordinator questions
+
+The user answered these on 2026-11-26.
+
+| Question | Answer |
+|---|---|
+| Which checkout do story worktrees start from? | `I:\Whisp` stays on `milestone/m0-gates` for the whole milestone. The coordinator fast-forwards it after each story merge. `worktree.baseRef: head` then gives G22. |
+| Which model does each role use? | Builder: Sonnet 5.5, effort high. Test author, reviewer, validator: Opus 5.5, effort high. Advisor: Fable 5.2. `docs/models.md` records this. |
+
+Facts from the Claude Code documents, found by the coordinator:
+
+- A subagent file has no field for deny rules. S6 enforces the builder limits with a `PreToolUse` hook in `builder.md` that blocks `Edit` and `Write` on the locked paths.
+- The hook does not cover file writes through `Bash`. The reviewer checks the diff of each story for changes to the locked paths.
+- `autoMode` rules are prose. An `allow` entry overrides only `soft_deny`, not `hard_deny`.
 
 ## Todo list
 
 - [x] User approves the brief and this plan.
-- [ ] User does the steps of "Before Milestone 0".
-- [ ] Coordinator reads the files and lists what it cannot answer. User answers.
-- [ ] Coordinator creates `milestone/m0-gates` from `main`.
+- [ ] User does the steps of "Before Milestone 0". The `autoMode` rule and the advisor remain.
+- [x] Coordinator reads the files and lists what it cannot answer. User answers.
+- [x] Coordinator creates `milestone/m0-gates` from `main`.
 - [ ] S1 Roles and rules
 - [ ] S2 CI, typecheck and lint
 - [ ] S3 Architecture tests
