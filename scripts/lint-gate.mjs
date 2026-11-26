@@ -7,7 +7,7 @@
 // Entries of other tools (S3: imports) use a rule name without parentheses.
 // This gate reads only the lint entries and keeps the others as they are.
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -59,6 +59,57 @@ export function runOxlint(targets, { ignoreFixtures = true } = {}) {
       message: d.message
     }
   })
+}
+
+export const ACCEPTANCE_RULE = 'playwright(no-focused-or-disabled-tests)'
+
+// `.only`, `.skip` and `.fixme` on anything: `test.only`, `test.describe.skip`, `test.skip(cond)`,
+// or an alias of `test`. The oxlint rules of vitest and jest know a test function only when it
+// comes from their own package, so they miss the `test` of a Playwright fixture.
+const DISABLING_CALL = /\.(only|skip|fixme)\s*\(/
+
+function walkSpecs(folder, found = []) {
+  for (const entry of readdirSync(folder, { withFileTypes: true })) {
+    const path = join(folder, entry.name)
+    if (entry.isDirectory()) walkSpecs(path, found)
+    else if (/\.(ts|tsx|mts|js|mjs)$/.test(entry.name)) found.push(path)
+  }
+  return found
+}
+
+/**
+ * Finds the tests that a run leaves out or runs alone, in acceptance test files.
+ * @param {string[]} folders Folders to scan, relative to the repository root.
+ * @returns {{ rule: string, file: string, line: number, column: number, message: string }[]}
+ */
+export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
+  const found = []
+  for (const folder of folders) {
+    let files
+    try {
+      files = walkSpecs(join(ROOT, folder))
+    } catch (error) {
+      if (error.code === 'ENOENT') continue
+      throw error
+    }
+    for (const path of files) {
+      readFileSync(path, 'utf8')
+        .split(/\r?\n/)
+        .forEach((text, index) => {
+          if (/^\s*(\/\/|\*|\/\*)/.test(text)) return // A comment.
+          const match = DISABLING_CALL.exec(text)
+          if (!match) return
+          found.push({
+            rule: ACCEPTANCE_RULE,
+            file: relative(ROOT, path).replaceAll('\\', '/'),
+            line: index + 1,
+            column: match.index + 1,
+            message: `".${match[1]}" in an acceptance test runs a test alone or leaves one out`
+          })
+        })
+    }
+  }
+  return found
 }
 
 export function readKnownViolations() {
@@ -130,7 +181,8 @@ function main() {
 
 function run() {
   assertTypeAwareRuns()
-  const problems = describeProblems(compareWithKnown(runOxlint(['.']), readKnownViolations()))
+  const diagnostics = [...runOxlint(['.']), ...findDisabledAcceptanceTests()]
+  const problems = describeProblems(compareWithKnown(diagnostics, readKnownViolations()))
   if (problems.length === 0) {
     console.log('lint: passed')
     return

@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FIXTURES, ROOT, runOxlint } from '../../scripts/lint-gate.mjs'
+import { ACCEPTANCE_RULE, FIXTURES, findDisabledAcceptanceTests, ROOT, runOxlint } from '../../scripts/lint-gate.mjs'
 
 const TSC = join(ROOT, 'node_modules/typescript/bin/tsc')
 
@@ -65,6 +65,20 @@ describe('lint fixtures', () => {
   it('G10: .skip fails lint', () => {
     expect(lint('g10')).toContain(`vitest(no-disabled-tests) ${FIXTURES}/g10/skip.fixture.ts`)
   }, 60_000)
+
+  it('G10: .only, .skip and .fixme fail the lint gate in an acceptance test, whatever the import', () => {
+    // The `test` of these files comes from a Playwright fixture, not from vitest.
+    const found = findDisabledAcceptanceTests([`${FIXTURES}/g10/acceptance`]).map(
+      (d) => `${d.rule} ${d.file}:${d.line}`
+    )
+    const only = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/only.spec.ts`
+    const skip = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/skip.spec.ts`
+    expect(found).toEqual([`${only}:4`, `${only}:8`, `${skip}:4`, `${skip}:8`, `${skip}:14`, `${skip}:19`])
+  })
+
+  it('the acceptance tests of the repository have no .only, .skip or .fixme', () => {
+    expect(findDisabledAcceptanceTests()).toEqual([])
+  })
 
   it('a renderer file that imports Electron, Node or main code fails lint', () => {
     const found = lint('g-imports')
