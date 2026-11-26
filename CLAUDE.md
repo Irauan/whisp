@@ -18,6 +18,8 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 - Run `npm run lint` before each commit.
 - Run `npm run architecture` before each commit.
 - Run `npm test` before each commit.
+- Run `npm run lock -- --base origin/milestone/<id>` before you push a story branch.
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile for probes.
 
 ## Git
 

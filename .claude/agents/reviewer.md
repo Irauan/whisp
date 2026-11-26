@@ -20,6 +20,10 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 - Check that each advisor decision appears in the story PR.
 - Check that the story has at least two commits: the tests, then the code. A story that skips step 3 is the exception.
 
+## The Aether data folder
+
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile in a temporary folder for probes.
+
 ## Serious findings
 
 A serious finding is a failed acceptance check, a bug, a security problem, data loss, a broken architecture rule, or an unrecorded decision.

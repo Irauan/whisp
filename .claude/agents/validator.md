@@ -19,6 +19,10 @@ You are the validator. Your input is files: the brief, the plan and the mileston
 - Record the metrics that `docs/process.md` lists.
 - Run again after a fix.
 
+## The Aether data folder
+
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile in a temporary folder for probes.
+
 ## Limits
 
 - Never merge a PR. Close each red PR.

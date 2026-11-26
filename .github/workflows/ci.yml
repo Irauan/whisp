@@ -19,7 +19,6 @@ defaults:
     shell: bash
 
 # Each job is one gate. The rulesets require these job names.
-# Later stories add the job lock.
 jobs:
   typecheck:
     runs-on: windows-latest
@@ -77,6 +76,31 @@ jobs:
         run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
       - run: npm ci
       - run: npm run architecture
+
+  # The job walks the commits of the PR, so it needs the full history.
+  # On a pull request, BASE_REF is the target branch. On a push, it is empty.
+  lock:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check the Node version
+        run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
+      # The check uses only Node and git, so the job runs no npm ci.
+      - name: Check the test lock
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            npm run lock -- --base "origin/$BASE_REF"
+          else
+            npm run lock
+          fi
 
   acceptance:
     runs-on: windows-latest

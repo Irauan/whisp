@@ -7,7 +7,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Each test starts a dozen git processes. A slow runner needs more than the default 5 seconds.
+vi.setConfig({ testTimeout: 60_000 })
 
 const SCRIPT = fileURLToPath(new URL('../../scripts/check-lock.mjs', import.meta.url))
 
@@ -46,7 +49,7 @@ class Repo {
   }
 
   git(...args: string[]) {
-    return execFileSync('git', args, { cwd: this.dir, encoding: 'utf8' }).trim()
+    return execFileSync('git', args, { cwd: this.dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   }
 
   write(files: Record<string, string | null>) {
