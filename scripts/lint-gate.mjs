@@ -64,9 +64,44 @@ export function runOxlint(targets, { ignoreFixtures = true } = {}) {
 export const ACCEPTANCE_RULE = 'playwright(no-focused-or-disabled-tests)'
 
 // `.only`, `.skip` and `.fixme` on anything: `test.only`, `test.describe.skip`, `test.skip(cond)`,
-// or an alias of `test`. The oxlint rules of vitest and jest know a test function only when it
-// comes from their own package, so they miss the `test` of a Playwright fixture.
-const DISABLING_CALL = /\.(only|skip|fixme)\s*\(/
+// `test['skip'](...)`, a call with its `(` on the next line, or an alias of `test`. The oxlint
+// rules of vitest and jest know a test function only when it comes from their own package, so
+// they miss the `test` of a Playwright fixture.
+const DISABLING_CALL = /\.\s*(only|skip|fixme)\s*\(|\[\s*(['"`])(only|skip|fixme)\2\s*\]\s*\(/g
+
+/**
+ * Replaces each comment with spaces and keeps the newlines, so that offsets and lines stay the
+ * same. Text inside a string or a template is code for this scan: a `//` in a string starts
+ * no comment.
+ */
+export function blankComments(source) {
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    const two = source.slice(i, i + 2)
+    const char = source[i]
+    if (two === '//') {
+      const end = source.indexOf('\n', i)
+      const stop = end === -1 ? source.length : end
+      out += ' '.repeat(stop - i)
+      i = stop
+    } else if (two === '/*') {
+      const end = source.indexOf('*/', i + 2)
+      const stop = end === -1 ? source.length : end + 2
+      out += source.slice(i, stop).replace(/[^\r\n]/g, ' ')
+      i = stop
+    } else if (char === "'" || char === '"' || char === '`') {
+      let j = i + 1
+      while (j < source.length && source[j] !== char) j += source[j] === '\\' ? 2 : 1
+      out += source.slice(i, j + 1)
+      i = j + 1
+    } else {
+      out += char
+      i += 1
+    }
+  }
+  return out
+}
 
 function walkSpecs(folder, found = []) {
   for (const entry of readdirSync(folder, { withFileTypes: true })) {
@@ -93,20 +128,17 @@ export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
       throw error
     }
     for (const path of files) {
-      readFileSync(path, 'utf8')
-        .split(/\r?\n/)
-        .forEach((text, index) => {
-          if (/^\s*(\/\/|\*|\/\*)/.test(text)) return // A comment.
-          const match = DISABLING_CALL.exec(text)
-          if (!match) return
-          found.push({
-            rule: ACCEPTANCE_RULE,
-            file: relative(ROOT, path).replaceAll('\\', '/'),
-            line: index + 1,
-            column: match.index + 1,
-            message: `".${match[1]}" in an acceptance test runs a test alone or leaves one out`
-          })
+      const code = blankComments(readFileSync(path, 'utf8'))
+      for (const match of code.matchAll(DISABLING_CALL)) {
+        const before = code.slice(0, match.index).split('\n')
+        found.push({
+          rule: ACCEPTANCE_RULE,
+          file: relative(ROOT, path).replaceAll('\\', '/'),
+          line: before.length,
+          column: (before.at(-1)?.length ?? 0) + 1,
+          message: `".${match[1] ?? match[3]}" in an acceptance test runs a test alone or leaves one out`
         })
+      }
     }
   }
   return found

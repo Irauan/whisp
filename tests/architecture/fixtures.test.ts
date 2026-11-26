@@ -3,7 +3,14 @@
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ACCEPTANCE_RULE, FIXTURES, findDisabledAcceptanceTests, ROOT, runOxlint } from '../../scripts/lint-gate.mjs'
+import {
+  ACCEPTANCE_RULE,
+  blankComments,
+  FIXTURES,
+  findDisabledAcceptanceTests,
+  ROOT,
+  runOxlint
+} from '../../scripts/lint-gate.mjs'
 
 const TSC = join(ROOT, 'node_modules/typescript/bin/tsc')
 
@@ -73,7 +80,14 @@ describe('lint fixtures', () => {
     )
     const only = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/only.spec.ts`
     const skip = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/skip.spec.ts`
-    expect(found).toEqual([`${only}:4`, `${only}:8`, `${skip}:4`, `${skip}:8`, `${skip}:14`, `${skip}:19`])
+    // The skip fixture ends with calls after a comment, with a string key and with the paren on
+    // the next line. It also holds comments with calls inside, which must not count.
+    const skipLines = [4, 8, 14, 19, 22, 24, 26, 31, 36]
+    expect(found).toEqual([`${only}:4`, `${only}:8`, ...skipLines.map((line) => `${skip}:${line}`)])
+  })
+
+  it('G10: the scan of an acceptance test leaves comments out and keeps strings', () => {
+    expect(blankComments("a // b\nc /* d\ne */ f 'x // y' g")).toBe("a     \nc     \n     f 'x // y' g")
   })
 
   it('the acceptance tests of the repository have no .only, .skip or .fixme', () => {
