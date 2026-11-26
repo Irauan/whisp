@@ -20,7 +20,7 @@
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s1/fixture.ts": {
-    "sha256": "0ef779ef12644af5fab80616d11ac32f07c6be764406260d73cb874abfcede7e",
+    "sha256": "b33700c704de4bce3d14de511fa1a082c1132a8e2adea8a8f2e04e1d3259d423",
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
