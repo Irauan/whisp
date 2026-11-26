@@ -165,7 +165,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [ ] User does the steps of "Before Milestone 0". The `autoMode` rule and the advisor remain.
 - [x] Coordinator reads the files and lists what it cannot answer. User answers.
 - [x] Coordinator creates `milestone/m0-gates` from `main`.
-- [ ] S1 Roles and rules
+- [x] S1 Roles and rules. PR #1. The user merged it with a merge commit, not a squash.
 - [ ] S2 CI, typecheck and lint
 - [ ] S3 Architecture tests
 - [ ] S4 Simulated agent
