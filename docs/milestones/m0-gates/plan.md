@@ -83,6 +83,8 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
   - No force push. No deletion.
 - `main` allows merge commits only. `milestone/*` allows squash merges only.
 - `scripts/apply-rulesets.mjs` applies them with `gh api`. The user approves each run.
+- The required checks use the strict policy: a story PR must be up to date with the milestone branch before it merges. User decision, 2026-11-26.
+- After the rulesets apply, nobody pushes straight to `main` or `milestone/*`. The coordinator keeps the run log in the notes folder. The next story PR adds the plan ticks. The validator PR adds `evidence.md` and `metrics.md`. User decision, 2026-11-26.
 
 ### Path step 2: contracts, registry and preload
 
