@@ -1,6 +1,6 @@
 {
   "tests/acceptance/m0-gates/red-probe/probe.spec.ts": {
-    "sha256": "3c279883f75dfd15e18d16eb68d6153bd3cb7be019061cb9f22cca4c0c5d6fc3",
+    "sha256": "9af9fdc1f91e2ab6cf61858534634b16d791894a1db091522d4c9186d1255e9f",
     "story": "m0-gates/red-probe"
   },
   "tests/acceptance/m0-gates/s5/app.spec.ts": {

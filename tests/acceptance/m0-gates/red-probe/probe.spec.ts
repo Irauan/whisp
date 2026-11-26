@@ -2,5 +2,5 @@
 import { expect, test } from '@playwright/test'
 
 test('red probe: a locked test of the story', () => {
-  expect(1).toBe(1)
+  expect(2).toBe(2)
 })
