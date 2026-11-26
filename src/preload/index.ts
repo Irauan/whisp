@@ -1,9 +1,30 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { AgentRun } from '../shared/agent'
 import type { AetherBridge } from '../shared/bridge'
+import { EVENT_CHANNEL, INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
 
 const bridge: AetherBridge = {
   platform: process.platform,
+  invoke: (name, input) => ipcRenderer.invoke(INVOKE_CHANNEL, name, input),
+  subscribe: (name, callback) => {
+    let active = true
+    const listener = (_event: IpcRendererEvent, eventName: unknown, payload: unknown) => {
+      if (active && eventName === name) callback(payload)
+    }
+    ipcRenderer.on(EVENT_CHANNEL, listener)
+    // The main process refuses a name that is not in the registry of events.
+    const refused = () => console.error(`Aether refused to subscribe to ${name}.`)
+    void ipcRenderer
+      .invoke(SUBSCRIBE_CHANNEL, name)
+      .then((result: unknown) => {
+        if ((result as { ok?: unknown } | null)?.ok !== true) refused()
+      })
+      .catch(refused)
+    return () => {
+      active = false
+      ipcRenderer.removeListener(EVENT_CHANNEL, listener)
+    }
+  },
   loadWorkspace: () => ipcRenderer.invoke('workspace:load'),
   saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace),
   listGithubAccounts: () => ipcRenderer.invoke('github:accounts'),

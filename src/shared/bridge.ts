@@ -23,6 +23,13 @@ export interface AgentMessage {
 
 export interface AetherBridge {
   platform: string
+  /**
+   * Calls the slice that has this contract name. It resolves to a `Result`. It rejects only when
+   * the main process cannot answer. The name must be in the contract registry.
+   */
+  invoke(name: string, input: unknown): Promise<unknown>
+  /** Calls back with the payload of each event of this name. Returns a function that stops it. */
+  subscribe(name: string, callback: (payload: unknown) => void): () => void
   loadWorkspace(): Promise<Workspace>
   saveWorkspace(workspace: Workspace): Promise<void>
   /** Lists the GitHub accounts that the GitHub CLI is signed in to. */

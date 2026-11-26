@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { GithubAccounts } from '../../../shared/bridge'
+import { useState } from 'react'
+import { useGithubAccounts } from '../../../features/workspaces/list-github-accounts/list-github-accounts.ui'
 import type { Account, GithubProfile } from '../../../shared/model'
 import { Modal } from './Dialogs'
 
@@ -13,22 +13,7 @@ interface Props {
 export function AccountDialog({ account, onClose, onSave }: Props) {
   const [label, setLabel] = useState(account?.label ?? '')
   const [login, setLogin] = useState(account?.github?.login ?? '')
-  const [found, setFound] = useState<GithubAccounts | null>(null)
-  const [attempt, setAttempt] = useState(0)
-
-  useEffect(() => {
-    let active = true
-    setFound(null)
-    window.aether
-      .listGithubAccounts()
-      .catch((cause: unknown): GithubAccounts => ({ ok: false, reason: String(cause) }))
-      .then((result) => {
-        if (active) setFound(result)
-      })
-    return () => {
-      active = false
-    }
-  }, [attempt])
+  const { found, readAgain } = useGithubAccounts()
 
   const profiles = found?.ok ? [...found.profiles] : []
   // Keep the saved GitHub account, also when the GitHub CLI does not list it.
@@ -89,7 +74,7 @@ export function AccountDialog({ account, onClose, onSave }: Props) {
         {found && (
           <p className="hint">
             To use another GitHub account, run <code>gh auth login</code> in a terminal.{' '}
-            <button type="button" className="link" onClick={() => setAttempt(attempt + 1)}>
+            <button type="button" className="link" onClick={readAgain}>
               Read again
             </button>
           </p>
