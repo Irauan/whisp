@@ -1,43 +1,42 @@
-import { ChevronLeft, ChevronRight, PanelLeft, Search, SearchX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelLeft, Plus, Search, SearchX } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import {
-  contentOf,
-  currentAccount,
-  type GithubProfile,
-  type SessionSettings
-} from '../../shared/model'
-import { AccountDialog } from './components/AccountDialog'
-import { AccountSwitcher } from './components/AccountSwitcher'
 import { ConfirmDialog, SearchDialog } from './components/Dialogs'
 import {
-  AccountsPage,
   BotsPage,
   CustomizePage,
   EmptyPage,
   HomePage,
   ProjectsPage,
   PullRequestsPage,
-  WorkItemsPage
+  WorkItemsPage,
+  WorkspacesPage
 } from './components/Pages'
+import { RootsDialog } from './components/RootsDialog'
 import { SessionPage } from './components/SessionPage'
 import { Sidebar } from './components/Sidebar'
+import { WorkspaceDialog, type WorkspaceValues } from './components/WorkspaceDialog'
+import { WorkspaceSwitcher } from './components/WorkspaceSwitcher'
 import { useNavigation, type View } from './navigation'
-import { useWorkspace } from './useWorkspace'
+import { useWorkspaces } from './useWorkspaces'
 
 type OpenDialog =
   | { kind: 'search' }
-  | { kind: 'add-account' }
-  | { kind: 'edit-account'; accountId: string }
-  | { kind: 'delete-account'; accountId: string }
-  | { kind: 'delete-session'; sessionId: string }
+  | { kind: 'add-workspace' }
+  | { kind: 'workspace-settings'; workspaceId: string }
+  | { kind: 'delete-workspace'; workspaceId: string }
 
-const now = () => new Date().toISOString()
+/** Between story S2 and story S3 of m1-chat, the sessions are the drafts of the import, and they are read-only. */
+const NEW_SESSION_UNAVAILABLE = 'Starting a new session is coming soon.'
 
 export function App() {
-  const { workspace, error, dispatch } = useWorkspace()
+  const { state, error, chooseRoots, add, edit, switchTo, remove } = useWorkspaces()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
+  // View state: the user closed the dialog of the roots for now. It shows again at the next start.
+  const [rootsPostponed, setRootsPostponed] = useState(false)
+  // View state: the messages of the start that the user closed.
+  const [closedNotices, setClosedNotices] = useState<string[]>([])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -49,7 +48,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  if (!workspace) {
+  if (!state) {
     return (
       <div className="app">
         <main className="main">
@@ -60,45 +59,49 @@ export function App() {
     )
   }
 
-  const account = currentAccount(workspace)
-  // Show only the current account, so that the accounts stay apart.
-  const content = contentOf(workspace, account.id)
+  const { workspaces, currentId, notices, sessions } = state
+  const current = workspaces.find((workspace) => workspace.id === currentId) ?? null
+  const withoutRoot = workspaces.filter((workspace) => workspace.root === null)
   const closeDialog = () => setDialog(null)
   const goFromDialog = (next: View) => {
     closeDialog()
     go(next)
   }
 
-  const openAddAccount = () => setDialog({ kind: 'add-account' })
+  const openAdd = () => setDialog({ kind: 'add-workspace' })
 
-  const addAccount = (label: string, github: GithubProfile | null) => {
-    dispatch({ type: 'account-added', id: crypto.randomUUID(), label, github })
-    closeDialog()
-    reset()
+  const switchWorkspace = async (id: string) => {
+    if (id === currentId) return
+    // The history belongs to the other workspace.
+    if ((await switchTo(id)) === null) reset()
   }
 
-  const switchAccount = (id: string) => {
-    if (id === account.id) return
-    dispatch({ type: 'account-switched', id })
-    // The history belongs to the other account.
-    reset()
+  const saveNew = async (values: WorkspaceValues) => {
+    const message = await add(values)
+    if (message === null) {
+      closeDialog()
+      reset()
+    }
+    return message
   }
 
-  const addSession = (prompt: string, settings: SessionSettings) => {
-    const id = crypto.randomUUID()
-    dispatch({ type: 'session-added', id, prompt, settings, at: now() })
-    go({ kind: 'session', sessionId: id })
+  const saveSettings = (workspaceId: string) => async (values: WorkspaceValues) => {
+    const message = await edit({ id: workspaceId, ...values })
+    if (message === null) closeDialog()
+    return message
   }
 
   const renderPage = () => {
     switch (view.kind) {
       case 'home':
+        if (!current) return <NoWorkspace onAdd={openAdd} />
         return (
           <HomePage
-            key={account.id}
-            sessions={content.sessions}
-            githubLogin={account.github?.login ?? null}
-            onStart={addSession}
+            key={current.id}
+            sessions={sessions}
+            githubLogin={current.github?.login ?? null}
+            unavailable={NEW_SESSION_UNAVAILABLE}
+            onStart={() => undefined}
           />
         )
       case 'pulls':
@@ -111,25 +114,21 @@ export function App() {
         return <BotsPage />
       case 'customize':
         return <CustomizePage />
-      case 'accounts':
+      case 'workspaces':
         return (
-          <AccountsPage
-            workspace={workspace}
-            onAdd={openAddAccount}
-            onSwitch={switchAccount}
-            onEdit={(accountId) => setDialog({ kind: 'edit-account', accountId })}
-            onDelete={(accountId) => setDialog({ kind: 'delete-account', accountId })}
+          <WorkspacesPage
+            workspaces={workspaces}
+            currentId={currentId}
+            onAdd={openAdd}
+            onSwitch={(workspaceId) => void switchWorkspace(workspaceId)}
+            onEdit={(workspaceId) => setDialog({ kind: 'workspace-settings', workspaceId })}
+            onDelete={(workspaceId) => setDialog({ kind: 'delete-workspace', workspaceId })}
           />
         )
       case 'session': {
-        const session = content.sessions.find((candidate) => candidate.id === view.sessionId)
+        const session = sessions.find((candidate) => candidate.id === view.sessionId)
         if (!session) break
-        return (
-          <SessionPage
-            session={session}
-            onDelete={() => setDialog({ kind: 'delete-session', sessionId: session.id })}
-          />
-        )
+        return <SessionPage session={session} />
       }
     }
     return (
@@ -140,52 +139,30 @@ export function App() {
   const renderDialog = () => {
     switch (dialog?.kind) {
       case 'search':
-        return <SearchDialog content={content} onClose={closeDialog} onGo={goFromDialog} />
-      case 'add-account':
-        return <AccountDialog onClose={closeDialog} onSave={addAccount} />
-      case 'edit-account': {
-        const { accountId } = dialog
-        return (
-          <AccountDialog
-            account={workspace.accounts.find((candidate) => candidate.id === accountId)}
-            onClose={closeDialog}
-            onSave={(label, github) => {
-              dispatch({ type: 'account-edited', id: accountId, label, github })
-              closeDialog()
-            }}
-          />
-        )
+        return <SearchDialog sessions={sessions} onClose={closeDialog} onGo={goFromDialog} />
+      case 'add-workspace':
+        return <WorkspaceDialog onClose={closeDialog} onSave={saveNew} />
+      case 'workspace-settings': {
+        const { workspaceId } = dialog
+        const workspace = workspaces.find((candidate) => candidate.id === workspaceId)
+        if (!workspace) return null
+        return <WorkspaceDialog workspace={workspace} onClose={closeDialog} onSave={saveSettings(workspaceId)} />
       }
-      case 'delete-account': {
-        const { accountId } = dialog
-        const target = workspace.accounts.find((candidate) => candidate.id === accountId)
-        const { sessions } = contentOf(workspace, accountId)
+      case 'delete-workspace': {
+        const { workspaceId } = dialog
+        const target = workspaces.find((candidate) => candidate.id === workspaceId)
         return (
           <ConfirmDialog
-            title={`Remove ${target?.label ?? 'account'}?`}
-            body={`This also deletes its sessions (${sessions.length}). You cannot undo this. The GitHub CLI stays signed in.`}
-            confirmLabel="Remove account"
+            title={`Remove ${target?.name ?? 'workspace'}?`}
+            body="This also deletes its sessions. You cannot undo this. The old files, the GitHub CLI and the Claude folder stay as they are."
+            confirmLabel="Remove workspace"
             onClose={closeDialog}
             onConfirm={() => {
-              dispatch({ type: 'account-deleted', id: accountId })
-              closeDialog()
-              if (accountId === account.id) reset()
-            }}
-          />
-        )
-      }
-      case 'delete-session': {
-        const { sessionId } = dialog
-        const session = content.sessions.find((candidate) => candidate.id === sessionId)
-        return (
-          <ConfirmDialog
-            title={`Delete ${session?.title ?? 'session'}?`}
-            body="You cannot undo this."
-            confirmLabel="Delete session"
-            onClose={closeDialog}
-            onConfirm={() => {
-              dispatch({ type: 'session-deleted', id: sessionId })
-              goFromDialog({ kind: 'home' })
+              void remove(workspaceId).then((message) => {
+                if (message !== null) return
+                closeDialog()
+                if (workspaceId === currentId) reset()
+              })
             }}
           />
         )
@@ -230,27 +207,60 @@ export function App() {
     </div>
   )
 
+  const shownNotices = notices.filter((notice) => !closedNotices.includes(notice.code))
+
   return (
     <div className="app">
       {sidebarOpen && (
         <aside className="sidebar">
           {toolbar}
-          <Sidebar content={content} view={view} onGo={go} />
-          <AccountSwitcher
-            accounts={workspace.accounts}
-            current={account}
-            onSwitch={switchAccount}
-            onAdd={openAddAccount}
-            onManage={() => go({ kind: 'accounts' })}
+          <Sidebar sessions={sessions} view={view} onGo={go} />
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            current={current}
+            onSwitch={(workspaceId) => void switchWorkspace(workspaceId)}
+            onSettings={() => current && setDialog({ kind: 'workspace-settings', workspaceId: current.id })}
+            onAdd={openAdd}
+            onManage={() => go({ kind: 'workspaces' })}
           />
         </aside>
       )}
       <main className="main">
         <div className="title-strip">{!sidebarOpen && toolbar}</div>
         {error && <p className="error" role="alert">{error}</p>}
+        {shownNotices.map((notice) => (
+          <p key={notice.code} className="error" role="alert">
+            {notice.message}{' '}
+            <button type="button" className="link" onClick={() => setClosedNotices([...closedNotices, notice.code])}>
+              Close
+            </button>
+          </p>
+        ))}
         <div className="content">{renderPage()}</div>
       </main>
       {renderDialog()}
+      {withoutRoot.length > 0 && !rootsPostponed && (
+        <RootsDialog
+          workspaces={withoutRoot}
+          onClose={() => setRootsPostponed(true)}
+          onSave={chooseRoots}
+        />
+      )}
     </div>
+  )
+}
+
+function NoWorkspace({ onAdd }: { onAdd(): void }) {
+  return (
+    <EmptyPage
+      icon={<Plus size={36} />}
+      title="No workspace"
+      body="A workspace holds your sessions and has its own root. Add one to start."
+      action={
+        <button type="button" className="button primary" onClick={onAdd}>
+          Add workspace
+        </button>
+      }
+    />
   )
 }

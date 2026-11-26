@@ -173,6 +173,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 
 - Live checks and acceptance wait for decision 0011. Reason: the stories and the CI checks do not need real Claude, so work can start now.
 - Between S4 and S6, a repository can run its hooks and MCP servers without a question. Reason: only the milestone branch has this gap, only the simulated agent runs there, and S6 merges before step 7.
+- Between S2 and S3, session drafts are read-only. Reason: S2 stops all writes to the old files, and S3 builds the session slices. User decision, 2026-11-26.
 
 ## Budget
 

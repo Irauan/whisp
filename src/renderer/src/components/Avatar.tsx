@@ -1,16 +1,16 @@
-import type { Account } from '../../../shared/model'
+import type { WorkspaceView } from '../useWorkspaces'
 
-export function Avatar({ account, size }: { account: Account; size: number }) {
-  if (account.github?.avatar) {
-    return <img className="avatar" src={account.github.avatar} width={size} height={size} alt="" />
+export function Avatar({ workspace, size }: { workspace: WorkspaceView; size: number }) {
+  if (workspace.github?.avatar) {
+    return <img className="avatar" src={workspace.github.avatar} width={size} height={size} alt="" />
   }
   return (
     <span className="avatar" style={{ width: size, height: size }} aria-hidden="true">
-      {account.label.slice(0, 1).toUpperCase()}
+      {workspace.name.slice(0, 1).toUpperCase()}
     </span>
   )
 }
 
-export function githubNote(account: Account): string {
-  return account.github ? `@${account.github.login}` : 'No GitHub account'
+export function githubNote(workspace: WorkspaceView): string {
+  return workspace.github ? `@${workspace.github.login}` : 'No GitHub account'
 }

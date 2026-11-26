@@ -9,11 +9,11 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { AccountContent } from '../../../shared/model'
 import type { View } from '../navigation'
+import type { SessionDraft } from '../useWorkspaces'
 
 interface Props {
-  content: AccountContent
+  sessions: SessionDraft[]
   view: View
   onGo(view: View): void
 }
@@ -48,7 +48,7 @@ const PAGES: { view: View; label: string; icon: LucideIcon; soon?: boolean }[] =
   { view: { kind: 'customize' }, label: 'Customize', icon: Blocks, soon: true }
 ]
 
-export function Sidebar({ content, view, onGo }: Props) {
+export function Sidebar({ sessions, view, onGo }: Props) {
   return (
     <nav className="sidebar-body" aria-label="Main">
       <div className="group">
@@ -76,8 +76,8 @@ export function Sidebar({ content, view, onGo }: Props) {
         </button>
       </div>
       <div className="group">
-        {content.sessions.length === 0 && <p className="empty-row">No sessions yet</p>}
-        {content.sessions.toReversed().map((session) => (
+        {sessions.length === 0 && <p className="empty-row">No sessions yet</p>}
+        {sessions.toReversed().map((session) => (
           <NavRow
             key={session.id}
             icon={<MessageSquare size={18} />}

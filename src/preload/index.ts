@@ -24,9 +24,6 @@ const bridge: AetherBridge = {
       ipcRenderer.removeListener(EVENT_CHANNEL, listener)
     }
   },
-  loadWorkspace: () => ipcRenderer.invoke('workspace:load'),
-  saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace),
-  listGithubAccounts: () => ipcRenderer.invoke('github:accounts'),
   chooseFolder: () => ipcRenderer.invoke('folder:choose'),
   chooseFolders: () => ipcRenderer.invoke('folders:choose'),
   chooseFiles: () => ipcRenderer.invoke('files:choose'),

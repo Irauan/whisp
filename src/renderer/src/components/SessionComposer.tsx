@@ -26,11 +26,11 @@ import {
   parseRequest,
   PERMISSIONS,
   type Attachment,
-  type Session,
   type SessionSettings
 } from '../../../shared/model'
 import { findMention, insertTrigger, removeMention, type Edit, type Trigger } from '../mention'
 import { useSuggestions } from '../useSuggestions'
+import type { SessionDraft } from '../useWorkspaces'
 import { AttachmentIcon } from './AttachmentIcon'
 import { Menu, MenuOption, Submenu } from './Menu'
 
@@ -66,18 +66,23 @@ const REPOSITORY_KINDS: Attachment['kind'][] = [
 ]
 
 interface Props {
-  /** The sessions of the account, oldest first. They give the recent folders and settings. */
-  sessions: Session[]
+  /** The sessions of the workspace, oldest first. They give the recent folders and the model. */
+  sessions: SessionDraft[]
   githubLogin: string | null
+  /** Why a new session cannot start, or null. The composer shows it and disables Send. */
+  unavailable: string | null
   onSubmit(prompt: string, settings: SessionSettings): void
 }
 
-export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
+/** The settings of a new session: the folder and the model of the last session. */
+function startSettings(last: SessionDraft | undefined): SessionSettings {
+  const model = MODELS.find((option) => option.id === last?.model)?.id
+  return { ...FIRST_SETTINGS, folder: last?.folder ?? '', model: model ?? FIRST_SETTINGS.model }
+}
+
+export function SessionComposer({ sessions, githubLogin, unavailable, onSubmit }: Props) {
   const [text, setText] = useState('')
-  const [settings, setSettings] = useState<SessionSettings>(() => ({
-    ...(sessions.at(-1)?.settings ?? FIRST_SETTINGS),
-    attachments: []
-  }))
+  const [settings, setSettings] = useState<SessionSettings>(() => startSettings(sessions.at(-1)))
   const [caret, setCaret] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
   const [active, setActive] = useState(0)
@@ -113,13 +118,13 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
   const activeIndex = Math.min(active, Math.max(0, (suggestions?.items.length ?? 0) - 1))
 
   const recentFolders = [
-    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.settings.folder)])
+    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.folder)])
   ].slice(0, MAX_RECENT_FOLDERS)
 
   // A folder without Git cannot have a worktree.
   const canUseWorktree = Boolean(info?.branch)
   const checkout = canUseWorktree ? settings.checkout : 'folder'
-  const ready = parseRequest(text) !== null && info?.exists === true
+  const ready = unavailable === null && parseRequest(text) !== null && info?.exists === true
 
   const pickFolder = (path: string) => {
     setProblem(null)
@@ -467,6 +472,7 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
             {problem ?? 'This folder no longer exists. Choose a different folder.'}
           </p>
         )}
+        {unavailable && <p className="muted composer-error">{unavailable}</p>}
       </form>
       <div className="ideas">
         {IDEAS.map((idea) => (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Listing } from '../../shared/bridge'
-import type { Attachment, Session } from '../../shared/model'
+import type { Attachment } from '../../shared/model'
+import type { SessionDraft } from './useWorkspaces'
 import type { Mention } from './mention'
 
 const MAX_SHOWN = 20
@@ -8,7 +9,7 @@ const MAX_SHOWN = 20
 interface Sources {
   folder: string
   githubLogin: string | null
-  sessions: Session[]
+  sessions: SessionDraft[]
 }
 
 export interface Suggestions {
@@ -30,7 +31,7 @@ export function useSuggestions(mention: Mention | null, sources: Sources): Sugge
       trigger === '@'
         ? window.aether.listRepositoryFiles(folder)
         : window.aether.listIssues(folder, githubLogin)
-    request
+    void request
       .catch((cause: unknown): Listing => ({ ok: false, reason: String(cause) }))
       .then((listing) => {
         if (active) setLoaded({ key, listing })

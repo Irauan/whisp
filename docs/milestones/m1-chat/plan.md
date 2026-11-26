@@ -31,7 +31,7 @@ The order follows the dependencies. S1 to S4 form the walking skeleton. After S4
 | S1 Remove projects and work items | 4 | Projects and work items show "coming soon". | — | A19 | M0 |
 | S2 Workspaces in SQLite | 3 | First start imports accounts as workspaces and asks for each root. Workspace settings edit root, GitHub account, Claude folder and profile. | Unreadable conversation file loads as empty | A17, A18 | S1 |
 | S3 Session slices | 5 | Create, list, open and delete sessions from the database. Draft sessions open with their prompt and their imported mode. One Mode control with five values replaces Mode and Tool permissions. Worktree and the session attachment show "coming soon". | New session copies "Approve all" | A13, A14 | S2 |
-| S4 Chat in a session | 6 | The session window streams replies. Send, stop, restart and resume work. Missing sign-in and crash show clear notices. | Shared process before ready; no permission mode; whole environment | A1, A2, A3, A6, A7, A8, A16, A20 | S3 |
+| S4 Chat in a session | 6 | The session window streams replies. Send, stop, restart and resume work. Missing sign-in and crash show clear notices. S4 tests replace G11 and G12 of m0-gates S5 (user decision, 2026-11-26). | Shared process before ready; no permission mode; whole environment | A1, A2, A3, A6, A7, A8, A16, A20 | S3 |
 | S5 Permission queue | 6 | Parallel requests show as a queue. Each answer reaches its own request. Stop cancels all. | Second request cancels the first | A4, A5 | S4 |
 | S6 Repository and directory trust | 6 | The trust question and the directory questions show before any process starts. | Hooks and MCP servers run without a question | A9, A10 | S4 |
 | S7 Session settings reach the agent | — | Model, mode and attachments reach the agent. A model that cannot use Auto shows the notice. | — | A12, A15 | S4 |
@@ -62,10 +62,10 @@ The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. These checks
 
 - [x] User approves the brief and this plan.
 - [x] User accepts that the live checks wait for decision 0011.
-- [ ] Milestone 0 is merged.
-- [ ] Coordinator reads the files and lists what it cannot answer. User answers.
-- [ ] Coordinator creates `milestone/m1-chat`.
-- [ ] S1 Remove projects and work items
+- [x] Milestone 0 is merged. PR #21, merge commit `9a0cd0f` on `main`.
+- [x] Coordinator reads the files and lists what it cannot answer. User answers.
+- [x] Coordinator creates `milestone/m1-chat`.
+- [x] S1 Remove projects and work items. PR #23, squash merge `65c54cc`.
 - [ ] S2 Workspaces in SQLite
 - [ ] S3 Session slices, with decision 0012
 - [ ] S4 Chat in a session

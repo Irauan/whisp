@@ -20,7 +20,18 @@ import {
   type SessionUpdateLike
 } from '../../shared/agent'
 import type { AgentRegistry, ResolvedAgent } from './registry'
-import type { RunStore } from './run-store'
+
+/**
+ * Keeps the conversation of each work item. The old store wrote one file in `runs/` for each item.
+ * Aether no longer writes `runs/` (decision 0005). A later story replaces this host with the session
+ * slices, which save each conversation entry in the database.
+ */
+export interface RunStore {
+  load(itemId: string): Promise<AgentRun>
+  save(run: AgentRun): Promise<void>
+  remove(itemId: string): Promise<void>
+  settled(): Promise<void>
+}
 
 /** ACP's error code for "nobody is signed in". */
 const AUTH_REQUIRED = -32000

@@ -1,7 +1,1 @@
-[
-  {
-    "rule": "typescript(no-floating-promises)",
-    "file": "src/renderer/src/useSuggestions.ts",
-    "count": 1
-  }
-]
+[]
