@@ -7,7 +7,8 @@
 // Entries of other tools (S3: imports) use a rule name without parentheses.
 // This gate reads only the lint entries and keeps the others as they are.
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -59,6 +60,103 @@ export function runOxlint(targets, { ignoreFixtures = true } = {}) {
       message: d.message
     }
   })
+}
+
+export const ACCEPTANCE_RULE = 'playwright(no-focused-or-disabled-tests)'
+
+// The oxlint rules of vitest and jest know a test function only when it comes from their own
+// package, so they miss the `test` of a Playwright fixture. This scan parses each acceptance
+// spec with swc and walks the syntax tree. It flags each member access with the property
+// `only`, `skip` or `fixme`, on any object: `test.only(...)`, `test.describe.skip(...)`,
+// `test['skip'](...)`, `test?.fixme(...)`, a call with its paren on the next line, and a bare
+// alias such as `const skipped = test.skip`. Comments and regex literals are not code, so the
+// tree has none of them. A spec that swc cannot parse fails the gate with the file name.
+const DISABLING = new Set(['only', 'skip', 'fixme'])
+
+/** The name of the property of a member expression, or null when it is not a plain name. */
+function propertyName(property) {
+  if (property.type === 'Identifier') return property.value
+  if (property.type !== 'Computed') return null
+  const key = property.expression
+  if (key.type === 'StringLiteral') return key.value
+  if (key.type === 'TemplateLiteral' && key.expressions.length === 0) return key.quasis[0]?.cooked ?? null
+  return null
+}
+
+/** Finds the member accesses of `only`, `skip` and `fixme` in the syntax tree of one file. */
+function findDisablingAccesses(node, found = []) {
+  if (Array.isArray(node)) {
+    for (const item of node) findDisablingAccesses(item, found)
+  } else if (node && typeof node === 'object') {
+    if (node.type === 'MemberExpression') {
+      const name = propertyName(node.property)
+      if (name !== null && DISABLING.has(name)) found.push({ name, span: node.property.span })
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'span') findDisablingAccesses(value, found)
+    }
+  }
+  return found
+}
+
+function walkSpecs(folder, found = []) {
+  for (const entry of readdirSync(folder, { withFileTypes: true })) {
+    const path = join(folder, entry.name)
+    if (entry.isDirectory()) walkSpecs(path, found)
+    else if (/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) found.push(path)
+  }
+  return found
+}
+
+/**
+ * Finds the tests that a run leaves out or runs alone, in acceptance test files.
+ * @param {string[]} folders Folders to scan, relative to the repository root.
+ * @returns {{ rule: string, file: string, line: number, column: number, message: string }[]}
+ * @throws When swc cannot parse a file. The message names the file.
+ */
+export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
+  // The architecture gate imports this file and needs no swc here, so swc loads on first use.
+  // A missing @swc/core throws: the scan never passes without a parser.
+  const swc = createRequire(import.meta.url)('@swc/core')
+  const found = []
+  for (const folder of folders) {
+    let files
+    try {
+      files = walkSpecs(join(ROOT, folder))
+    } catch (error) {
+      if (error.code === 'ENOENT') continue
+      throw error
+    }
+    for (const path of files) {
+      const file = relative(ROOT, path).replaceAll('\\', '/')
+      const source = readFileSync(path, 'utf8')
+      let tree
+      try {
+        const typescript = /\.(ts|tsx|mts|cts)$/.test(path)
+        tree = swc.parseSync(source, {
+          syntax: typescript ? 'typescript' : 'ecmascript',
+          tsx: path.endsWith('.tsx'),
+          jsx: path.endsWith('.jsx'),
+          target: 'es2023'
+        })
+      } catch (error) {
+        throw new Error(`The swc parser cannot read ${file}, so the scan for .only and .skip cannot run.\n${error.message}`)
+      }
+      const bytes = Buffer.from(source, 'utf8')
+      for (const { name, span } of findDisablingAccesses(tree.body)) {
+        // swc counts bytes from 1 in each file. Turn the offset into a line and a column.
+        const before = bytes.subarray(0, span.start - 1).toString('utf8').split('\n')
+        found.push({
+          rule: ACCEPTANCE_RULE,
+          file,
+          line: before.length,
+          column: (before.at(-1)?.length ?? 0) + 1,
+          message: `".${name}" in an acceptance test runs a test alone or leaves one out`
+        })
+      }
+    }
+  }
+  return found
 }
 
 export function readKnownViolations(file = KNOWN_VIOLATIONS_FILE) {
@@ -136,7 +234,8 @@ function main() {
 
 function run() {
   assertTypeAwareRuns()
-  const problems = describeProblems(compareWithKnown(runOxlint(['.']), readKnownViolations()))
+  const diagnostics = [...runOxlint(['.']), ...findDisabledAcceptanceTests()]
+  const problems = describeProblems(compareWithKnown(diagnostics, readKnownViolations()))
   if (problems.length === 0) {
     console.log('lint: passed')
     return

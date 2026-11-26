@@ -10,6 +10,13 @@
 //   await control.close()
 //
 // The test waits on a gate or on a message that the agent reports. It never sleeps.
+//
+// The wait rule: each report is kept until one wait takes it, and no wait takes it twice.
+//   - A wait takes the oldest kept report that matches. This includes a report that came before
+//     the wait started, so a test can wait after the agent already reached the gate.
+//   - A report that no wait took stays kept. A later wait for the same gate takes it, even when
+//     it belongs to an earlier turn. Take each report that a turn makes, or use a gate name for
+//     each turn, so that a later wait does not meet a stale report.
 // The protocol is described at the top of `agent.mjs`.
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server, type Socket } from 'node:net'
@@ -44,7 +51,10 @@ interface Connection {
   acks: Map<number, { resolve(): void; reject(error: Error): void }>
 }
 
-/** Events that no wait has taken yet, and the waits for events that have not come. */
+/**
+ * Events that no wait has taken yet, and the waits for events that have not come.
+ * See the wait rule at the top of this file.
+ */
 class Inbox {
   private readonly events: AgentEvent[] = []
   private readonly waits: { match(event: AgentEvent): boolean; resolve(event: AgentEvent): void }[] = []

@@ -23,6 +23,8 @@ interface Harness {
   /** What the client answers to a permission request. */
   answer: RequestPermissionResponse
   permissions: unknown[]
+  /** Holds the answer to permission requests until `release` runs. `asked` resolves at the first request. */
+  hold(): { asked: Promise<void>; release(): void }
   initialize(): Promise<unknown>
   newSession(): Promise<string>
   prompt(sessionId: string, text?: string): Promise<{ stopReason: string }>
@@ -37,13 +39,18 @@ function startAgent(): Harness {
   const exited = new Promise<number | null>((resolve) => child.once('exit', resolve))
   const updates: Record<string, unknown>[] = []
   const permissions: unknown[] = []
-  const state = { answer: { outcome: { outcome: 'selected', optionId: 'yes' } } as RequestPermissionResponse }
+  const state = {
+    answer: { outcome: { outcome: 'selected', optionId: 'yes' } } as RequestPermissionResponse,
+    held: undefined as { asked(): void; released: Promise<void> } | undefined
+  }
   const app = client({ name: 'test' })
     .onNotification(methods.client.session.update, ({ params }) => {
       updates.push(params.update as Record<string, unknown>)
     })
-    .onRequest(methods.client.session.requestPermission, ({ params }) => {
+    .onRequest(methods.client.session.requestPermission, async ({ params }) => {
       permissions.push(params)
+      state.held?.asked()
+      await state.held?.released
       return state.answer
     })
   const connection = app.connect(
@@ -63,6 +70,14 @@ function startAgent(): Harness {
     },
     set answer(value) {
       state.answer = value
+    },
+    hold: () => {
+      let release!: () => void
+      let asked!: () => void
+      const released = new Promise<void>((resolve) => (release = resolve))
+      const wasAsked = new Promise<void>((resolve) => (asked = resolve))
+      state.held = { asked, released }
+      return { asked: wasAsked, release }
     },
     initialize: () =>
       connection.agent.request(methods.agent.initialize, {
@@ -162,6 +177,20 @@ describe('simulated agent', () => {
       await agent.connection.agent.notify(methods.agent.session.cancel, { sessionId: session })
       expect(await turn).toEqual({ stopReason: 'cancelled' })
       expect(agent.updates).toEqual([])
+    })
+
+    it('ends the turn as cancelled when the cancel came before the agent reached a gate', async () => {
+      await control.scenario('steps', { prompt: [{ do: 'tool', title: 'Edit', kind: 'edit', allowed: 'Yes', refused: 'No' }, { do: 'gate', name: 'late' }] })
+      const agent = startAgent()
+      const held = agent.hold()
+      await agent.initialize()
+      const session = await agent.newSession()
+      const turn = agent.prompt(session)
+      await held.asked
+      // The turn is busy with the tool call, so the cancel arrives before the gate step starts.
+      await agent.connection.agent.notify(methods.agent.session.cancel, { sessionId: session })
+      held.release()
+      expect(await turn).toEqual({ stopReason: 'cancelled' })
     })
 
     it('resumes a session of its own and refuses an unknown one', async () => {

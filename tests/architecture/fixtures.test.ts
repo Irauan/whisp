@@ -3,7 +3,13 @@
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FIXTURES, ROOT, runOxlint } from '../../scripts/lint-gate.mjs'
+import {
+  ACCEPTANCE_RULE,
+  FIXTURES,
+  findDisabledAcceptanceTests,
+  ROOT,
+  runOxlint
+} from '../../scripts/lint-gate.mjs'
 
 const TSC = join(ROOT, 'node_modules/typescript/bin/tsc')
 
@@ -65,6 +71,36 @@ describe('lint fixtures', () => {
   it('G10: .skip fails lint', () => {
     expect(lint('g10')).toContain(`vitest(no-disabled-tests) ${FIXTURES}/g10/skip.fixture.ts`)
   }, 60_000)
+
+  it('G10: .only, .skip and .fixme fail the lint gate in an acceptance test, whatever the import', () => {
+    // The `test` of these files comes from a Playwright fixture, not from vitest.
+    const found = findDisabledAcceptanceTests([`${FIXTURES}/g10/acceptance`]).map(
+      (d) => `${d.rule} ${d.file}:${d.line}`
+    )
+    const only = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/only.spec.ts`
+    const skip = `${ACCEPTANCE_RULE} ${FIXTURES}/g10/acceptance/skip.spec.ts`
+    // The skip fixture also holds calls after a comment, with a string key, with the paren on the
+    // next line, after two regex literals that look like comments, with optional chaining, and
+    // as a bare alias. It holds comments with calls inside (lines 33 and 34), which must not count.
+    const skipLines = [4, 8, 14, 19, 22, 24, 26, 31, 36, 40, 41, 43, 46, 47, 48]
+    expect(found).toEqual([`${only}:4`, `${only}:8`, ...skipLines.map((line) => `${skip}:${line}`)])
+  })
+
+  it('G10: a spec that swc cannot parse fails the scan and names the file', () => {
+    expect(() => findDisabledAcceptanceTests([`${FIXTURES}/g10-unparsable/acceptance`])).toThrow(
+      `${FIXTURES}/g10-unparsable/acceptance/broken.spec.ts`
+    )
+  })
+
+  it('G10: the position of a hit counts a line after multi-byte text', () => {
+    const [hit] = findDisabledAcceptanceTests([`${FIXTURES}/g10-position/acceptance`])
+    // The line before the hit holds multi-byte characters. The column counts characters.
+    expect(hit).toMatchObject({ file: `${FIXTURES}/g10-position/acceptance/utf8.spec.ts`, line: 2, column: 32 })
+  })
+
+  it('the acceptance tests of the repository have no .only, .skip or .fixme', () => {
+    expect(findDisabledAcceptanceTests()).toEqual([])
+  })
 
   it('a renderer file that imports Electron, Node or main code fails lint', () => {
     const found = lint('g-imports')

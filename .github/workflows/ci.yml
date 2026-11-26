@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 # Each job is one gate. The rulesets require these job names.
-# Later stories add the jobs acceptance and lock.
+# Later stories add the job lock.
 jobs:
   typecheck:
     runs-on: windows-latest
@@ -77,3 +77,28 @@ jobs:
         run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
       - run: npm ci
       - run: npm run architecture
+
+  acceptance:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Check the Node version
+        run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
+      - run: npm ci
+      # Builds the app, then runs Playwright on it with the simulated agent.
+      - run: npm run acceptance
+      - name: Upload the Playwright results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-results
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
