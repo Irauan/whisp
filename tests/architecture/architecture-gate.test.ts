@@ -181,12 +181,8 @@ describe('the other import rules', () => {
     expect(found('g-imports-ok')).toEqual([])
   }, 60_000)
 
-  it('passes when a folder of a rule does not exist', () => {
-    // The current code has no src/features, src/app, src/providers or src/building-blocks.
-    const { modules } = runDepcruise()
-    expect(modules.some((module) => /^src\/(features|app|providers|building-blocks)\//.test(module))).toBe(
-      false
-    )
+  // Since m0-gates S8, the code has src/features, src/app, src/providers and src/building-blocks.
+  it('passes on the current code', () => {
     expect(runDepcruise().diagnostics).toEqual([])
   }, 60_000)
 })
