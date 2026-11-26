@@ -14,6 +14,7 @@
   "include": [
     "electron.vite.config.ts",
     "vitest.config.mts",
+    "playwright.config.ts",
     "src/*.ts",
     "src/*.mts",
     "src/**/*.mts",
@@ -30,7 +31,8 @@
     "src/features/**/*.store.ts",
     "src/**/*.test.ts",
     "tests/architecture/*.ts",
-    "tests/simulated-agent"
+    "tests/simulated-agent",
+    "tests/acceptance"
   ],
   "exclude": [
     "tests/architecture/fixtures",

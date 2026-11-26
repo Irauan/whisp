@@ -12,7 +12,8 @@
     "typecheck": "node scripts/typecheck.mjs",
     "test": "vitest run",
     "icons": "electron scripts/build-icons.cjs",
-    "lint": "node scripts/lint-gate.mjs"
+    "lint": "node scripts/lint-gate.mjs",
+    "acceptance": "npm run build && playwright test"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.112.0",
@@ -22,6 +23,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.1",
     "@types/react-dom": "^19.3.0",
