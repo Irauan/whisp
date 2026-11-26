@@ -59,12 +59,15 @@ Does not apply. The milestone adds no screen.
 - A file `tests/architecture/known-violations.json` lists each current violation by rule and file. CI fails when an entry is added, or when a listed violation no longer occurs.
 - Each gate has a fixture that breaks its rule. A test runs the tool on the fixture and expects the failure. Then the gate proves itself in CI.
 - The simulated agent replaces `fake-agent.mjs`. It lives in `tests/simulated-agent/`. A test sends commands to it on a local control channel and opens its gates. It uses no timers.
-- The acceptance test registers the simulated agent in `agents.json` of a temporary data folder. It sets `APPDATA` for the app process, so the app finds that folder. The product gets no test hook.
+- The acceptance test registers the simulated agent in `agents.json` of a temporary data folder. It starts the app with the Chromium switch `--user-data-dir=<temp folder>`, so the app finds that folder. The product gets no test hook. User decision, 2026-11-26: `APPDATA` does not move the folder, see the assumptions.
 - The first acceptance test chats through the current work item panel. Story S1 of m1-chat removes work items, so its test author retires this test.
 - The acceptance test of the GitHub accounts query puts a fake `gh` program first on `PATH`. The test uses no real account.
 - The test lock: `tests/locks.json` holds the SHA-256 of each locked test file. CI checks the commits of each story PR:
   - The commits before the first code commit can add locked tests and their lock entries.
   - No later commit can change a locked file or its entry.
+  - Exception: when the builder disputes a test that the test author added in the same story, the test author changes it in a new commit with the trailer `Locked-Test-Change:`, after the coordinator approves. A change of meaning goes to the user. User decision, 2026-11-26.
+  - The lock job runs the copy of `scripts/check-lock.mjs` from the base branch, so a PR cannot weaken the check that judges it. User decision, 2026-11-26.
+  - A milestone PR to `main` holds squashed stories. For it, the lock job checks only the hashes and the known violations.
   - A test that is locked on the base branch changes only in a commit with the trailer `Locked-Test-Change:` and a reason. The coordinator adds it only for the test author. It reports each such change in the evidence. A change of meaning goes to the user.
 - The builder role has deny rules for `tests/acceptance/**`, `tests/locks.json` and `tests/simulated-agent/**`.
 - GitHub rulesets protect `main` and `milestone/*`:
@@ -107,7 +110,7 @@ Does not apply. The milestone adds no screen.
 | G15 | A change of a test locked on the base branch, without the trailer | CI runs | The lock check fails. With the trailer, it passes and prints the reason. |
 | G16 | The rulesets are applied | Somebody pushes straight to `main` or to `milestone/m0-gates`, or force pushes | GitHub refuses the push. |
 | G17 | A PR to `milestone/*` with a failed check | The coordinator tries to merge | GitHub refuses the merge. |
-| G18 | The renderer calls `invoke('github.list-accounts', {})` | A fake `gh` reports two accounts | The account dialog lists both. |
+| G18 | The renderer calls `invoke('workspaces.list-github-accounts', {})` | A fake `gh` reports two accounts | The account dialog lists both. |
 | G19 | The renderer calls `invoke` with an unknown name, with invalid input, or from another frame | The main process receives it | It returns an error and runs no handler. |
 | G20 | Each contract in the registry | The contract test runs | Each has valid and invalid examples, and each example gives the expected result. |
 | G21 | The trial story | It runs through steps 3 to 6 | The evidence shows: the test author commit before the builder commit, an advisor call from the builder, a reviewer report, a squash merge by the coordinator in auto mode, and the count of 1Password prompts. |
@@ -151,7 +154,7 @@ Does not apply. The milestone adds no screen.
 | Item | How the milestone tests it |
 |---|---|
 | Playwright for Electron runs the built app on `windows-latest`. | G11 in CI. |
-| Setting `APPDATA` moves the user data folder of the app. | G11 checks that the real folder is not touched. |
+| Setting `APPDATA` moves the user data folder of the app. | False. S5 showed that Electron 45.5 on Windows keeps the real folder. `--user-data-dir` moves it. G11 checks that the real folder is not touched. |
 | dependency-cruiser with swc parses the current TypeScript 7 code. | G8. |
 | tsgolint works with TypeScript 7. | G3. |
 | `worktree.baseRef: head` starts story worktrees from the milestone branch. | G22. |
@@ -163,11 +166,12 @@ Does not apply. The milestone adds no screen.
 ## Accepted gaps
 
 - CI cannot tell the test author from the builder. Reason: one GitHub account for all agents, from `docs/process.md`. The deny rules and the reviewer reduce the risk.
+- A PR can still change the `lock` job in `ci.yml`. Reason: a fix needs a `pull_request_target` workflow, and the user chose not to add it now. The reviewer checks each change under `.github/workflows/`. User decision, 2026-11-26.
 - Before the lock story merges, only the reviewer guards the tests. Reason: the lock is built in this milestone, and S1 to S5 add no locked acceptance test of product behavior.
 
 ## Budget
 
-35 agent runs.
+45 agent runs. The user raised it from 35 on 2026-11-26, after 24 runs.
 
 - 7 gate stories skip step 3, at about 3 runs each: 21.
 - The trial story, with all steps: 5.

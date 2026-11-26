@@ -109,7 +109,7 @@ Rules from the template that do not apply: a container for dependency injection,
 
 ## IPC and the renderer boundary
 
-- The preload exposes only `invoke(name, input)` and `subscribe(name)`.
+- The preload exposes only `invoke(name, input)` and `subscribe(name, callback)`. `subscribe` returns a function that stops the subscription.
 - Both accept only names in the contract registry.
 - The main process checks the sender frame and validates the input with zod.
 - A slice returns `Result`. The main process logs a defect and returns a generic message.

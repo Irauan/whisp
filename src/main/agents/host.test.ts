@@ -2,29 +2,30 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { ControlServer } from '../../../tests/simulated-agent/control'
 import type { AgentRun } from '../../shared/agent'
 import { AgentHost } from './host'
 import type { AgentRegistry, ResolvedAgent } from './registry'
 import { RunStore } from './run-store'
 
-const fake: ResolvedAgent = {
-  id: 'fake',
-  name: 'Fake',
-  command: process.execPath,
-  args: [join(__dirname, 'fixtures/fake-agent.mjs')],
-  env: {},
-  signInHint: 'Sign in first.',
-  available: true,
-  detail: ''
-}
-
-const registry = { get: async (id: string) => (id === fake.id ? fake : undefined) } as AgentRegistry
-
+let control: ControlServer
+let registry: AgentRegistry
 let folder: string
 let host: AgentHost
 let onRun: (run: AgentRun) => void
 
 beforeEach(async () => {
+  control = await ControlServer.start()
+  const fake: ResolvedAgent = {
+    id: 'fake',
+    name: 'Fake',
+    ...control.agent,
+    env: {},
+    signInHint: 'Sign in first.',
+    available: true,
+    detail: ''
+  }
+  registry = { get: async (id: string) => (id === fake.id ? fake : undefined) } as AgentRegistry
   folder = await mkdtemp(join(tmpdir(), 'aether-host-'))
   onRun = () => undefined
   host = new AgentHost(registry, new RunStore(join(folder, 'runs')), (run) => onRun(run))
@@ -32,6 +33,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.shutdown()
+  await control.close()
   await rm(folder, { recursive: true, force: true })
 })
 
@@ -39,6 +41,7 @@ const send = (itemId: string, text: string) => host.send({ itemId, agentId: 'fak
 
 describe('AgentHost', () => {
   it('streams the reply of an ACP agent into the transcript', async () => {
+    await control.scenario('text')
     await send('w1', 'hello')
     const run = await host.get('w1')
     expect(run.status).toBe('idle')
@@ -53,6 +56,7 @@ describe('AgentHost', () => {
   })
 
   it('asks the user before a tool call and passes on the answer', async () => {
+    await control.scenario('tool')
     onRun = (run) => {
       if (run.question) host.answer('w1', run.question.choices[0]!.id)
     }
@@ -66,6 +70,7 @@ describe('AgentHost', () => {
   })
 
   it('refuses the tool call when the user stops the agent', async () => {
+    await control.scenario('tool')
     onRun = (run) => {
       if (run.question) host.cancel('w1')
     }
@@ -74,6 +79,8 @@ describe('AgentHost', () => {
   })
 
   it('stops a turn on request', async () => {
+    // The agent waits at a gate that nobody opens. Only the cancel ends the turn.
+    await control.scenario('text', { gate: 'never' })
     onRun = (run) => {
       if (run.status === 'working') host.cancel('w1')
     }
@@ -82,6 +89,7 @@ describe('AgentHost', () => {
   })
 
   it('explains how to sign in', async () => {
+    await control.scenario('sign-in-error')
     await send('w1', 'auth')
     const run = await host.get('w1')
     expect(run.status).toBe('error')
@@ -100,11 +108,57 @@ describe('AgentHost', () => {
   })
 
   it('refuses a second message while the agent works', async () => {
-    onRun = (run) => {
-      if (run.status === 'working') host.cancel('w1')
-    }
-    const first = send('w1', 'wait')
-    await expect(send('w1', 'hello')).rejects.toThrow('still working')
+    // The agent holds the turn at a gate. The first message is surely working when the
+    // second goes out, and it ends only when the test opens the gate.
+    await control.scenario('text', { gate: 'reply' })
+    const first = send('w1', 'first')
+    await control.waitForGate('reply')
+    await expect(send('w1', 'second')).rejects.toThrow('still working')
+    await control.open('reply')
     await first
+    const run = await host.get('w1')
+    expect(run.status).toBe('idle')
+    expect(run.entries).toMatchObject([{ kind: 'user', text: 'first' }, { kind: 'agent', text: 'Hello' }])
+  })
+
+  it('shows "working" before the agent replies and the reply after it', async () => {
+    await control.scenario('text', { gate: 'reply' })
+    const sent = send('w1', 'hello')
+    await control.waitForGate('reply')
+    const before = await host.get('w1')
+    expect(before.status).toBe('working')
+    expect(before.entries).toMatchObject([{ kind: 'user', text: 'hello' }])
+    await control.open('reply')
+    await sent
+    const after = await host.get('w1')
+    expect(after.status).toBe('idle')
+    expect(after.entries).toMatchObject([{ kind: 'user', text: 'hello' }, { kind: 'agent', text: 'Hello' }])
+  })
+
+  it('shows "starting" until a slow agent answers initialize', async () => {
+    await control.scenario('slow-start')
+    const sent = send('w1', 'hello')
+    await control.waitForGate('initialize')
+    expect((await host.get('w1')).status).toBe('starting')
+    await control.open('initialize')
+    await sent
+    const run = await host.get('w1')
+    expect(run.status).toBe('idle')
+    expect(run.entries.at(-1)).toMatchObject({ kind: 'agent', text: 'Hello' })
+  })
+
+  it('reports an agent that ends, and starts a new process on the next message', async () => {
+    await control.scenario('crash')
+    await send('w1', 'hello')
+    const crashed = await host.get('w1')
+    expect(crashed.status).toBe('error')
+    expect(crashed.entries.at(-1)).toMatchObject({ kind: 'notice', tone: 'error' })
+    await control.waitForClose()
+
+    await control.scenario('text')
+    await send('w1', 'hello')
+    const run = await host.get('w1')
+    expect(run.status).toBe('idle')
+    expect(run.entries.at(-1)).toMatchObject({ kind: 'agent', text: 'Hello' })
   })
 })

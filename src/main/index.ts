@@ -1,21 +1,56 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { pathToFileURL } from 'node:url'
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import iconIco from '../../resources/icon.ico?asset'
 import iconPng from '../../resources/icon.png?asset'
+import { contracts, events } from '../app/contracts'
+import { createInvoke, createSubscribe } from '../app/main/ipc'
+import { listGithubAccounts } from '../features/workspaces/list-github-accounts/list-github-accounts.contract'
+import { listGithubAccountsController } from '../features/workspaces/list-github-accounts/list-github-accounts.controller'
+import { GithubCli } from '../providers/github-cli/github-cli'
+import type { GithubAccounts } from '../shared/bridge'
+import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
 import { isWorkspace } from '../shared/model'
 import { AgentHost } from './agents/host'
 import { AgentRegistry } from './agents/registry'
 import { isItemId, RunStore } from './agents/run-store'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
-import { listGithubAccounts, listIssues } from './github'
-import { listRepositoryFiles } from './repository'
+import { git, listRepositoryFiles } from './repository'
 import { WorkspaceFile } from './workspace-file'
 
 if (process.env.AETHER_DATA_DIR) app.setPath('userData', process.env.AETHER_DATA_DIR)
 
 const hasLock = app.requestSingleInstanceLock()
 if (!hasLock) app.quit()
+
+const github = new GithubCli()
+
+/** The pages of Aether: the built file, or the dev server in a dev run. */
+const devServer = process.env.ELECTRON_RENDERER_URL
+const appPage = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+
+/** The web contents of the windows that Aether created. */
+const appWindows = new Set<number>()
+
+/** True only for the main frame of an Aether window, with the page of Aether. */
+function isAppFrame(event: IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame
+  if (!frame || !appWindows.has(event.sender.id) || frame !== event.sender.mainFrame) return false
+  const address = frame.url.split(/[?#]/)[0] ?? ''
+  if (devServer && !app.isPackaged) return frame.url.startsWith(devServer)
+  return address === appPage
+}
+
+const invoke = createInvoke({
+  contracts,
+  controllers: { [listGithubAccounts.name]: listGithubAccountsController(github) },
+  isTrusted: isAppFrame,
+  log: (message, cause) => console.error(message, cause)
+})
+const subscription = createSubscribe({ events, isTrusted: isAppFrame })
+ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
+ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
 
 const file = new WorkspaceFile(join(app.getPath('userData'), 'workspace.json'))
 const registry = new AgentRegistry(join(app.getPath('userData'), 'agents.json'))
@@ -41,6 +76,9 @@ function createWindow(): void {
       sandbox: true
     }
   })
+  const contentsId = window.webContents.id
+  appWindows.add(contentsId)
+  window.once('closed', () => appWindows.delete(contentsId))
   window.once('ready-to-show', () => window.show())
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   // Allow a reload of the current page only. Hot reload needs it.
@@ -48,7 +86,6 @@ function createWindow(): void {
     if (event.url !== window.webContents.getURL()) event.preventDefault()
   })
 
-  const devServer = process.env.ELECTRON_RENDERER_URL
   if (devServer && !app.isPackaged) void window.loadURL(devServer)
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
 }
@@ -63,14 +100,20 @@ ipcMain.handle('workspace:save', (_event, workspace: unknown) => {
   if (!isWorkspace(workspace)) throw new Error('Refused to save data that is not a workspace.')
   return file.save(workspace)
 })
-ipcMain.handle('github:accounts', () => listGithubAccounts())
+// The old channel. The renderer reads the accounts through `invoke` now. m1-chat removes this one.
+ipcMain.handle('github:accounts', async (): Promise<GithubAccounts> => {
+  const result = await github.listAccounts()
+  return result.ok ? { ok: true, profiles: result.value } : { ok: false, reason: result.error.message }
+})
 ipcMain.handle('folder:choose', () => chooseFolder())
 ipcMain.handle('folders:choose', () => chooseFolders())
 ipcMain.handle('files:choose', () => chooseFiles())
 ipcMain.handle('folder:inspect', (_event, folder: unknown) => inspectFolder(asText(folder)))
 ipcMain.handle('repository:files', (_event, folder: unknown) => listRepositoryFiles(asText(folder)))
 ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
-  listIssues(asText(folder), login === null ? null : asText(login))
+  github.listIssues(asText(folder), login === null ? null : asText(login), (path) =>
+    git(path, ['remote', 'get-url', 'origin'])
+  )
 )
 
 async function isFolder(path: unknown): Promise<boolean> {

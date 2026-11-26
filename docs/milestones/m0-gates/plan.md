@@ -24,10 +24,13 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 - `.oxlintrc.json` sets the rules for promises, restricted imports, restricted globals (`localStorage`, `sessionStorage`), raw HTML, `.only` and `.skip`. tsgolint gives the type-aware rules.
 - `.dependency-cruiser.cjs` uses the swc parser. It holds the rules of "Dependencies" in `docs/architecture.md`, for the current and the target layout.
 - `tests/architecture/` holds the vitest tests that run the tools on the fixtures, and the tests for the slice shape, the contract registry and the migrations.
-- `tests/architecture/known-violations.json` lists each current violation as `{ rule, file }`. One test compares the tool output with the list:
+- `tests/architecture/known-violations.json` lists each current violation as `{ rule, file, count }`. One test compares the tool output with the list:
   - An occurrence that is not listed fails.
-  - A listed entry with no occurrence fails.
-- The list can only shrink. The lock check fails when a PR adds an entry.
+  - More occurrences than `count` fail.
+  - Fewer occurrences than `count` fail until the change lowers `count` or removes the entry.
+  - User decision, 2026-11-26: the count closes the gap where a new violation in a listed file passed.
+- The list can only shrink. The lock check fails when a PR adds an entry or raises a count.
+- Each `src` source file belongs to at least one zone config. A test in `tests/architecture/` checks this.
 
 ### Simulated agent
 
@@ -40,7 +43,8 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 ### Acceptance tests
 
 - Playwright starts the built app with `_electron.launch`.
-- A fixture makes a temporary folder, sets `APPDATA` to it for the app process, and writes `Aether/agents.json` there.
+- A fixture makes a temporary folder, starts the app with `--user-data-dir=<temp>/data`, and writes `agents.json` and `workspace.json` there.
+- The product keeps `AETHER_DATA_DIR` as a documented user feature (`README.md`). The test removes it from the app environment. User decision, 2026-11-26.
 - The fixture for GitHub puts a fake `gh` program first on `PATH`.
 - Tests live in `tests/acceptance/<milestone>/<story>/`.
 
@@ -58,7 +62,14 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 ### Roles and settings
 
 - `.claude/agents/test-author.md`, `builder.md`, `reviewer.md`, `validator.md`. Each sets `model`, `effort` and its tools, from `docs/models.md`.
-- The builder has deny rules for `tests/acceptance/**`, `tests/simulated-agent/**`, `tests/locks.json` and `tests/architecture/known-violations.json`.
+- From S6 on, the builder has deny rules for `tests/acceptance/**`, `tests/simulated-agent/**` and `tests/locks.json`.
+- A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked. S2 to S5 create these paths as normal story work.
+- S2 and S3 create `tests/architecture/known-violations.json` with the current violations: S2 for lint, S3 for imports. After S3 merges, the list only shrinks.
+- The builder can remove an entry from that list when its change fixes that violation. After S3, the builder never adds an entry. The lock check fails a PR that grows the list. User decision, 2026-11-26.
+- The coordinator approves each change of a file locked on the base branch, and only for the test author. The commit then carries the trailer `Locked-Test-Change: <reason>`.
+- The coordinator records the model, the effort and the reason of each agent run in `metrics.md` of the milestone.
+- The coordinator passes worktree isolation in each builder dispatch. The builder file does not set it.
+- The reviewer checks by hand, in every story, that the diff changes no locked file. The deny rules do not cover writes through `Bash`.
 - `.claude/settings.json` sets `worktree.baseRef` to `head`.
 - `docs/models.md` says when each model and effort fits. The test author, the reviewer and the validator rank above the builder.
 - `CLAUDE.md` holds short rules for every session, with links. It stays under 200 lines.
@@ -72,6 +83,8 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
   - No force push. No deletion.
 - `main` allows merge commits only. `milestone/*` allows squash merges only.
 - `scripts/apply-rulesets.mjs` applies them with `gh api`. The user approves each run.
+- The required checks use the strict policy: a story PR must be up to date with the milestone branch before it merges. User decision, 2026-11-26.
+- After the rulesets apply, nobody pushes straight to `main` or `milestone/*`. The coordinator keeps the run log in the notes folder. The next story PR adds the plan ticks. The validator PR adds `evidence.md` and `metrics.md`. User decision, 2026-11-26.
 
 ### Path step 2: contracts, registry and preload
 
@@ -93,7 +106,7 @@ S1 to S7 change no product behavior, so they skip step 3. Their fixtures are uni
 | Story | Content | Checks | Depends on |
 |---|---|---|---|
 | S1 Roles and rules | Role definitions, `docs/models.md`, `CLAUDE.md`, `.claude/settings.json` | G22 | — |
-| S2 CI, typecheck and lint | Workflow, zone tsconfigs, oxlint with tsgolint, known violations list for lint | G1 (first four jobs), G2, G3, G4, G6, G10 | S1 |
+| S2 CI, typecheck and lint | Workflow, zone tsconfigs, oxlint with tsgolint, known violations list for lint | G1 (jobs `typecheck`, `lint`, `unit`), G2, G3, G4, G6, G10 | S1 |
 | S3 Architecture tests | dependency-cruiser with swc, fixtures, known violations for imports | G5, G7, G8, G9 | S2 |
 | S4 Simulated agent | Program, control pipe, gates, five scenarios. `host.test.ts` moves to it. | G12 (slice level) | S2 |
 | S5 App test | Playwright, temporary data folder, `acceptance` job | G1, G11, G12 | S4 |
@@ -127,30 +140,46 @@ S1 to S7 change no product behavior, so they skip step 3. Their fixtures are uni
 
 ## User steps
 
-| Step | Who | State on 2026-11-25 |
+| Step | Who | State on 2026-11-26 |
 |---|---|---|
-| Push `14ffcf5` and merge `aether-first-version` to `main` | The user | Not done. `14ffcf5` is local only. |
-| Select the `Irauan` account in `gh` | The user | Not done. `Irauan-LettrLabs` is active, with read access only. |
-| Permit the squash merge to `milestone/*` in the auto mode settings (user settings, not project settings) | The user | Not done |
-| Update local Node to 24.15 or later | The user | Not done. Local Node is 24.11. |
+| Push `14ffcf5` and merge `aether-first-version` to `main` | The user | Done. `main` is at `0912869`. |
+| Select the `Irauan` account in `gh` | The user | Done |
+| Permit the squash merge to `milestone/*` in the auto mode settings (user settings, not project settings) | The user | Not done. User settings have no `autoMode` key. The first story merge waits for it. |
+| Update local Node to 24.15 or later | The user | Done. Local Node is 24.22.3. |
+| Turn on the advisor with `/advisor fable` in the coordinator session | The user | Not done. Subagents inherit the advisor from the coordinator. |
 | Approve the application of the rulesets in S7 | The user | When S7 runs |
 | Be present for the 1Password prompts in S8 | The user | When S8 runs |
+
+## Coordinator questions
+
+The user answered these on 2026-11-26.
+
+| Question | Answer |
+|---|---|
+| Which checkout do story worktrees start from? | `I:\Whisp` stays on `milestone/m0-gates` for the whole milestone. The coordinator fast-forwards it after each story merge. `worktree.baseRef: head` then gives G22. |
+| Which model does each role use? | Builder: Sonnet 5.5, effort high. Test author, reviewer, validator: Opus 5.5, effort high. Advisor: Fable 5.2. `docs/models.md` records this. |
+
+Facts from the Claude Code documents, found by the coordinator:
+
+- A subagent file has no field for deny rules. S6 enforces the builder limits with a `PreToolUse` hook in `builder.md` that blocks `Edit` and `Write` on the locked paths.
+- The hook does not cover file writes through `Bash`. The reviewer checks the diff of each story for changes to the locked paths.
+- `autoMode` rules are prose. An `allow` entry overrides only `soft_deny`, not `hard_deny`.
 
 ## Todo list
 
 - [x] User approves the brief and this plan.
-- [ ] User does the steps of "Before Milestone 0".
-- [ ] Coordinator reads the files and lists what it cannot answer. User answers.
-- [ ] Coordinator creates `milestone/m0-gates` from `main`.
-- [ ] S1 Roles and rules
-- [ ] S2 CI, typecheck and lint
-- [ ] S3 Architecture tests
-- [ ] S4 Simulated agent
-- [ ] S5 App test
-- [ ] Demo of the walking skeleton to the user
-- [ ] S6 Test lock
-- [ ] S7 Branch protection
-- [ ] S8 Trial: contracts and GitHub accounts
+- [ ] User does the steps of "Before Milestone 0". The `autoMode` rule and the advisor remain.
+- [x] Coordinator reads the files and lists what it cannot answer. User answers.
+- [x] Coordinator creates `milestone/m0-gates` from `main`.
+- [x] S1 Roles and rules. PR #1. The user merged it with a merge commit, not a squash.
+- [x] S2 CI, typecheck and lint. PR #2, squash merge `3120ca3`.
+- [x] S3 Architecture tests. PR #4, squash merge by the user (`08eb39a`).
+- [x] S4 Simulated agent. PR #3, squash merge by the user.
+- [x] S5 App test. PR #5, squash merge by the user.
+- [x] Demo of the walking skeleton to the user: CI run 45821001386 on `641fee1`, five jobs green.
+- [x] S6 Test lock. PR #6, squash merge by the user (`7d4a4f9`), before the re-review ended; the re-review then passed.
+- [x] S7 Branch protection. PR #7, squash merge by the user (`5f564b5`). Rulesets applied with the user approval on 2026-11-26.
+- [x] S8 Trial: contracts and GitHub accounts. PR #8, squash merge by the coordinator in auto mode (`797ae76`).
 - [ ] Step 7: milestone validation, with one red PR per gate
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective
