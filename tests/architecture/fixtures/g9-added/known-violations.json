@@ -1,0 +1,7 @@
+[
+  {
+    "rule": "typescript(no-floating-promises)",
+    "file": "src/renderer/other.ts",
+    "count": 1
+  }
+]
