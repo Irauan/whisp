@@ -169,7 +169,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] Coordinator reads the files and lists what it cannot answer. User answers.
 - [x] Coordinator creates `milestone/m0-gates` from `main`.
 - [x] S1 Roles and rules. PR #1. The user merged it with a merge commit, not a squash.
-- [ ] S2 CI, typecheck and lint
+- [x] S2 CI, typecheck and lint. PR #2, squash merge `3120ca3`.
 - [ ] S3 Architecture tests
 - [ ] S4 Simulated agent
 - [ ] S5 App test
