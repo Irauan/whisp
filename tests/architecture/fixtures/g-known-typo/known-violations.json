@@ -1,0 +1,7 @@
+[
+  {
+    "rule": "renderer-imports-no-mian",
+    "file": "src/renderer/view.ts",
+    "count": 1
+  }
+]

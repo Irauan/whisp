@@ -10,6 +10,7 @@ import {
   assertSwcParserRuns,
   compareImports,
   describeProblems,
+  describeUnownedEntries,
   findUncruisedFiles,
   importRuleNames,
   runDepcruise
@@ -113,6 +114,32 @@ describe('the other import rules', () => {
     ])
   }, 60_000)
 
+  it('fails on a domain file that reaches Node through a store', () => {
+    expect(found('g-shared-domain')).toEqual([
+      'shared-imports-no-main src/features/sessions/session.ts'
+    ])
+  }, 60_000)
+
+  it('fails on a shared file that imports main code, which renderer code then reaches', () => {
+    expect(found('g-shared-main')).toEqual(['shared-imports-no-main src/shared/x.ts'])
+  }, 60_000)
+
+  it('fails on a contract that imports its handler, which renderer code then reaches', () => {
+    expect(found('g-shared-contract')).toEqual([
+      'shared-imports-no-main src/features/sessions/send-message/send-message.contract.ts'
+    ])
+  }, 60_000)
+
+  it('fails on a shared file that imports renderer code', () => {
+    expect(found('g-shared-renderer')).toEqual(['shared-imports-no-renderer src/shared/y.ts'])
+  }, 60_000)
+
+  it('lets src/main/index.ts import a provider and refuses src/main/other.ts', () => {
+    expect(found('g-composition-root')).toEqual([
+      'only-app-main-imports-providers src/main/other.ts'
+    ])
+  }, 60_000)
+
   it('passes on the valid imports of the target layout', () => {
     expect(found('g-imports-ok')).toEqual([])
   }, 60_000)
@@ -190,6 +217,40 @@ describe('G9: a changed list of violations', () => {
     const known = [{ rule: 'typescript(no-floating-promises)', file, count: 1 }]
     expect(describeProblems(compareImports([], known))).toEqual([])
   })
+})
+
+describe('the rule names of the known violations', () => {
+  it('belong to a gate in the official list', () => {
+    expect(describeUnownedEntries(readKnownViolations())).toEqual([])
+  })
+
+  it('name a typo', () => {
+    const known = [{ rule: 'renderer-imports-no-mian', file: 'src/a.ts', count: 1 }]
+    expect(describeUnownedEntries(known)).toEqual([
+      'Known violation names no rule of a gate, fix or remove it: `renderer-imports-no-mian in src/a.ts`'
+    ])
+  })
+
+  it('accept the lint rules and the import rules', () => {
+    const known = [
+      { rule: 'typescript(no-floating-promises)', file: 'src/a.ts', count: 1 },
+      { rule: 'renderer-imports-no-main', file: 'src/a.ts', count: 1 }
+    ]
+    expect(describeUnownedEntries(known)).toEqual([])
+  })
+
+  it('fail the gate command', () => {
+    const { status, output } = runGate([
+      '--root',
+      fixture('g-known-typo'),
+      '--known',
+      join(fixture('g-known-typo'), 'known-violations.json')
+    ])
+    expect(status).toBe(1)
+    expect(output).toContain(
+      'Known violation names no rule of a gate, fix or remove it: `renderer-imports-no-mian in src/renderer/view.ts`'
+    )
+  }, 60_000)
 })
 
 describe('the swc parser', () => {

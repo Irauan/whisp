@@ -15,6 +15,8 @@ import {
   ROOT,
   compareWithKnown,
   describeProblems,
+  entryKey,
+  isLintRule,
   readKnownViolations
 } from './lint-gate.mjs'
 
@@ -100,6 +102,17 @@ export function compareImports(diagnostics, known) {
   return compareWithKnown(diagnostics, known, (rule) => names.has(rule))
 }
 
+/**
+ * Finds the entries whose rule no gate owns: neither a lint rule nor a rule of
+ * .dependency-cruiser.cjs. Without this check a typo in a rule name leaves the entry unused.
+ */
+export function describeUnownedEntries(known) {
+  const names = new Set(importRuleNames())
+  return known
+    .filter((entry) => !isLintRule(entry.rule) && !names.has(entry.rule))
+    .map((entry) => `Known violation names no rule of a gate, fix or remove it: \`${entryKey(entry)}\``)
+}
+
 export { describeProblems }
 
 function main() {
@@ -134,7 +147,11 @@ function run(args) {
   if (uncruised.length > 0) {
     throw new Error(`dependency-cruiser did not read these files:\n${uncruised.join('\n')}`)
   }
-  const problems = describeProblems(compareImports(diagnostics, readKnownViolations(known)))
+  const entries = readKnownViolations(known)
+  const problems = [
+    ...describeUnownedEntries(entries),
+    ...describeProblems(compareImports(diagnostics, entries))
+  ]
   if (problems.length === 0) {
     console.log('architecture: passed')
     return

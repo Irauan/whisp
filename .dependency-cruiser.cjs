@@ -16,6 +16,15 @@ const RENDERER =
 const MAIN =
   '^src/(?:main/|preload/|app/main/|app/preload/|features/.*\\.(?:controller|handler|store)\\.ts$)'
 
+// Shared-zone code runs in both processes: `src/shared`, contracts and domain files (see
+// DOMAIN below for the domain). It must reach no main code and no renderer code, or an
+// allowed zone would pass that code on to the renderer or into the domain.
+const SHARED =
+  '^src/(?:shared/|features/.*\\.contract\\.ts$|features/[^/]+/[^/.]+\\.ts$)'
+
+// Providers run in the main process. Only the composition root imports them.
+const PROVIDERS = '^src/providers/'
+
 // What renderer code may import inside `src`: renderer code, contracts and base UI.
 // `src/shared` and `src/app/contracts.ts` (the registry) hold the contracts. Base UI is the
 // `.tsx` and `.css` files of `building-blocks`, with the two contract helpers `contract.ts`
@@ -32,6 +41,7 @@ const SLICE = '^src/features/([^/]+)/([^/]+)/'
 // A domain file is a file without a zone suffix in the root of a feature, for example
 // src/features/sessions/session.ts. The shared folder of the current layout is pure too.
 const DOMAIN = '^src/(?:shared/|features/[^/]+/[^/.]+\\.ts$)'
+// The SHARED zone above has the domain files and the shared folder too.
 
 // What the domain must not import. dependency-cruiser gives a Node core module as its bare name
 // (`fs`, `fs/promises`) and an npm package as its resolved path or, when it is not installed,
@@ -67,6 +77,21 @@ module.exports = {
       from: { path: RENDERER },
       // `renderer-imports-no-main` reports the main code. This rule reports the rest.
       to: { path: '^src/', pathNot: [RENDERER_MAY_IMPORT, MAIN] }
+    },
+    {
+      name: 'shared-imports-no-main',
+      comment:
+        'Shared-zone files (src/shared, contracts, domain files) import no main code and no providers.',
+      severity: 'error',
+      from: { path: SHARED, pathNot: '\\.test\\.tsx?$' },
+      to: { path: [MAIN, PROVIDERS] }
+    },
+    {
+      name: 'shared-imports-no-renderer',
+      comment: 'Shared-zone files (src/shared, contracts, domain files) import no renderer code.',
+      severity: 'error',
+      from: { path: SHARED, pathNot: '\\.test\\.tsx?$' },
+      to: { path: RENDERER }
     },
     {
       name: 'no-slice-to-slice',
@@ -106,15 +131,18 @@ module.exports = {
     {
       name: 'only-app-main-imports-providers',
       comment:
-        'Only app/main connects providers to ports. A provider imports its own files. A test file is a composition root and may import a provider.',
+        'Only app/main connects providers to ports. src/main/index.ts is the composition root of the current layout until the code moves to src/app/main. A provider imports its own files. A test file is a composition root and may import a provider.',
       severity: 'error',
-      from: { path: '^src/', pathNot: ['^src/providers/', '^src/app/main/', '\\.test\\.tsx?$'] },
-      to: { path: '^src/providers/' }
+      from: {
+        path: '^src/',
+        pathNot: ['^src/providers/', '^src/app/main/', '^src/main/index\\.ts$', '\\.test\\.tsx?$']
+      },
+      to: { path: PROVIDERS }
     },
     {
       name: 'product-imports-no-tests',
       comment:
-        'Product code under src never imports from tests/. A test file (*.test.ts, *.test.tsx) and the files under tests/ may import tests/simulated-agent.',
+        'Product code under src never imports from tests/. A test file under src (*.test.ts, *.test.tsx) may import any path under tests/. The files under tests/ are not product code and no rule covers them.',
       severity: 'error',
       from: { path: '^src/', pathNot: '\\.test\\.tsx?$' },
       to: { path: '^tests/' }
