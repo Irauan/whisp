@@ -1,12 +1,4 @@
 {
-  "tests/acceptance/m0-gates/s5/app.spec.ts": {
-    "sha256": "4afe6d45c222b707d544a710a449d6dadd31eeefdf0a1a8a10e6043815f097bd",
-    "story": "m0-gates/s5"
-  },
-  "tests/acceptance/m0-gates/s5/fixture.ts": {
-    "sha256": "98162db78ffe5186868c2108e85087e04fa743e391fb2efea6bce64cee61df13",
-    "story": "m0-gates/s5"
-  },
   "tests/acceptance/m0-gates/s8/fake-gh.cs": {
     "sha256": "2b0e09cf756653e0e893b1101d083b6a24ed656e2284ce1d1a08cab36b8bf80a",
     "story": "m0-gates/s8"
@@ -22,6 +14,14 @@
   "tests/acceptance/m0-gates/s8/invoke-guard.spec.ts": {
     "sha256": "a75747e5dd94fa687869b704532df93590e09fc657746f171bea582d6f5b983f",
     "story": "m0-gates/s8"
+  },
+  "tests/acceptance/m1-chat/s1/coming-soon.spec.ts": {
+    "sha256": "7948b4ef5a682f5d0fbe17ae095026ae65f4cb1b2dc1cbf0ef19161fccf93d94",
+    "story": "m1-chat/s1"
+  },
+  "tests/acceptance/m1-chat/s1/fixture.ts": {
+    "sha256": "0ef779ef12644af5fab80616d11ac32f07c6be764406260d73cb874abfcede7e",
+    "story": "m1-chat/s1"
   },
   "tests/architecture/contracts.test.ts": {
     "sha256": "5a17578af85187b9f72d69464b765573cdf4469471a35056a30a32b1aa893e0d",

@@ -1,5 +1,4 @@
-import { stat } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import iconIco from '../../resources/icon.ico?asset'
@@ -12,9 +11,6 @@ import { GithubCli } from '../providers/github-cli/github-cli'
 import type { GithubAccounts } from '../shared/bridge'
 import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
 import { isWorkspace } from '../shared/model'
-import { AgentHost } from './agents/host'
-import { AgentRegistry } from './agents/registry'
-import { isItemId, RunStore } from './agents/run-store'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
 import { git, listRepositoryFiles } from './repository'
 import { WorkspaceFile } from './workspace-file'
@@ -53,10 +49,6 @@ ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(
 ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
 
 const file = new WorkspaceFile(join(app.getPath('userData'), 'workspace.json'))
-const registry = new AgentRegistry(join(app.getPath('userData'), 'agents.json'))
-const agents = new AgentHost(registry, new RunStore(join(app.getPath('userData'), 'runs')), (run) => {
-  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('agent:run', run)
-})
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -116,42 +108,12 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
   )
 )
 
-async function isFolder(path: unknown): Promise<boolean> {
-  if (typeof path !== 'string' || !isAbsolute(path)) return false
-  try {
-    return (await stat(path)).isDirectory()
-  } catch {
-    return false
-  }
-}
-
-function requireItemId(itemId: unknown): string {
-  if (!isItemId(itemId)) throw new Error('Not a work item id.')
-  return itemId
-}
-
-ipcMain.handle('agents:list', () => registry.info())
-ipcMain.handle('agent:get', (_event, itemId: unknown) => agents.get(requireItemId(itemId)))
-ipcMain.handle('agent:send', async (_event, request: unknown) => {
-  const { itemId, agentId, cwd, text } = (request ?? {}) as Record<string, unknown>
-  if (typeof agentId !== 'string' || typeof text !== 'string') throw new Error('Not a message for an agent.')
-  if (!(await isFolder(cwd))) throw new Error('The project folder does not exist.')
-  // Resolves when the turn ends. Its progress arrives as agent:run events, and
-  // only a message that cannot start rejects.
-  return agents.send({ itemId: requireItemId(itemId), agentId, cwd: cwd as string, text })
-})
-ipcMain.handle('agent:cancel', (_event, itemId: unknown) => agents.cancel(requireItemId(itemId)))
-ipcMain.handle('agent:answer', (_event, itemId: unknown, choiceId: unknown) =>
-  agents.answer(requireItemId(itemId), typeof choiceId === 'string' ? choiceId : null)
-)
-ipcMain.handle('agent:forget', (_event, itemId: unknown) => agents.forget(requireItemId(itemId)))
-
-// Finish the saves in progress, and stop the agents, before the app exits.
+// Finish the saves in progress before the app exits.
 let settled = false
 app.on('before-quit', (event) => {
   if (settled) return
   event.preventDefault()
-  void Promise.all([file.settled(), agents.shutdown()]).then(() => {
+  void file.settled().then(() => {
     settled = true
     app.quit()
   })

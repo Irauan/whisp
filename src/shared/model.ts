@@ -1,14 +1,3 @@
-export const STAGES = [
-  { id: 'spec', label: 'Spec' },
-  { id: 'test', label: 'Test' },
-  { id: 'build', label: 'Build' },
-  { id: 'validate', label: 'Validate' },
-  { id: 'pr-review', label: 'PR review' },
-  { id: 'done', label: 'Done' }
-] as const
-
-export type StageId = (typeof STAGES)[number]['id']
-
 export interface GithubProfile {
   login: string
   name: string | null
@@ -20,30 +9,6 @@ export interface Account {
   id: string
   label: string
   github: GithubProfile | null
-}
-
-export interface Project {
-  id: string
-  accountId: string
-  name: string
-  /** The folder where agents work on this project. */
-  path?: string
-  createdAt: string
-}
-
-export interface StageChange {
-  stage: StageId
-  at: string
-}
-
-export interface WorkItem {
-  id: string
-  projectId: string
-  title: string
-  description: string
-  stage: StageId
-  history: StageChange[]
-  createdAt: string
 }
 
 export const MODES = [
@@ -111,32 +76,23 @@ export interface Workspace {
   version: 4
   accounts: Account[]
   currentAccountId: string
-  projects: Project[]
-  workItems: WorkItem[]
+  /**
+   * Old data of projects and work items (decision 0005). Aether does not read it and no action
+   * changes it. It stays here so that each save writes back exactly what the load read.
+   */
+  projects: readonly unknown[]
+  workItems: readonly unknown[]
   sessions: Session[]
 }
 
-/** The projects, work items and sessions of one account. */
-export type AccountContent = Pick<Workspace, 'projects' | 'workItems' | 'sessions'>
+/** The sessions of one account. */
+export type AccountContent = Pick<Workspace, 'sessions'>
 
 export type Action =
   | { type: 'account-added'; id: string; label: string; github: GithubProfile | null }
   | { type: 'account-edited'; id: string; label: string; github: GithubProfile | null }
   | { type: 'account-switched'; id: string }
   | { type: 'account-deleted'; id: string }
-  | { type: 'project-added'; id: string; name: string; path?: string; at: string }
-  | { type: 'project-folder-set'; id: string; path: string }
-  | { type: 'project-deleted'; id: string }
-  | {
-      type: 'item-added'
-      id: string
-      projectId: string
-      title: string
-      description: string
-      at: string
-    }
-  | { type: 'item-moved'; id: string; stage: StageId; at: string }
-  | { type: 'item-deleted'; id: string }
   | { type: 'session-added'; id: string; prompt: string; settings: SessionSettings; at: string }
   | { type: 'session-deleted'; id: string }
 
@@ -152,13 +108,7 @@ export const emptyWorkspace: Workspace = {
 }
 
 export function contentOf(state: Workspace, accountId: string): AccountContent {
-  const projects = state.projects.filter((project) => project.accountId === accountId)
-  const ids = new Set(projects.map((project) => project.id))
-  return {
-    projects,
-    workItems: state.workItems.filter((item) => ids.has(item.projectId)),
-    sessions: state.sessions.filter((session) => session.accountId === accountId)
-  }
+  return { sessions: state.sessions.filter((session) => session.accountId === accountId) }
 }
 
 export function currentAccount(state: Workspace): Account {
@@ -187,74 +137,16 @@ export function reduce(state: Workspace, action: Action): Workspace {
     case 'account-deleted': {
       const accounts = state.accounts.filter((account) => account.id !== action.id)
       const [next] = accounts
-      // The last account stays, because each project needs an account.
+      // The last account stays, because each session needs an account.
       if (!next) return state
-      const projects = state.projects.filter((project) => project.accountId !== action.id)
-      const ids = new Set(projects.map((project) => project.id))
+      // The old projects and work items stay as they are. See `Workspace`.
       return {
         ...state,
         accounts,
         currentAccountId: state.currentAccountId === action.id ? next.id : state.currentAccountId,
-        projects,
-        workItems: state.workItems.filter((item) => ids.has(item.projectId)),
         sessions: state.sessions.filter((session) => session.accountId !== action.id)
       }
     }
-    case 'project-added':
-      return {
-        ...state,
-        projects: [
-          ...state.projects,
-          {
-            id: action.id,
-            accountId: state.currentAccountId,
-            name: action.name,
-            ...(action.path ? { path: action.path } : {}),
-            createdAt: action.at
-          }
-        ]
-      }
-    case 'project-folder-set':
-      return {
-        ...state,
-        projects: state.projects.map((project) =>
-          project.id === action.id ? { ...project, path: action.path } : project
-        )
-      }
-    case 'project-deleted':
-      return {
-        ...state,
-        projects: state.projects.filter((project) => project.id !== action.id),
-        workItems: state.workItems.filter((item) => item.projectId !== action.id)
-      }
-    case 'item-added': {
-      if (!state.projects.some((project) => project.id === action.projectId)) return state
-      const item: WorkItem = {
-        id: action.id,
-        projectId: action.projectId,
-        title: action.title,
-        description: action.description,
-        stage: 'spec',
-        history: [{ stage: 'spec', at: action.at }],
-        createdAt: action.at
-      }
-      return { ...state, workItems: [...state.workItems, item] }
-    }
-    case 'item-moved':
-      return {
-        ...state,
-        workItems: state.workItems.map((item) =>
-          item.id !== action.id || item.stage === action.stage
-            ? item
-            : {
-                ...item,
-                stage: action.stage,
-                history: [...item.history, { stage: action.stage, at: action.at }]
-              }
-        )
-      }
-    case 'item-deleted':
-      return { ...state, workItems: state.workItems.filter((item) => item.id !== action.id) }
     case 'session-added': {
       const request = parseRequest(action.prompt)
       if (!request) return state
@@ -312,7 +204,7 @@ function upgrade(value: unknown): unknown {
   if (old.version !== 1 || !Array.isArray(old.projects)) return value
   return {
     ...emptyWorkspace,
-    projects: old.projects.map((project) => ({ ...project, accountId: firstAccount.id })),
+    projects: old.projects.map((project: object) => ({ ...project, accountId: firstAccount.id })),
     workItems: old.workItems
   }
 }

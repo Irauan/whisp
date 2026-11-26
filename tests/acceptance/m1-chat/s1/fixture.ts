@@ -1,48 +1,42 @@
-// The fixture of the acceptance tests: the built app, in a temporary data folder, with the
-// simulated agent registered in `agents.json`. The product has no test hook.
+// The fixture of the A19 tests: the built app, in a temporary data folder, with an old profile.
+//
+// The old profile is a `workspace.json` of version 4, as Aether wrote it before decision 0005.
+// It has one project, one work item and one session draft. The fixture writes it as plain JSON
+// and imports no product type, so the removal of the project types does not break this file.
 //
 // How the app finds the temporary folder: the app keeps its data in Electron's `userData`
-// folder. On Windows, Electron takes the roaming profile from the system, not from the
-// `APPDATA` variable, so `APPDATA` alone does not move it. Checked on Windows 11 with Electron 45.
-// The fixture passes the standard Chromium switch `--user-data-dir` instead. The tests prove
-// that it works: they read `userData` from the running app.
-// The app process also gets a changed `APPDATA`. This is only a partial guard: `USERPROFILE`,
-// `LOCALAPPDATA` and the known-folder API of Windows still lead a child program to the real
-// profile. The check of the real folder below is the proof, not this variable.
+// folder. The fixture passes the standard Chromium switch `--user-data-dir`, as the fixture of
+// m0-gates S5 did. The app process also gets a changed `APPDATA`. This is only a partial guard.
+// The check of the real folder at the end is the proof.
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { _electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
-import type { Workspace } from '../../../../src/shared/model'
-import { ControlServer } from '../../../simulated-agent/control'
 
 const ROOT = resolve(__dirname, '../../../..')
 
-export const ITEM_ID = 'work-item-1'
-export const ITEM_TITLE = 'Say hello to the agent'
-export const PROJECT_NAME = 'Demo project'
+export const PROJECT_NAME = 'Old demo project'
+export const ITEM_TITLE = 'Old work item to say hello'
+export const SESSION_TITLE = 'Old session draft'
 
 export interface AetherApp {
   app: ElectronApplication
   page: Page
-  control: ControlServer
   /** The temporary folder that holds everything of this test. */
   root: string
   /** The data folder of the app (`userData`), inside `root`. */
   dataDir: string
-  /** The folder of the project, where the agent works. */
-  projectDir: string
 }
 
 /** The real data folder of the person who runs the test. The tests must not touch it. */
-export function realDataDir(): string {
+function realDataDir(): string {
   const roaming = process.env.APPDATA
   if (!roaming) throw new Error('APPDATA is not set in the test process.')
   return join(roaming, 'aether')
 }
 
 /** Lists the files and folders of the user data that the product writes, with their times. */
-export async function snapshot(folder: string): Promise<string[]> {
+async function snapshot(folder: string): Promise<string[]> {
   const found: string[] = []
   const visit = async (path: string): Promise<void> => {
     let info
@@ -57,11 +51,12 @@ export async function snapshot(folder: string): Promise<string[]> {
     }
   }
   // The files that Aether writes. Chromium caches and logs are not part of the check.
-  for (const name of ['agents.json', 'workspace.json', 'runs']) await visit(join(folder, name))
+  for (const name of ['agents.json', 'workspace.json', 'runs', 'aether.db']) await visit(join(folder, name))
   return found
 }
 
-function workspace(projectDir: string): Workspace {
+/** An old profile: one account with one project, one work item and one session draft. */
+function oldProfile(projectDir: string): unknown {
   const at = '2026-01-01T00:00:00.000Z'
   return {
     version: 4,
@@ -70,7 +65,7 @@ function workspace(projectDir: string): Workspace {
     projects: [{ id: 'project-1', accountId: 'personal', name: PROJECT_NAME, path: projectDir, createdAt: at }],
     workItems: [
       {
-        id: ITEM_ID,
+        id: 'work-item-1',
         projectId: 'project-1',
         title: ITEM_TITLE,
         description: '',
@@ -79,7 +74,23 @@ function workspace(projectDir: string): Workspace {
         createdAt: at
       }
     ],
-    sessions: []
+    sessions: [
+      {
+        id: 'session-1',
+        accountId: 'personal',
+        title: SESSION_TITLE,
+        prompt: SESSION_TITLE,
+        settings: {
+          folder: projectDir,
+          mode: 'interactive',
+          permissions: 'ask',
+          model: 'default',
+          checkout: 'folder',
+          attachments: []
+        },
+        createdAt: at
+      }
+    ]
   }
 }
 
@@ -108,13 +119,7 @@ export const test = base.extend<{ aether: AetherApp }>({
     // The real folder before the app starts. The check at the end covers the start and the exit.
     const realBefore = await snapshot(realDataDir())
 
-    const control = await ControlServer.start()
-    const { command, args } = control.agent
-    await writeFile(
-      join(dataDir, 'agents.json'),
-      JSON.stringify({ agents: [{ id: 'simulated', name: 'Simulated', command, args }] }, null, 2)
-    )
-    await writeFile(join(dataDir, 'workspace.json'), JSON.stringify(workspace(projectDir), null, 2))
+    await writeFile(join(dataDir, 'workspace.json'), JSON.stringify(oldProfile(projectDir), null, 2))
 
     const app = await _electron.launch({
       args: [ROOT, `--user-data-dir=${dataDir}`],
@@ -125,7 +130,7 @@ export const test = base.extend<{ aether: AetherApp }>({
     await app.context().tracing.start({ screenshots: true, snapshots: true })
 
     try {
-      await use({ app, page, control, root, dataDir, projectDir })
+      await use({ app, page, root, dataDir })
     } finally {
       const failed = testInfo.status !== testInfo.expectedStatus
       await app
@@ -133,7 +138,6 @@ export const test = base.extend<{ aether: AetherApp }>({
         .tracing.stop(failed ? { path: testInfo.outputPath('trace.zip') } : {})
         .catch(() => undefined)
       await app.close().catch(() => undefined)
-      await control.close()
       await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => undefined)
       // The app is gone. The real folder must have the same files, with the same times.
       expect(await snapshot(realDataDir()), 'The app changed the real user data folder.').toEqual(realBefore)

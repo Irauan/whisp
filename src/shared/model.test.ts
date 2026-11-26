@@ -7,66 +7,22 @@ import {
   parseRequest,
   readWorkspace,
   reduce,
+  type Action,
   type SessionSettings,
   type Workspace
 } from './model'
 
 const at = '2026-01-01T00:00:00.000Z'
-const later = '2026-01-02T00:00:00.000Z'
+
+/** Old data of version 4, with a field that the code does not know. Decision 0005 keeps it. */
+const oldProjects = [{ id: 'p1', accountId: 'personal', name: 'One', path: '/code/one', createdAt: at, extra: { a: 1 } }]
+const oldWorkItems = [
+  { id: 'w1', projectId: 'p1', title: 'Task', description: '', stage: 'build', history: [{ stage: 'build', at }] }
+]
 
 function seeded(): Workspace {
-  const withProject = reduce(emptyWorkspace, { type: 'project-added', id: 'p1', name: 'One', at })
-  return reduce(withProject, {
-    type: 'item-added',
-    id: 'w1',
-    projectId: 'p1',
-    title: 'Task',
-    description: '',
-    at
-  })
+  return { ...emptyWorkspace, projects: oldProjects, workItems: oldWorkItems }
 }
-
-describe('reduce', () => {
-  it('starts a work item in the spec stage', () => {
-    expect(seeded().workItems[0]).toMatchObject({ stage: 'spec', history: [{ stage: 'spec', at }] })
-  })
-
-  it('refuses a work item of an unknown project', () => {
-    const next = reduce(emptyWorkspace, {
-      type: 'item-added',
-      id: 'w1',
-      projectId: 'none',
-      title: 'Task',
-      description: '',
-      at
-    })
-    expect(next.workItems).toEqual([])
-  })
-
-  it('records each stage change', () => {
-    const next = reduce(seeded(), { type: 'item-moved', id: 'w1', stage: 'build', at: later })
-    expect(next.workItems[0]?.history).toEqual([
-      { stage: 'spec', at },
-      { stage: 'build', at: later }
-    ])
-  })
-
-  it('does not record a move to the current stage', () => {
-    const next = reduce(seeded(), { type: 'item-moved', id: 'w1', stage: 'spec', at: later })
-    expect(next.workItems[0]?.history).toHaveLength(1)
-  })
-
-  it('keeps the folder of a project', () => {
-    const added = reduce(emptyWorkspace, { type: 'project-added', id: 'p1', name: 'One', path: '/code/one', at })
-    expect(added.projects[0]?.path).toBe('/code/one')
-    const moved = reduce(added, { type: 'project-folder-set', id: 'p1', path: '/code/two' })
-    expect(moved.projects[0]?.path).toBe('/code/two')
-  })
-
-  it('deletes the work items of a deleted project', () => {
-    expect(reduce(seeded(), { type: 'project-deleted', id: 'p1' })).toEqual(emptyWorkspace)
-  })
-})
 
 describe('parseRequest', () => {
   it('splits the title from the description', () => {
@@ -84,6 +40,7 @@ describe('parseRequest', () => {
 describe('isWorkspace', () => {
   it('accepts a saved workspace and refuses other data', () => {
     expect(isWorkspace(JSON.parse(JSON.stringify(seeded())))).toBe(true)
+    expect(isWorkspace({ ...seeded(), projects: undefined })).toBe(false)
     expect(isWorkspace({ ...seeded(), currentAccountId: 'none' })).toBe(false)
     expect(isWorkspace({ ...seeded(), version: 5 })).toBe(false)
     expect(isWorkspace(null)).toBe(false)
@@ -91,17 +48,10 @@ describe('isWorkspace', () => {
 })
 
 describe('accounts', () => {
-  const withWork = () => {
-    const added = reduce(seeded(), { type: 'account-added', id: 'work', label: 'Work', github: null })
-    return reduce(added, { type: 'project-added', id: 'p2', name: 'Two', at })
-  }
+  const withWork = () => reduce(seeded(), { type: 'account-added', id: 'work', label: 'Work', github: null })
 
-  it('switches to a new account and keeps the projects apart', () => {
-    const state = withWork()
-    expect(state.currentAccountId).toBe('work')
-    expect(contentOf(state, 'work').projects.map((project) => project.id)).toEqual(['p2'])
-    expect(contentOf(state, 'work').workItems).toEqual([])
-    expect(contentOf(state, 'personal').workItems.map((item) => item.id)).toEqual(['w1'])
+  it('switches to a new account', () => {
+    expect(withWork().currentAccountId).toBe('work')
   })
 
   it('refuses a switch to an unknown account', () => {
@@ -118,12 +68,10 @@ describe('accounts', () => {
     ])
   })
 
-  it('deletes the content of a deleted account and switches away', () => {
+  it('deletes a deleted account and switches away', () => {
     expect(reduce(withWork(), { type: 'account-deleted', id: 'work' })).toEqual(seeded())
     const next = reduce(withWork(), { type: 'account-deleted', id: 'personal' })
     expect(next.currentAccountId).toBe('work')
-    expect(next.projects.map((project) => project.id)).toEqual(['p2'])
-    expect(next.workItems).toEqual([])
   })
 
   it('keeps the last account', () => {
@@ -202,11 +150,10 @@ describe('readWorkspace', () => {
   })
 
   it('moves version 1 data to the first account', () => {
-    const { projects, workItems } = seeded()
     const old = {
       version: 1,
-      projects: projects.map(({ accountId: _, ...project }) => project),
-      workItems
+      projects: oldProjects.map(({ accountId: _, ...project }) => project),
+      workItems: oldWorkItems
     }
     expect(readWorkspace(old)).toEqual(seeded())
   })
@@ -214,5 +161,50 @@ describe('readWorkspace', () => {
   it('refuses other data', () => {
     expect(readWorkspace({ version: 1 })).toBeNull()
     expect(readWorkspace({ version: 1, projects: [] })).toBeNull()
+  })
+})
+
+describe('the old projects and work items (decision 0005)', () => {
+  const settings: SessionSettings = {
+    folder: '/code/one',
+    mode: 'interactive',
+    permissions: 'ask',
+    model: 'default',
+    checkout: 'folder',
+    attachments: []
+  }
+  const actions: Action[] = [
+    { type: 'account-added', id: 'third', label: 'Third', github: null },
+    { type: 'account-edited', id: 'personal', label: 'Home', github: null },
+    { type: 'account-switched', id: 'personal' },
+    { type: 'session-added', id: 's1', prompt: 'Say hello', settings, at },
+    { type: 'session-deleted', id: 's1' },
+    { type: 'account-deleted', id: 'personal' }
+  ]
+
+  it.each(actions.map((action) => [action.type, action] as const))(
+    'stay the same after %s, and the result is still a workspace',
+    (_name, action) => {
+      // The account "work" exists, so that each action does something.
+      const before = reduce(seeded(), { type: 'account-added', id: 'work', label: 'Work', github: null })
+      const after = reduce(before, action)
+      expect(after.projects).toBe(before.projects)
+      expect(after.workItems).toBe(before.workItems)
+      expect(isWorkspace(after)).toBe(true)
+    }
+  )
+
+  it('stay in the workspace of a deleted account', () => {
+    const two = reduce(seeded(), { type: 'account-added', id: 'work', label: 'Work', github: null })
+    const next = reduce(two, { type: 'account-deleted', id: 'personal' })
+    expect(next.accounts.map((account) => account.id)).toEqual(['work'])
+    expect(next.projects).toEqual(oldProjects)
+    expect(next.workItems).toEqual(oldWorkItems)
+  })
+
+  it('load unchanged from a file of version 4', () => {
+    const loaded = readWorkspace(JSON.parse(JSON.stringify(seeded())))
+    expect(loaded?.projects).toEqual(oldProjects)
+    expect(loaded?.workItems).toEqual(oldWorkItems)
   })
 })
