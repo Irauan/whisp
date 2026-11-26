@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(root, 'node_modules/typescript/bin/tsc')
-const configs = ['tsconfig.main.json', 'tsconfig.renderer.json', 'tsconfig.shared.json']
+const configs = ['tsconfig.main.json', 'tsconfig.renderer.json', 'tsconfig.shared.json', 'tsconfig.test.json']
 
 let failed = 0
 for (const config of configs) {

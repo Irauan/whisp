@@ -14,11 +14,15 @@
   "include": [
     "electron.vite.config.ts",
     "vitest.config.mts",
+    "src/*.ts",
+    "src/*.mts",
+    "src/**/*.mts",
+    "src/**/*.cts",
+    "src/app/*.ts",
     "src/main",
     "src/preload",
     "src/app/main",
     "src/app/preload",
-    "src/app/contracts.ts",
     "src/building-blocks/**/*.ts",
     "src/providers",
     "src/features/**/*.controller.ts",
@@ -29,8 +33,9 @@
     "tests/simulated-agent"
   ],
   "exclude": [
-    
-    
-    "tests/architecture/fixtures"
+    "tests/architecture/fixtures",
+    "src/renderer/**/*.test.ts",
+    "src/app/renderer/**/*.test.ts",
+    "src/**/*.ui.ts"
   ]
 }

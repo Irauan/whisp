@@ -49,7 +49,9 @@ describe('lint fixtures', () => {
     const found = lint('g4')
     const file = `${FIXTURES}/g4/renderer/local-storage.ts`
     expect(found).toContain(`eslint(no-restricted-globals) ${file}`)
-    expect(found).toContain(`eslint(no-restricted-properties) ${file}`)
+    // One for window.localStorage and two for self.localStorage and self.sessionStorage.
+    const properties = found.filter((entry) => entry === `eslint(no-restricted-properties) ${file}`)
+    expect(properties).toHaveLength(3)
   }, 60_000)
 
   it('G4: dangerouslySetInnerHTML in renderer code fails lint', () => {

@@ -61,6 +61,16 @@
             "object": "globalThis",
             "property": "sessionStorage",
             "message": "The renderer keeps only view state."
+          },
+          {
+            "object": "self",
+            "property": "localStorage",
+            "message": "The renderer keeps only view state."
+          },
+          {
+            "object": "self",
+            "property": "sessionStorage",
+            "message": "The renderer keeps only view state."
           }
         ],
         "no-restricted-imports": [
