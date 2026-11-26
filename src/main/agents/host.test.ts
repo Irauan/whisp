@@ -100,11 +100,16 @@ describe('AgentHost', () => {
   })
 
   it('refuses a second message while the agent works', async () => {
+    // The second message goes out while the run is working. The run is cancelled only after
+    // that message is refused, so the test does not race with the cancel.
+    let second: Promise<unknown> | undefined
     onRun = (run) => {
-      if (run.status === 'working') host.cancel('w1')
+      if (run.status === 'working' && !second) {
+        second = send('w1', 'hello')
+        void second.catch(() => host.cancel('w1'))
+      }
     }
-    const first = send('w1', 'wait')
-    await expect(send('w1', 'hello')).rejects.toThrow('still working')
-    await first
+    await send('w1', 'wait')
+    await expect(second).rejects.toThrow('still working')
   })
 })

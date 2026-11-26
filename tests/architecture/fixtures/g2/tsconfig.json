@@ -1,0 +1,5 @@
+{
+  "extends": "../../../../tsconfig.main.json",
+  "include": ["./type-error.ts"],
+  "exclude": []
+}

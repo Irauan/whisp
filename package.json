@@ -9,9 +9,10 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/typecheck.mjs",
     "test": "vitest run",
-    "icons": "electron scripts/build-icons.cjs"
+    "icons": "electron scripts/build-icons.cjs",
+    "lint": "node scripts/lint-gate.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.112.0",
@@ -27,6 +28,8 @@
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.5.0",
     "electron-vite": "^6.0.0",
+    "oxlint": "^1.95.0",
+    "oxlint-tsgolint": "^7.0.2008",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"

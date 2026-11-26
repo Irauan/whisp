@@ -1,0 +1,14 @@
+[
+  {
+    "rule": "typescript(no-floating-promises)",
+    "file": "src/renderer/src/components/AccountDialog.tsx"
+  },
+  {
+    "rule": "eslint(no-restricted-globals)",
+    "file": "src/renderer/src/components/AgentPanel.tsx"
+  },
+  {
+    "rule": "typescript(no-floating-promises)",
+    "file": "src/renderer/src/useSuggestions.ts"
+  }
+]

@@ -1,0 +1,131 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "off"
+  },
+  "ignorePatterns": [
+    "out/**",
+    "node_modules/**",
+    ".claude/**"
+  ],
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/no-disabled-tests": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/renderer/**",
+        "src/app/renderer/**",
+        "src/features/**/*.ui.tsx",
+        "src/building-blocks/**/*.tsx",
+        "tests/architecture/fixtures/**/renderer/**"
+      ],
+      "rules": {
+        "react/no-danger": "error",
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "localStorage",
+            "message": "The renderer keeps only view state. The main process owns data that must last."
+          },
+          {
+            "name": "sessionStorage",
+            "message": "The renderer keeps only view state. The main process owns data that must last."
+          }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "window",
+            "property": "localStorage",
+            "message": "The renderer keeps only view state."
+          },
+          {
+            "object": "window",
+            "property": "sessionStorage",
+            "message": "The renderer keeps only view state."
+          },
+          {
+            "object": "globalThis",
+            "property": "localStorage",
+            "message": "The renderer keeps only view state."
+          },
+          {
+            "object": "globalThis",
+            "property": "sessionStorage",
+            "message": "The renderer keeps only view state."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "electron",
+                  "electron/*",
+                  "node:*"
+                ],
+                "message": "Renderer code imports no Electron or Node module."
+              },
+              {
+                "group": [
+                  "**/main/**",
+                  "**/preload/**",
+                  "**/app/main/**",
+                  "**/app/preload/**"
+                ],
+                "message": "Renderer code imports no main-process code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "tests/simulated-agent/**",
+        "tests/architecture/fixtures/**/simulated-agent/**"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "setTimeout",
+            "message": "The simulated agent uses no timers. Use a gate."
+          },
+          {
+            "name": "setInterval",
+            "message": "The simulated agent uses no timers. Use a gate."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "node:timers",
+                "message": "The simulated agent uses no timers. Use a gate."
+              },
+              {
+                "name": "node:timers/promises",
+                "message": "The simulated agent uses no timers. Use a gate."
+              },
+              {
+                "name": "timers",
+                "message": "The simulated agent uses no timers. Use a gate."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
