@@ -16,6 +16,7 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 - Windows 11. Node 24.15 or later.
 - Run `npm run typecheck` before each commit.
 - Run `npm run lint` before each commit.
+- Run `npm run architecture` before each commit.
 - Run `npm test` before each commit.
 
 ## Git

@@ -17,6 +17,12 @@
   ],
   "rules": {
     "typescript/no-floating-promises": "error",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "disallowTypeAnnotations": true
+      }
+    ],
     "vitest/no-focused-tests": "error",
     "vitest/no-disabled-tests": "error"
   },

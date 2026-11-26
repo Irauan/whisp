@@ -43,7 +43,8 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 ### Acceptance tests
 
 - Playwright starts the built app with `_electron.launch`.
-- A fixture makes a temporary folder, sets `APPDATA` to it for the app process, and writes `Aether/agents.json` there.
+- A fixture makes a temporary folder, starts the app with `--user-data-dir=<temp>/data`, and writes `agents.json` and `workspace.json` there.
+- The product keeps `AETHER_DATA_DIR` as a documented user feature (`README.md`). The test removes it from the app environment. User decision, 2026-11-26.
 - The fixture for GitHub puts a fake `gh` program first on `PATH`.
 - Tests live in `tests/acceptance/<milestone>/<story>/`.
 
@@ -170,7 +171,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] Coordinator creates `milestone/m0-gates` from `main`.
 - [x] S1 Roles and rules. PR #1. The user merged it with a merge commit, not a squash.
 - [x] S2 CI, typecheck and lint. PR #2, squash merge `3120ca3`.
-- [ ] S3 Architecture tests
+- [x] S3 Architecture tests. PR #4, squash merge by the user (`08eb39a`).
 - [x] S4 Simulated agent. PR #3, squash merge by the user.
 - [ ] S5 App test
 - [ ] Demo of the walking skeleton to the user

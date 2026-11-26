@@ -100,6 +100,13 @@ describe('lint fixtures', () => {
     expect(found.filter((entry) => entry === `eslint(no-restricted-imports) ${file}`)).toHaveLength(3)
   }, 60_000)
 
+  it('an import type expression fails lint, because dependency-cruiser does not see it', () => {
+    const found = lint('g-type-import')
+    const file = `${FIXTURES}/g-type-import/type-import.ts`
+    // One for `import(...).Other` and one for `typeof import(...)`.
+    expect(found.filter((entry) => entry === `typescript(consistent-type-imports) ${file}`)).toHaveLength(2)
+  }, 60_000)
+
   it('a timer in the simulated agent fails lint', () => {
     const found = lint('g-timers')
     const file = `${FIXTURES}/g-timers/simulated-agent/timer.mjs`

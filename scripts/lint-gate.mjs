@@ -144,18 +144,23 @@ export function findDisabledAcceptanceTests(folders = ['tests/acceptance']) {
   return found
 }
 
-export function readKnownViolations() {
-  return JSON.parse(readFileSync(KNOWN_VIOLATIONS_FILE, 'utf8'))
+export function readKnownViolations(file = KNOWN_VIOLATIONS_FILE) {
+  return JSON.parse(readFileSync(file, 'utf8'))
 }
 
 /**
- * Compares the lint diagnostics with the known lint entries.
+ * Compares the diagnostics of one tool with the known entries of that tool.
+ * The architecture gate reuses this function with its own `owns` test.
+ * @param {{ rule: string, file: string }[]} diagnostics
+ * @param {{ rule: string, file: string, count?: number }[]} known All entries of the list.
+ * @param {(rule: string) => boolean} owns Tells whether a rule belongs to the tool.
+ * The default owns the lint rules.
  * @returns {{ grew: object[], fewer: object[] }} `grew` holds one item for each rule and
  * file with more occurrences than listed (an unlisted file has a limit of 0). `fewer`
  * holds the listed entries with fewer occurrences than their `count`.
  */
-export function compareWithKnown(diagnostics, known) {
-  const lintEntries = known.filter((entry) => isLintRule(entry.rule))
+export function compareWithKnown(diagnostics, known, owns = isLintRule) {
+  const lintEntries = known.filter((entry) => owns(entry.rule))
   for (const entry of lintEntries) {
     if (!Number.isInteger(entry.count) || entry.count < 1) {
       throw new Error(`Known violation has no valid count: ${entryKey(entry)}`)
@@ -181,10 +186,11 @@ export function compareWithKnown(diagnostics, known) {
 
 export function describeProblems({ grew, fewer }) {
   return [
-    ...grew.map(
-      (d) =>
-        `Known violations grew: \`${d.rule}\` in \`${d.file}\` (${d.count} found, ${d.limit} listed; first at ${d.line}:${d.column} ${d.message})`
-    ),
+    ...grew.map((d) => {
+      // A tool that gives no position (the architecture gate) sets line to 0.
+      const first = d.line ? `at ${d.line}:${d.column} ${d.message}` : d.message
+      return `Known violations grew: \`${d.rule}\` in \`${d.file}\` (${d.count} found, ${d.limit} listed; first ${first})`
+    }),
     ...fewer.map((entry) =>
       entry.found === 0
         ? `Known violation is fixed, remove it: \`${entryKey(entry)}\``

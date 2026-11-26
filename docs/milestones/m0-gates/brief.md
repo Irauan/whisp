@@ -59,7 +59,7 @@ Does not apply. The milestone adds no screen.
 - A file `tests/architecture/known-violations.json` lists each current violation by rule and file. CI fails when an entry is added, or when a listed violation no longer occurs.
 - Each gate has a fixture that breaks its rule. A test runs the tool on the fixture and expects the failure. Then the gate proves itself in CI.
 - The simulated agent replaces `fake-agent.mjs`. It lives in `tests/simulated-agent/`. A test sends commands to it on a local control channel and opens its gates. It uses no timers.
-- The acceptance test registers the simulated agent in `agents.json` of a temporary data folder. It sets `APPDATA` for the app process, so the app finds that folder. The product gets no test hook.
+- The acceptance test registers the simulated agent in `agents.json` of a temporary data folder. It starts the app with the Chromium switch `--user-data-dir=<temp folder>`, so the app finds that folder. The product gets no test hook. User decision, 2026-11-26: `APPDATA` does not move the folder, see the assumptions.
 - The first acceptance test chats through the current work item panel. Story S1 of m1-chat removes work items, so its test author retires this test.
 - The acceptance test of the GitHub accounts query puts a fake `gh` program first on `PATH`. The test uses no real account.
 - The test lock: `tests/locks.json` holds the SHA-256 of each locked test file. CI checks the commits of each story PR:
@@ -151,7 +151,7 @@ Does not apply. The milestone adds no screen.
 | Item | How the milestone tests it |
 |---|---|
 | Playwright for Electron runs the built app on `windows-latest`. | G11 in CI. |
-| Setting `APPDATA` moves the user data folder of the app. | G11 checks that the real folder is not touched. |
+| Setting `APPDATA` moves the user data folder of the app. | False. S5 showed that Electron 45.5 on Windows keeps the real folder. `--user-data-dir` moves it. G11 checks that the real folder is not touched. |
 | dependency-cruiser with swc parses the current TypeScript 7 code. | G8. |
 | tsgolint works with TypeScript 7. | G3. |
 | `worktree.baseRef: head` starts story worktrees from the milestone branch. | G22. |
@@ -167,7 +167,7 @@ Does not apply. The milestone adds no screen.
 
 ## Budget
 
-35 agent runs.
+45 agent runs. The user raised it from 35 on 2026-11-26, after 24 runs.
 
 - 7 gate stories skip step 3, at about 3 runs each: 21.
 - The trial story, with all steps: 5.
