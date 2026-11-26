@@ -69,7 +69,7 @@ export function importOldFilesHandler({ workspaces, imports, clock, ids, file }:
     if (current) workspaces.setCurrent(current)
     for (const draft of profile.drafts) {
       const workspaceId = workspaceOf.get(draft.accountId)
-      if (workspaceId) imports.insertDraft({ ...draft, id: ids.next(), workspaceId })
+      if (workspaceId) imports.insertDraft({ ...draft, createdAt: draft.createdAt ?? now, id: ids.next(), workspaceId })
     }
     imports.markImported(now)
     return ok({ status: 'imported', workspaces: profile.accounts.length, sessions: profile.drafts.length } as const)

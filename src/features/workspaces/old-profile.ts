@@ -22,7 +22,8 @@ export interface OldDraft {
   folder: string
   model: string
   attachments: { kind: string; ref: string; label: string }[]
-  createdAt: string
+  /** Null when the old file had no time. The import then uses the time of the import. */
+  createdAt: string | null
 }
 
 export interface OldProfile {
@@ -49,16 +50,18 @@ const attachmentSchema = z.looseObject({ kind: z.string(), ref: z.string(), labe
 
 const draftSchema = z.looseObject({
   accountId: z.string(),
-  title: z.string(),
+  // Only the prompt, the account and the folder must exist. The other fields take a default, so
+  // that a file from an early version of the old Aether still imports.
+  title: z.string().optional(),
   prompt: z.string(),
   settings: z.looseObject({
     folder: z.string(),
-    mode: z.string(),
-    permissions: z.string(),
-    model: z.string(),
-    attachments: z.array(attachmentSchema)
+    mode: z.string().default('interactive'),
+    permissions: z.string().default('ask'),
+    model: z.string().default('default'),
+    attachments: z.array(attachmentSchema).default([])
   }),
-  createdAt: z.string()
+  createdAt: z.string().optional()
 })
 
 const profileSchema = z.looseObject({
@@ -67,7 +70,9 @@ const profileSchema = z.looseObject({
       z.looseObject({
         id: z.string(),
         label: z.string().trim().min(1),
-        github: z.looseObject({ login: z.string().min(1), name: z.string().nullish(), avatar: z.string().nullish() }).nullable()
+        github: z
+          .looseObject({ login: z.string().min(1), name: z.string().nullish(), avatar: z.string().nullish() })
+          .nullish()
       })
     )
     .min(1),
@@ -80,14 +85,20 @@ const profileSchema = z.looseObject({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+const firstLine = (text: string) => text.trim().split(/\r?\n/)[0]?.trim() ?? ''
+
 const baseName = (path: string) => path.split(/[\\/]/).findLast(Boolean) ?? path
 
 /** Version 3 kept only the paths of the files of a session. */
 function upgradeSession(session: unknown): unknown {
   if (!isRecord(session) || !isRecord(session.settings)) return session
   const { files, ...settings } = session.settings
-  if (!Array.isArray(files)) return session
-  const attachments = files.map((path) => ({ kind: 'file', ref: String(path), label: baseName(String(path)) }))
+  // A session without `files` has no attachments, as in the old loader.
+  const attachments = (Array.isArray(files) ? files : []).map((path) => ({
+    kind: 'file',
+    ref: String(path),
+    label: baseName(String(path))
+  }))
   return { ...session, settings: { ...settings, attachments } }
 }
 
@@ -133,7 +144,7 @@ export function readOldProfile(text: string): OldProfile | null {
     accounts: profile.accounts.map(({ id, label, github }) => ({
       id,
       label: label.trim(),
-      github: github && { login: github.login, name: github.name ?? null, avatar: github.avatar ?? null }
+      github: github ? { login: github.login, name: github.name ?? null, avatar: github.avatar ?? null } : null
     })),
     currentAccountId: profile.currentAccountId,
     // A session of an account that does not exist cannot show in the old app, so the import skips it.
@@ -141,13 +152,14 @@ export function readOldProfile(text: string): OldProfile | null {
       .filter((session) => known.has(session.accountId))
       .map(({ accountId, title, prompt, settings, createdAt }) => ({
         accountId,
-        title,
+        // An early version had no title: the first line of the prompt is the title.
+        title: title ?? firstLine(prompt),
         prompt,
         mode: modeOf(settings.mode, settings.permissions),
         folder: settings.folder,
         model: settings.model,
         attachments: settings.attachments.map(({ kind, ref, label }) => ({ kind, ref, label })),
-        createdAt
+        createdAt: createdAt ?? null
       }))
   }
 }

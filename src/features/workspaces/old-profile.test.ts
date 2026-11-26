@@ -117,6 +117,31 @@ describe('readOldProfile', () => {
     expect(result?.drafts[0]?.attachments).toEqual([{ kind: 'file', ref: 'C:\\tmp\\a.txt', label: 'a.txt' }])
   })
 
+  it('gives a default to a field that an early version of the old Aether did not write', () => {
+    const early = { id: 's1', accountId: 'personal', prompt: 'Say hello\nPlease', settings: { folder: 'C:\\code\\one' } }
+    const result = read(
+      profile({ accounts: [{ id: 'personal', label: 'Personal' }], sessions: [early] })
+    )
+    expect(result?.accounts[0]?.github).toBeNull()
+    expect(result?.drafts).toEqual([
+      {
+        accountId: 'personal',
+        title: 'Say hello',
+        prompt: 'Say hello\nPlease',
+        mode: 'ask',
+        folder: 'C:\\code\\one',
+        model: 'default',
+        attachments: [],
+        createdAt: null
+      }
+    ])
+  })
+
+  it('gives a draft of version 3 without files no attachments', () => {
+    const old = session({}, { attachments: undefined })
+    expect(read(profile({ version: 3, sessions: [old] }))?.drafts[0]?.attachments).toEqual([])
+  })
+
   it('reads a file of version 2, which has no drafts', () => {
     const { sessions: _sessions, ...old } = profile({ version: 2 })
     expect(read(old)).toMatchObject({ currentAccountId: 'personal', drafts: [] })
@@ -140,6 +165,8 @@ describe('readOldProfile', () => {
     ['an account without a name', JSON.stringify(profile({ accounts: [{ id: 'personal', label: ' ', github: null }] }))],
     ['a draft without a prompt', JSON.stringify(profile({ sessions: [session({ prompt: undefined })] }))],
     ['a draft without settings', JSON.stringify(profile({ sessions: [session({ settings: undefined })] }))],
+    ['a draft without a folder', JSON.stringify(profile({ sessions: [session({}, { folder: undefined })] }))],
+    ['a draft without an account', JSON.stringify(profile({ sessions: [session({ accountId: undefined })] }))],
     ['a version 1 file without projects', JSON.stringify({ version: 1 })]
   ])('refuses %s, and never reads it as empty', (_name, text) => {
     expect(readOldProfile(text)).toBeNull()

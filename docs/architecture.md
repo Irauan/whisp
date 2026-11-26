@@ -260,6 +260,7 @@ These parts stay as they are: React, the visual design and CSS tokens, navigatio
 |---|---|---|
 | Two sessions that start at the same time share a process before it is ready. The second fails. | `src/main/agents/host.ts` | 6 |
 | A second permission request cancels the first. | `src/main/agents/host.ts` | 6 |
+| An unreadable conversation file loads as empty, and the next save overwrites it. | `src/main/agents/run-store.ts` | 3 |
 | A new session copies "Approve all". | `SessionComposer.tsx` | 5 |
 | Aether sets no permission mode. Claude then starts in `auto` mode with bypass allowed. | `src/main/agents/host.ts` | 6 |
 | The agent receives the whole environment of Aether. | `src/main/agents/host.ts` | 6 |

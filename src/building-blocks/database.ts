@@ -51,12 +51,16 @@ function freePath(path: string, label: string, now: Date): string {
   }
 }
 
-/** Opens the file, turns foreign keys on and reads one value. A file that is not a database fails here. */
+/**
+ * Opens the file, turns foreign keys on and reads the header and the schema. A file that is not a
+ * database fails at the header. A file with a good header and a damaged schema fails at the schema.
+ */
 function connect(path: string): DatabaseSync {
   const sqlite = new DatabaseSync(path)
   try {
     sqlite.exec('PRAGMA foreign_keys = ON')
     sqlite.prepare('PRAGMA user_version').get()
+    sqlite.prepare('SELECT count(*) FROM sqlite_master').get()
     return sqlite
   } catch (cause) {
     sqlite.close()

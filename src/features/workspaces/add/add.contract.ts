@@ -23,7 +23,9 @@ export const addWorkspace = defineContract(
         github: { login: 'example-user', name: null, avatar: null },
         claudeFolder: 'C:\\claude',
         claudeProfile: 'client'
-      }
+      },
+      // The login of a managed user of a GitHub enterprise has an underscore.
+      { name: 'Managed', root: 'C:\\managed', github: { login: 'example_user_ab12', name: null, avatar: null }, claudeFolder: null, claudeProfile: null }
     ],
     invalid: [
       null,

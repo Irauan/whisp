@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 /** The GitHub account that the user chooses. The name and the avatar (a data URL) are for display. Aether keeps no token. */
 export const githubAccountInputSchema = z.strictObject({
-  login: z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/),
+  // GitHub allows letters, digits and hyphens. A managed user of an enterprise also has an underscore.
+  // The check stays loose: a name with no space and at most 100 characters.
+  login: z.string().min(1).max(100).regex(/^\S+$/),
   name: z.string().max(200).nullable(),
   avatar: z.string().max(1_000_000).startsWith('data:image/').nullable()
 })

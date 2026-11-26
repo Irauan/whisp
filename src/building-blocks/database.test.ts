@@ -112,6 +112,21 @@ describe('openDatabase', () => {
     database.close()
   })
 
+  it('keeps a file that has a good header and a damaged schema, and starts a new database', async () => {
+    opened([first]).database.close()
+    // The first 100 bytes are the header of the database, and `user_version` is in them.
+    // The schema (`sqlite_master`) follows in the same page. Damage everything after the header.
+    const good = await readFile(path)
+    const damaged = Buffer.concat([good.subarray(0, 100), Buffer.alloc(good.length - 100, 0xff)])
+    await writeFile(path, damaged)
+
+    const { database, keptAside } = opened([first])
+    expect(keptAside).toBe(`${path}.unreadable-20260102030405678`)
+    expect((await readFile(keptAside!)).equals(damaged)).toBe(true)
+    expect(database.prepare('SELECT count(*) AS total FROM one').get()).toMatchObject({ total: 0 })
+    database.close()
+  })
+
   it('gives each kept file its own name', async () => {
     await writeFile(path, 'not a database, first')
     opened([first]).database.close()
