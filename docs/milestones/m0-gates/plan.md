@@ -174,7 +174,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] S3 Architecture tests. PR #4, squash merge by the user (`08eb39a`).
 - [x] S4 Simulated agent. PR #3, squash merge by the user.
 - [x] S5 App test. PR #5, squash merge by the user.
-- [ ] Demo of the walking skeleton to the user
+- [x] Demo of the walking skeleton to the user: CI run 45821001386 on `641fee1`, five jobs green.
 - [ ] S6 Test lock
 - [ ] S7 Branch protection
 - [ ] S8 Trial: contracts and GitHub accounts
