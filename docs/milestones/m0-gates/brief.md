@@ -110,7 +110,7 @@ Does not apply. The milestone adds no screen.
 | G15 | A change of a test locked on the base branch, without the trailer | CI runs | The lock check fails. With the trailer, it passes and prints the reason. |
 | G16 | The rulesets are applied | Somebody pushes straight to `main` or to `milestone/m0-gates`, or force pushes | GitHub refuses the push. |
 | G17 | A PR to `milestone/*` with a failed check | The coordinator tries to merge | GitHub refuses the merge. |
-| G18 | The renderer calls `invoke('github.list-accounts', {})` | A fake `gh` reports two accounts | The account dialog lists both. |
+| G18 | The renderer calls `invoke('workspaces.list-github-accounts', {})` | A fake `gh` reports two accounts | The account dialog lists both. |
 | G19 | The renderer calls `invoke` with an unknown name, with invalid input, or from another frame | The main process receives it | It returns an error and runs no handler. |
 | G20 | Each contract in the registry | The contract test runs | Each has valid and invalid examples, and each example gives the expected result. |
 | G21 | The trial story | It runs through steps 3 to 6 | The evidence shows: the test author commit before the builder commit, an advisor call from the builder, a reviewer report, a squash merge by the coordinator in auto mode, and the count of 1Password prompts. |

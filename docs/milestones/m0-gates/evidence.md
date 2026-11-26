@@ -254,3 +254,12 @@ Do not change these documents alone. The user decides at acceptance.
 - The dev-server prefix check in `src/main/index.ts:41`.
 - A dead fixture import.
 - `.ui.ts` against `.ui.tsx` in the zone configs.
+
+## User acceptance (step 8)
+
+The user accepted Milestone 0 with deviations on 2026-11-26. The user decided:
+
+- Accept G8, G16, G17 and G21 as partial. The guard hook and the builder advisor go to the retrospective.
+- Update `docs/architecture.md` to `subscribe(name, callback)`. This commit makes the change.
+- Keep the contract name `workspaces.list-github-accounts`. This commit updates brief G18.
+- The count of 1Password prompts is acceptable.
