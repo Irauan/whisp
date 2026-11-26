@@ -3,9 +3,8 @@
 // The app runs in a temporary data folder with the simulated agent in `agents.json`.
 // No test sleeps. Each wait is an auto-waiting check of Playwright, or a report that the
 // simulated agent sends on its control pipe.
-import { readdir, stat } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
-import { expect, ITEM_ID, ITEM_TITLE, realDataDir, test, type AetherApp } from './fixture'
+import { join, resolve } from 'node:path'
+import { expect, ITEM_ID, ITEM_TITLE, realDataDir, snapshot, test, type AetherApp } from './fixture'
 
 /** Opens the work item, chooses the simulated agent, and sends "hello" in the work item panel. */
 async function sendHello({ page }: AetherApp): Promise<void> {
@@ -21,32 +20,10 @@ async function sendHello({ page }: AetherApp): Promise<void> {
 const reply = ({ page }: AetherApp) => page.getByText('Hello', { exact: true })
 const working = ({ page }: AetherApp) => page.getByText('Working', { exact: true })
 
-/** Lists the files and folders of the user data that the product writes, with their times. */
-async function snapshot(folder: string): Promise<string[]> {
-  const found: string[] = []
-  const visit = async (path: string): Promise<void> => {
-    let info
-    try {
-      info = await stat(path)
-    } catch {
-      return // Missing: the snapshot records nothing for it.
-    }
-    found.push(`${relative(folder, path)}|${info.isDirectory() ? 'dir' : info.size}|${info.mtimeMs}`)
-    if (info.isDirectory()) {
-      for (const name of (await readdir(path)).sort()) await visit(join(path, name))
-    }
-  }
-  // The files that Aether writes. Chromium caches and logs are not part of the check.
-  for (const name of ['agents.json', 'workspace.json', 'runs']) await visit(join(folder, name))
-  return found
-}
-
 const samePath = (a: string, b: string) => resolve(a).toLowerCase() === resolve(b).toLowerCase()
 
 test.describe('the built app with the simulated agent', () => {
   test('G11: "hello" in the work item panel shows "Hello", in a temporary data folder', async ({ aether }) => {
-    const realBefore = await snapshot(realDataDir())
-
     await aether.control.scenario('text')
     await sendHello(aether)
     await expect(reply(aether)).toBeVisible()
@@ -65,8 +42,7 @@ test.describe('the built app with the simulated agent', () => {
       .poll(async () => (await snapshot(aether.dataDir)).some((line) => line.startsWith(join('runs', `${ITEM_ID}.json`))))
       .toBe(true)
 
-    // The real folder has the same files, with the same times, as before.
-    expect(await snapshot(realDataDir())).toEqual(realBefore)
+    // The fixture checks the real folder before the launch and after the exit of the app.
   })
 
   test('G12: the app shows "Working" while the agent waits at a gate, and the reply after it opens', async ({

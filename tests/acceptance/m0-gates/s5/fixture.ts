@@ -6,12 +6,13 @@
 // `APPDATA` variable, so `APPDATA` alone does not move it. Checked on Windows 11 with Electron 45.
 // The fixture passes the standard Chromium switch `--user-data-dir` instead. The tests prove
 // that it works: they read `userData` from the running app.
-// The app process also gets a changed `APPDATA`, so that a child program cannot reach the
-// real profile through the variable.
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+// The app process also gets a changed `APPDATA`. This is only a partial guard: `USERPROFILE`,
+// `LOCALAPPDATA` and the known-folder API of Windows still lead a child program to the real
+// profile. The check of the real folder below is the proof, not this variable.
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { _electron, test as base, type ElectronApplication, type Page } from '@playwright/test'
+import { join, relative, resolve } from 'node:path'
+import { _electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import type { Workspace } from '../../../../src/shared/model'
 import { ControlServer } from '../../../simulated-agent/control'
 
@@ -38,6 +39,26 @@ export function realDataDir(): string {
   const roaming = process.env.APPDATA
   if (!roaming) throw new Error('APPDATA is not set in the test process.')
   return join(roaming, 'aether')
+}
+
+/** Lists the files and folders of the user data that the product writes, with their times. */
+export async function snapshot(folder: string): Promise<string[]> {
+  const found: string[] = []
+  const visit = async (path: string): Promise<void> => {
+    let info
+    try {
+      info = await stat(path)
+    } catch {
+      return // Missing: the snapshot records nothing for it.
+    }
+    found.push(`${relative(folder, path)}|${info.isDirectory() ? 'dir' : info.size}|${info.mtimeMs}`)
+    if (info.isDirectory()) {
+      for (const name of (await readdir(path)).sort()) await visit(join(path, name))
+    }
+  }
+  // The files that Aether writes. Chromium caches and logs are not part of the check.
+  for (const name of ['agents.json', 'workspace.json', 'runs']) await visit(join(folder, name))
+  return found
 }
 
 function workspace(projectDir: string): Workspace {
@@ -84,6 +105,9 @@ export const test = base.extend<{ aether: AetherApp }>({
     await mkdir(projectDir, { recursive: true })
     await mkdir(join(root, 'appdata'), { recursive: true })
 
+    // The real folder before the app starts. The check at the end covers the start and the exit.
+    const realBefore = await snapshot(realDataDir())
+
     const control = await ControlServer.start()
     const { command, args } = control.agent
     await writeFile(
@@ -111,8 +135,10 @@ export const test = base.extend<{ aether: AetherApp }>({
       await app.close().catch(() => undefined)
       await control.close()
       await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => undefined)
+      // The app is gone. The real folder must have the same files, with the same times.
+      expect(await snapshot(realDataDir()), 'The app changed the real user data folder.').toEqual(realBefore)
     }
   }
 })
 
-export { expect } from '@playwright/test'
+export { expect }
