@@ -19,7 +19,8 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 
 ## Git
 
-- Commits are signed through 1Password. The user approves each prompt. Wait for it.
+- Commits are signed through 1Password. 1Password asks the user to approve each signature and each SSH connection.
+- Wait for the approval. When nobody approves a prompt, the story waits. Independent stories continue.
 - Never bypass signing. Never use `--no-gpg-sign`. Never change git config.
 - Use auto mode. Never use bypass mode.
 - Story PRs squash to `milestone/*`.
@@ -34,4 +35,6 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 ## Writing
 
 - Write in the active voice. Use the imperative for instructions.
-- Keep one topic in each sentence. Keep each instruction to 20 words or fewer.
+- Keep one topic in each sentence.
+- Keep each instruction to 20 words or fewer. Keep each description to 25 words or fewer.
+- Keep each paragraph to 6 sentences or fewer.

@@ -5,8 +5,9 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 ## Rules
 
 - The test author, the reviewer and the validator rank above the builder.
-- At the top rank, they use a higher effort.
-- The coordinator chooses the model and the effort per run. The coordinator records the reason.
+- When the builder uses the top model, the other roles use a higher effort.
+- The coordinator chooses the model and the effort per run. The coordinator may raise or lower them.
+- The coordinator records the reason for each choice.
 - The starting session never uses a light model (Haiku).
 
 ## Roles
@@ -19,15 +20,18 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 | Validator | Opus 5.5 | high | It judges the whole milestone against the brief. |
 | Advisor | Fable 5.2 | not set | Senior engineer for the builder. |
 
-The role files in `.claude/agents/` set the model and the effort of each role.
+- The role files in `.claude/agents/` set the model and the effort of each role.
+- The aliases `opus` and `sonnet` follow the latest version.
+- The coordinator records the exact version in the log of each run.
 
 ## Advisor
 
+- Every agent can use the advisor.
 - The user turns the advisor on with `/advisor fable` in the coordinator session.
 - Subagents inherit the advisor from the coordinator.
 - The builder asks the advisor for the middle-column choices of "Decisions" in `docs/process.md`.
 
 ## Changing a row
 
-- The coordinator may raise the model or the effort for one run. The coordinator records the reason in the plan.
 - A change of a row in the table above goes to the user.
+- A change for one run follows the rules above.
