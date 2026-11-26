@@ -427,3 +427,6 @@ FodyWeavers.xsd
 
 # Aether build output
 /out/
+
+# Claude Code local settings
+.claude/settings.local.json
