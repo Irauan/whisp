@@ -179,7 +179,7 @@ Facts from the Claude Code documents, found by the coordinator:
 - [x] Demo of the walking skeleton to the user: CI run 45821001386 on `641fee1`, five jobs green.
 - [x] S6 Test lock. PR #6, squash merge by the user (`7d4a4f9`), before the re-review ended; the re-review then passed.
 - [x] S7 Branch protection. PR #7, squash merge by the user (`5f564b5`). Rulesets applied with the user approval on 2026-11-26.
-- [ ] S8 Trial: contracts and GitHub accounts
+- [x] S8 Trial: contracts and GitHub accounts. PR #8, squash merge by the coordinator in auto mode (`797ae76`).
 - [ ] Step 7: milestone validation, with one red PR per gate
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective
