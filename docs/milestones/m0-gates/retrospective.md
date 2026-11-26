@@ -53,11 +53,18 @@ The full table is in [metrics.md](metrics.md).
 
 ## Proposed text rules (the user approves each)
 
-1. `docs/process.md`: the builder asks the coordinator when the documents do not settle a choice. The coordinator asks the advisor. Reason: builder subagents have no advisor tool.
-2. `docs/process.md`: the user sets the default advisor before the coordinator session starts. Reason: `/advisor` in a running conversation keeps the old model.
-3. `docs/process.md`: the user merges a story PR only after a PASS from the reviewer. The user uses a squash merge. Reason: the S1 and S6 deviations.
-4. `.claude/agents/builder.md` and `docs/process.md`: do not count the guard hook as a gate until a probe proves it. The `lock` CI job and the reviewer byte check are the gates. Reason: the hook never fired.
-5. `docs/process.md`: before a milestone, the coordinator proves each tool assumption in the brief with one cheap probe.
+1. `docs/process.md`: the advisor runs from the start of the coordinator session.
+   - The coordinator checks for the advisor tool as its first action.
+   - When the tool is missing, the coordinator starts it, or stops and asks the user to start it.
+   - No story starts without the advisor.
+   - Reason: the advisor was not on in the m0 coordinator session. The builder subagents likely had no advisor for that reason. The user decided this on 2026-11-26.
+2. `docs/process.md`: the coordinator squash merges a story PR to `milestone/*` after a PASS from the reviewer. The `autoMode` rule allows this merge. Reason: the S1 and S6 deviations. The user decided this on 2026-11-26.
+3. Open: the guard hook. See the question below.
+4. `docs/process.md`: before a milestone, the coordinator proves each tool assumption in the brief with one cheap probe. The user agreed on 2026-11-26.
+
+Open question on the guard hook: `builder.md` and the plan count the guard hook as a protection for the locked files. It never ran in m0. The choices:
+- Fix the hook first, then keep it as a gate.
+- Remove the hook from the gate list. The `lock` CI job and the reviewer check remain.
 
 ## Follow-ups
 
