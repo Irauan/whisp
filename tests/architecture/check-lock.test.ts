@@ -3,7 +3,7 @@
 // `commit.gpgsign=false` in its own config. The config of this repository stays as it is.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +17,8 @@ const SCRIPT = fileURLToPath(new URL('../../scripts/check-lock.mjs', import.meta
 const TEST_FILE = 'tests/acceptance/m0-gates/x/a.spec.ts'
 const OTHER_TEST = 'tests/acceptance/m0-gates/x/b.spec.ts'
 const SIMULATED = 'tests/simulated-agent/agent.mjs'
+// A story PR targets a milestone branch. The lock check walks the commits of such a PR only.
+const BASE = 'milestone/m0-gates'
 const RULE = 'eslint(no-restricted-globals)'
 
 /** The rule of the lock: SHA-256 of the file with CRLF turned into LF. */
@@ -39,9 +41,9 @@ const repos: Repo[] = []
 class Repo {
   readonly dir = mkdtempSync(join(tmpdir(), 'aether-lock-'))
 
-  constructor() {
+  constructor(branch = BASE) {
     repos.push(this)
-    this.git('init', '-q', '-b', 'main')
+    this.git('init', '-q', '-b', branch)
     this.git('config', 'user.name', 'Lock Test')
     this.git('config', 'user.email', 'lock-test@example.invalid')
     this.git('config', 'commit.gpgsign', 'false')
@@ -89,6 +91,27 @@ class Repo {
     this.git('checkout', '-q', ...(create ? ['-b'] : []), branch)
   }
 
+  /**
+   * A commit of files that never exist in the working tree. The file system of Windows holds one
+   * of two names that differ only in case, so the test writes the objects and the index itself.
+   */
+  commitBlobs(message: string, files: Record<string, string>) {
+    for (const [path, text] of Object.entries(files)) {
+      const id = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+        cwd: this.dir,
+        input: text,
+        encoding: 'utf8'
+      }).trim()
+      this.git('update-index', '--add', '--cacheinfo', `100644,${id},${path}`)
+    }
+    this.git('commit', '-q', '-m', message)
+  }
+
+  /** Makes `origin/<branch>` point at the branch, as a clone of the repository would. */
+  publish(branch: string) {
+    this.git('update-ref', `refs/remotes/origin/${branch}`, branch)
+  }
+
   /** Runs the check. `base` set means a PR check. Without it, the check is the one of a push. */
   check(base?: string, extra: string[] = []) {
     const args = [SCRIPT, '--repo', this.dir, ...(base ? ['--base', base] : []), ...extra]
@@ -119,7 +142,7 @@ describe('G13: a story with the tests first and the code second', () => {
     const repo = storyRepo()
     repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -130,21 +153,21 @@ describe('G13: a story with the tests first and the code second', () => {
     repo.commit('Change the test', { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) })
     repo.commit('Add more tests', { [OTHER_TEST]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [OTHER_TEST]: SPEC_V1 }) })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 
   it('passes a story with code commits only, when it locks nothing', () => {
     const repo = storyRepo()
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
     repo.commit('Add a unit test', { 'tests/architecture/unit.test.ts': 'x\n' })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 
   it('treats a change of a file outside tests as the first code commit, whatever the file is', () => {
     const repo = storyRepo()
     repo.commit('Add a script', { 'scripts/tool.mjs': 'x\n' })
     repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.status).toBe(1)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
   })
@@ -161,7 +184,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('fails and names the file when a later commit changes the test and its hash', () => {
     const repo = afterCode()
     repo.commit('Weaken the test', { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -169,7 +192,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('fails when a later commit changes only the test', () => {
     const repo = afterCode()
     repo.commit('Weaken the test', { [TEST_FILE]: SPEC_V2 })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -177,7 +200,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('fails when a later commit changes only the hash in tests/locks.json', () => {
     const repo = afterCode()
     repo.commit('Change the entry', { 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -185,7 +208,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('fails when a later commit deletes the test', () => {
     const repo = afterCode()
     repo.commit('Delete the test', { [TEST_FILE]: null })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -193,7 +216,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('fails when a later commit removes the entry', () => {
     const repo = afterCode()
     repo.commit('Drop the entry', { 'tests/locks.json': '{}\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -204,7 +227,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
       [OTHER_TEST]: SPEC_V1,
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [OTHER_TEST]: SPEC_V1 })
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${OTHER_TEST}\``)
     expect(result.status).toBe(1)
   })
@@ -217,7 +240,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
       [TEST_FILE]: SPEC_V2,
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 })
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -229,7 +252,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
       { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) },
       'The coordinator approved a wrong selector fix'
     )
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.out).toContain(TEST_FILE)
     expect(result.out).toContain('The coordinator approved a wrong selector fix')
     expect(result.status).toBe(0)
@@ -238,7 +261,7 @@ describe('G14: no change of a locked test after the first code commit', () => {
   it('lets a later commit change tests that are not locked', () => {
     const repo = afterCode()
     repo.commit('A unit test', { 'tests/architecture/unit.test.ts': 'x\n' })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 })
 
@@ -256,7 +279,7 @@ describe('G15: a test locked on the base branch', () => {
       [TEST_FILE]: SPEC_V2,
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [SIMULATED]: 'agent\n' })
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -268,7 +291,7 @@ describe('G15: a test locked on the base branch', () => {
       { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [SIMULATED]: 'agent\n' }) },
       'The brief changed the label'
     )
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.out).toContain(TEST_FILE)
     expect(result.out).toContain('The brief changed the label')
     expect(result.status).toBe(0)
@@ -279,10 +302,10 @@ describe('G15: a test locked on the base branch', () => {
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
     const files = { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [SIMULATED]: 'agent\n' }) }
     repo.commit('Change the locked test', files)
-    expect(repo.check('main').status).toBe(1)
+    expect(repo.check(BASE).status).toBe(1)
     repo.git('reset', '-q', '--hard', 'HEAD~1')
     repo.commit('Change the locked test', files, 'Approved by the coordinator')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.out).toContain('Approved by the coordinator')
     expect(result.status).toBe(0)
   })
@@ -294,7 +317,7 @@ describe('G15: a test locked on the base branch', () => {
       { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [SIMULATED]: 'agent\n' }) },
       ''
     )
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -302,7 +325,7 @@ describe('G15: a test locked on the base branch', () => {
   it('fails when a commit removes the entry of a base file without the trailer', () => {
     const repo = storyRepo(baseFiles())
     repo.commit('Drop the entry', { 'tests/locks.json': locks({ [SIMULATED]: 'agent\n' }) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -310,7 +333,7 @@ describe('G15: a test locked on the base branch', () => {
   it('fails on a change of the entry alone, and keeps the other files out of the message', () => {
     const repo = storyRepo(baseFiles())
     repo.commit('Change the entry', { 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [SIMULATED]: 'agent\n' }) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.all).not.toContain(`Locked test changed: \`${SIMULATED}\``)
     expect(result.status).toBe(1)
@@ -319,7 +342,7 @@ describe('G15: a test locked on the base branch', () => {
   it('leaves the other locked files free to stay', () => {
     const repo = storyRepo(baseFiles())
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 })
 
@@ -332,7 +355,7 @@ describe('known violations', () => {
     repo.commit('Add an entry', {
       'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2], [RULE, 'src/b.tsx', 1])
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/b.tsx\``)
     expect(result.status).toBe(1)
   })
@@ -340,7 +363,7 @@ describe('known violations', () => {
   it('fails when the story raises a count', () => {
     const repo = storyRepo(base())
     repo.commit('Raise the count', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 3]) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/a.tsx\``)
     expect(result.status).toBe(1)
   })
@@ -350,7 +373,7 @@ describe('known violations', () => {
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
     repo.commit('Raise the count', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 3]) })
     repo.commit('Lower the count', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2]) })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/a.tsx\``)
     expect(result.status).toBe(1)
   })
@@ -361,7 +384,7 @@ describe('known violations', () => {
       'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2], [RULE, 'src/c.tsx', 1])
     })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/c.tsx\``)
     expect(result.status).toBe(1)
   })
@@ -375,22 +398,22 @@ describe('known violations', () => {
       'src/a.tsx': 'x\n',
       'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 1])
     })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 
   it('passes when the base branch has no list yet, because the story creates it', () => {
     const repo = storyRepo()
     repo.commit('Create the list', { 'tests/architecture/known-violations.json': list })
-    expect(repo.check('main').status).toBe(0)
+    expect(repo.check(BASE).status).toBe(0)
   })
 
   it('compares with the fork point, so a count that the base branch lowered later is no growth', () => {
     const repo = storyRepo(base())
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    repo.switch('main')
+    repo.switch(BASE)
     repo.commit('Lower the count', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 1]) })
     repo.switch('story')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -401,7 +424,7 @@ describe('hashes', () => {
     const repo = storyRepo()
     repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
     repo.commit('Change the test, keep the hash', { [TEST_FILE]: SPEC_V2 })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -413,7 +436,7 @@ describe('hashes', () => {
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 })
     })
     repo.commit('Change the test', { [TEST_FILE]: SPEC_V2 }, 'A reason')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.all).toContain('hash')
     expect(result.status).toBe(1)
@@ -426,7 +449,7 @@ describe('hashes', () => {
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 })
     })
     repo.commit('Delete the test', { [TEST_FILE]: null }, 'A reason')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -438,7 +461,7 @@ describe('hashes', () => {
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 })
     })
     repo.commit('Retire the test', { [TEST_FILE]: null, 'tests/locks.json': '{}\n' }, 'The story removes work items')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.out).toContain('The story removes work items')
     expect(result.status).toBe(0)
   })
@@ -446,7 +469,7 @@ describe('hashes', () => {
   it('fails when a test under tests/acceptance has no entry', () => {
     const repo = storyRepo()
     repo.commit('Add a test and no entry', { [TEST_FILE]: SPEC_V1 })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -454,7 +477,7 @@ describe('hashes', () => {
   it('fails when a file under tests/simulated-agent has no entry', () => {
     const repo = storyRepo()
     repo.commit('Add a file and no entry', { 'tests/simulated-agent/new.mjs': 'x\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('Locked test changed: `tests/simulated-agent/new.mjs`')
     expect(result.status).toBe(1)
   })
@@ -462,7 +485,7 @@ describe('hashes', () => {
   it('fails when tests/locks.json is not valid JSON', () => {
     const repo = storyRepo()
     repo.commit('Break the lock file', { 'tests/locks.json': '{ nope' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('tests/locks.json')
     expect(result.status).toBe(1)
   })
@@ -473,7 +496,7 @@ describe('hashes', () => {
     const lf = crlf.replaceAll('\r\n', '\n')
     repo.commit('Add the test with CRLF', { [TEST_FILE]: crlf, 'tests/locks.json': locks({ [TEST_FILE]: lf }) })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -484,7 +507,7 @@ describe('hashes', () => {
       [TEST_FILE]: "test('a', () => {})\r\n",
       'tests/locks.json': locks({ [TEST_FILE]: "test('b', () => {})\n" })
     })
-    expect(repo.check('main').status).toBe(1)
+    expect(repo.check(BASE).status).toBe(1)
   })
 })
 
@@ -499,7 +522,7 @@ describe('merge commits in a story', () => {
       'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2])
     })
     repo.switch('story', true)
-    repo.switch('main')
+    repo.switch(BASE)
     repo.commit('Another story merged', {
       'src/other.ts': 'export const b = 2\n',
       [TEST_FILE]: SPEC_V2,
@@ -517,28 +540,28 @@ describe('merge commits in a story', () => {
       [SIMULATED]: 'agent\n',
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [SIMULATED]: 'agent\n' })
     })
-    repo.merge('main', {
+    repo.merge(BASE, {
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [OTHER_TEST]: SPEC_V1, [SIMULATED]: 'agent\n' })
     })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).not.toContain('Locked test changed')
     expect(result.status).toBe(0)
   })
 
   it('does not take a merge from the base branch as the first code commit', () => {
     const repo = storyRepo({ 'README.md': 'base\n' })
-    repo.switch('main')
+    repo.switch(BASE)
     repo.commit('Another story merged', { 'src/other.ts': 'export const b = 2\n' })
     repo.switch('story')
     repo.commit('Add a locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
-    repo.merge('main')
+    repo.merge(BASE)
     repo.commit('Add a second locked test', {
       [OTHER_TEST]: SPEC_V1,
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [OTHER_TEST]: SPEC_V1 })
     })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -546,8 +569,8 @@ describe('merge commits in a story', () => {
   it('does not count a base-locked test that changed on the base branch, with no trailer', () => {
     const repo = movedBase()
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    repo.merge('main')
-    const result = repo.check('main')
+    repo.merge(BASE)
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -556,11 +579,11 @@ describe('merge commits in a story', () => {
     const repo = storyRepo()
     repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    repo.switch('main')
+    repo.switch(BASE)
     repo.commit('Another story merged', { 'src/other.ts': 'export const b = 2\n' })
     repo.switch('synthetic', true)
     repo.git('merge', '-q', '--no-ff', '-m', 'Merge of the pull request', 'story')
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain('lock: passed')
     expect(result.status).toBe(0)
   })
@@ -572,11 +595,11 @@ describe('merge commits in a story', () => {
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [SIMULATED]: 'agent\n' })
     })
     repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
-    repo.merge('main', {
+    repo.merge(BASE, {
       [SIMULATED]: 'agent changed in the merge\n',
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [OTHER_TEST]: SPEC_V1, [SIMULATED]: 'agent changed in the merge\n' })
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${SIMULATED}\``)
     expect(result.status).toBe(1)
   })
@@ -588,11 +611,11 @@ describe('merge commits in a story', () => {
       [TEST_FILE]: SPEC_V1 + '// edit\n',
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 + '// edit\n' })
     })
-    repo.merge('main', {
+    repo.merge(BASE, {
       [TEST_FILE]: SPEC_V2,
       'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2, [OTHER_TEST]: SPEC_V1 })
     })
-    const result = repo.check('main')
+    const result = repo.check(BASE)
     expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
     expect(result.status).toBe(1)
   })
@@ -644,7 +667,7 @@ describe('a push with no pull request', () => {
     repo.commit('Base', { 'tests/architecture/known-violations.json': list })
     repo.switch('milestone', true)
     repo.commit('Grow', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2], [RULE, 'src/z.tsx', 1]) })
-    repo.switch('main')
+    repo.switch(BASE)
     repo.git('merge', '-q', '--no-ff', '-m', 'Merge the milestone', 'milestone')
     const result = repo.check()
     expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/z.tsx\``)
@@ -657,6 +680,138 @@ describe('a push with no pull request', () => {
     expect(repo.check().status).toBe(0)
     repo.commit('Create the list', { 'tests/architecture/known-violations.json': list })
     expect(repo.check().status).toBe(0)
+  })
+})
+
+describe('F1: a milestone PR to main holds squashed stories', () => {
+  /** Each story is one squash commit with its tests, its code and its entries. */
+  function milestoneRepo() {
+    const repo = new Repo('main')
+    repo.commit('Base', {
+      'README.md': 'base\n',
+      'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 2])
+    })
+    repo.switch(BASE, true)
+    repo.commit('S5 App test (#5)', {
+      [TEST_FILE]: SPEC_V1,
+      'src/code.ts': 'export const a = 1\n',
+      'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 })
+    })
+    repo.commit('S6 Test lock (#6)', {
+      [OTHER_TEST]: SPEC_V1,
+      'scripts/tool.mjs': 'x\n',
+      'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [OTHER_TEST]: SPEC_V1 })
+    })
+    repo.publish('main')
+    return repo
+  }
+
+  it('passes with the entries that the squash commits add after their code', () => {
+    const result = milestoneRepo().check('origin/main')
+    expect(result.all).toContain('lock: passed')
+    expect(result.all).not.toContain('Locked test changed')
+    expect(result.status).toBe(0)
+  })
+
+  it('passes when the base is the local branch main', () => {
+    expect(milestoneRepo().check('main').status).toBe(0)
+  })
+
+  it('asks for no trailer on a test that main locks and a squash commit changes', () => {
+    const repo = new Repo('main')
+    repo.commit('Base', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
+    repo.switch(BASE, true)
+    repo.commit('S7 (#7)', {
+      [TEST_FILE]: SPEC_V2,
+      'src/code.ts': 'export const a = 1\n',
+      'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 })
+    })
+    repo.publish('main')
+    expect(repo.check('origin/main').status).toBe(0)
+  })
+
+  it('still fails on a stale hash', () => {
+    const repo = milestoneRepo()
+    repo.commit('Change a test, keep the hash', { [TEST_FILE]: SPEC_V2 })
+    const result = repo.check('origin/main')
+    expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
+    expect(result.status).toBe(1)
+  })
+
+  it('still fails when the known violations grew against main', () => {
+    const repo = milestoneRepo()
+    repo.commit('Raise a count', { 'tests/architecture/known-violations.json': known([RULE, 'src/a.tsx', 3]) })
+    const result = repo.check('origin/main')
+    expect(result.all).toContain(`Known violations grew: \`${RULE}\` in \`src/a.tsx\``)
+    expect(result.status).toBe(1)
+  })
+
+  it('walks the commits when the base is a milestone branch, with the origin prefix', () => {
+    const repo = storyRepo()
+    repo.publish(BASE)
+    repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
+    repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
+    repo.commit('Weaken the test', { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) })
+    const result = repo.check(`origin/${BASE}`)
+    expect(result.all).toContain(`Locked test changed: \`${TEST_FILE}\``)
+    expect(result.status).toBe(1)
+  })
+})
+
+describe('F2: the job runs a copy of the script from the base branch', () => {
+  it('runs from another folder and judges the repository it is given', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'aether-lock-copy-'))
+    try {
+      const copy = join(folder, 'check-lock.mjs')
+      copyFileSync(SCRIPT, copy)
+      const repo = storyRepo()
+      repo.commit('Add the locked test', { [TEST_FILE]: SPEC_V1, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1 }) })
+      repo.commit('Add the code', { 'src/code.ts': 'export const a = 1\n' })
+      const args = [copy, '--repo', repo.dir, '--base', BASE]
+      const pass = spawnSync(process.execPath, args, { encoding: 'utf8' })
+      expect(pass.stdout).toContain('lock: passed')
+      repo.commit('Weaken the test', { [TEST_FILE]: SPEC_V2, 'tests/locks.json': locks({ [TEST_FILE]: SPEC_V2 }) })
+      const fail = spawnSync(process.execPath, args, { encoding: 'utf8' })
+      expect(fail.stderr).toContain(`Locked test changed: \`${TEST_FILE}\``)
+      expect(fail.status).toBe(1)
+    } finally {
+      rmSync(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+  })
+
+  it('imports nothing but Node modules, so a copy needs no node_modules', () => {
+    const source = readFileSync(SCRIPT, 'utf8')
+    const specifiers = [...source.matchAll(/^import .* from '([^']+)'/gm)].map((match) => match[1])
+    expect(specifiers.length).toBeGreaterThan(0)
+    for (const specifier of specifiers) expect(specifier).toMatch(/^node:/)
+  })
+})
+
+describe('case collisions under the locked folders', () => {
+  it('fails on two head paths that differ only in case, and names both', () => {
+    const repo = storyRepo()
+    const upper = 'tests/acceptance/m0-gates/x/App.spec.ts'
+    const lower = 'tests/acceptance/m0-gates/x/app.spec.ts'
+    repo.commitBlobs('Add two tests that differ in case', {
+      [upper]: SPEC_V1,
+      [lower]: SPEC_V2,
+      'tests/locks.json': locks({ [upper]: SPEC_V1, [lower]: SPEC_V2 })
+    })
+    const result = repo.check(BASE)
+    expect(result.all).toContain(upper)
+    expect(result.all).toContain(lower)
+    expect(result.all).toMatch(/case/i)
+    expect(result.status).toBe(1)
+  })
+
+  it('passes two different names', () => {
+    const repo = storyRepo()
+    repo.commit('Add two tests', {
+      [TEST_FILE]: SPEC_V1,
+      [OTHER_TEST]: SPEC_V2,
+      'tests/locks.json': locks({ [TEST_FILE]: SPEC_V1, [OTHER_TEST]: SPEC_V2 })
+    })
+    expect(repo.check(BASE).status).toBe(0)
   })
 })
 

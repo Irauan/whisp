@@ -1,7 +1,7 @@
 // Tests of the builder guard (S6): the PreToolUse hook of .claude/agents/builder.md blocks
 // Edit and Write on the locked paths and on the real Aether data folder.
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,6 +73,40 @@ describe('G22 and S6: locked paths', () => {
     expect(edit('x.ts', 'Edit', join(work(), 'tests/acceptance')).block).toBe(true)
   })
 
+  it.each([
+    'scripts/check-lock.mjs',
+    'scripts/hooks/builder-guard.mjs',
+    'scripts/hooks/new-hook.mjs',
+    '.github/workflows/ci.yml',
+    '.github/workflows/other.yml',
+    '.claude/agents/builder.md',
+    '.claude/agents/new-role.md',
+    '.claude/settings.json'
+  ])('F2: blocks %s, the files that make the lock and the guard itself', (path) => {
+    expect(edit(path, 'Edit').block).toBe(true)
+    expect(edit(path, 'Write').block).toBe(true)
+    expect(edit(join(work(), path), 'Write').block).toBe(true)
+    expect(edit(path.toUpperCase().replaceAll('/', '\\'), 'Write').block).toBe(true)
+  })
+
+  it('F2: allows the files next to them', () => {
+    for (const path of [
+      'scripts/lint-gate.mjs',
+      'scripts/check-lock.mjs.bak',
+      'scripts/hooks-notes.md',
+      '.claude/settings.local.json',
+      '.claude/worktrees/x/src/a.ts',
+      '.github/ISSUE_TEMPLATE.md'
+    ]) {
+      expect(edit(path).block, path).toBe(false)
+    }
+  })
+
+  it('F2: blocks the protected files inside a worktree under .claude/worktrees', () => {
+    expect(edit(join(work(), '.claude/worktrees/agent-1/scripts/hooks/builder-guard.mjs')).block).toBe(true)
+    expect(edit(join(work(), '.claude/worktrees/agent-1/.github/workflows/ci.yml')).block).toBe(true)
+  })
+
   it('blocks the way Windows reads a name: a trailing dot, a trailing space, a data stream', () => {
     expect(edit('tests/acceptance./x.ts').block).toBe(true)
     expect(edit('tests/acceptance /x.ts').block).toBe(true)
@@ -128,6 +162,20 @@ describe('S6: the real Aether data folder', () => {
     expect(edit(relative, 'Write', join(root, 'work/src')).block).toBe(true)
   })
 
+  it('expands a leading tilde to the home folder, for a data folder path and a locked path', () => {
+    const decision = (path: string) => decide({ toolName: 'Write', toolInput: { file_path: path }, cwd: work(), env: {} })
+    expect(decision('~/AppData/Roaming/aether/agents.json').block).toBe(true)
+    expect(decision('~\\AppData\\Roaming\\aether\\agents.json').block).toBe(true)
+    expect(decision('~').block).toBe(false)
+    expect(decision('~/notes.txt').block).toBe(false)
+    expect(decision('~/repo/tests/locks.json').block).toBe(true)
+  })
+
+  it('does not treat a name that merely starts with a tilde as the home folder', () => {
+    const decision = decide({ toolName: 'Write', toolInput: { file_path: '~aether/x.json' }, cwd: work(), env: env() })
+    expect(decision.block).toBe(false)
+  })
+
   it('blocks the folder that AETHER_DATA_DIR names, when it is set', () => {
     const custom = join(root, 'custom-data')
     const decision = decide({
@@ -173,6 +221,20 @@ describe('the tools that the guard judges', () => {
     expect(decide({ toolName: 'Edit', toolInput: {}, cwd: work(), env: env() }).block).toBe(true)
     expect(decide({ toolName: 'Write', toolInput: { file_path: 42 }, cwd: work(), env: env() }).block).toBe(true)
     expect(decide({ toolName: 'Write', toolInput: undefined, cwd: work(), env: env() }).block).toBe(true)
+  })
+})
+
+describe('the hook in builder.md', () => {
+  const frontmatter = readFileSync(new URL('../../.claude/agents/builder.md', import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n')
+    .split('\n---\n')[0]
+
+  it('runs the guard on Edit and Write, with Node and an argument list, and blocks on failure', () => {
+    expect(frontmatter).toMatch(/PreToolUse:/)
+    expect(frontmatter).toMatch(/matcher: "Edit\|Write"/)
+    expect(frontmatter).toMatch(/command: node\n/)
+    expect(frontmatter).toContain('args: ["${CLAUDE_PROJECT_DIR}/scripts/hooks/builder-guard.mjs"]')
+    expect(frontmatter).toMatch(/onFailure: block/)
   })
 })
 
