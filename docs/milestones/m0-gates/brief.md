@@ -166,7 +166,7 @@ Does not apply. The milestone adds no screen.
 ## Accepted gaps
 
 - CI cannot tell the test author from the builder. Reason: one GitHub account for all agents, from `docs/process.md`. The deny rules and the reviewer reduce the risk.
-- A PR can still change the `lock` job in `ci.yml`. Reason: a fix needs a `pull_request_target` workflow, which the user rejected as too complex for now. The reviewer checks each change under `.github/workflows/`. User decision, 2026-11-26.
+- A PR can still change the `lock` job in `ci.yml`. Reason: a fix needs a `pull_request_target` workflow, and the user chose not to add it now. The reviewer checks each change under `.github/workflows/`. User decision, 2026-11-26.
 - Before the lock story merges, only the reviewer guards the tests. Reason: the lock is built in this milestone, and S1 to S5 add no locked acceptance test of product behavior.
 
 ## Budget
