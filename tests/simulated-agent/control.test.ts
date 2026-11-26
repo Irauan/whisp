@@ -50,6 +50,26 @@ describe('ControlServer wait rule', () => {
     await second
   })
 
+  it('gives the oldest kept event first', async () => {
+    const message = (id: number) => report({ type: 'message', message: { jsonrpc: '2.0', id, method: 'ping' } })
+    message(1)
+    message(2)
+    message(3)
+    await handled()
+    expect((await control.waitForMessage('ping')).id).toBe(1)
+    expect((await control.waitForMessage('ping')).id).toBe(2)
+    expect((await control.waitForMessage('ping')).id).toBe(3)
+  })
+
+  it('serves the waits in the order they started', async () => {
+    const first = control.waitForMessage('ping')
+    const second = control.waitForMessage('ping')
+    report({ type: 'message', message: { jsonrpc: '2.0', id: 1, method: 'ping' } })
+    report({ type: 'message', message: { jsonrpc: '2.0', id: 2, method: 'ping' } })
+    expect((await first).id).toBe(1)
+    expect((await second).id).toBe(2)
+  })
+
   it('keeps the events of other gates and of other states apart', async () => {
     waiting('other')
     report({ type: 'gate', name: 'reply', state: 'passed' })

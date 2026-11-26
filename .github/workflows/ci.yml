@@ -19,7 +19,6 @@ defaults:
     shell: bash
 
 # Each job is one gate. The rulesets require these job names.
-# Later stories add the jobs architecture, acceptance and lock.
 jobs:
   typecheck:
     runs-on: windows-latest
