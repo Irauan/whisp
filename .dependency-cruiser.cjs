@@ -79,6 +79,22 @@ module.exports = {
       to: { path: '^src/', pathNot: [RENDERER_MAY_IMPORT, MAIN] }
     },
     {
+      name: 'renderer-reaches-no-main',
+      comment:
+        'Renderer code reaches no main code through any chain of imports. The allowed files (contracts, the registry, base UI, building-blocks helpers) must not pass main code on.',
+      severity: 'error',
+      from: { path: RENDERER },
+      to: { path: MAIN, reachable: true }
+    },
+    {
+      name: 'domain-reaches-no-impure',
+      comment:
+        'A domain file reaches no Node, Electron or React module through any chain of imports.',
+      severity: 'error',
+      from: { path: DOMAIN },
+      to: { path: IMPURE, reachable: true }
+    },
+    {
       name: 'shared-imports-no-main',
       comment:
         'Shared-zone files (src/shared, contracts, domain files) import no main code and no providers.',

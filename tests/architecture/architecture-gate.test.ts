@@ -57,7 +57,11 @@ describe('G8: the current code', () => {
 
 describe('G5: the renderer imports no main code', () => {
   it('fails on a renderer file that imports from src/main', () => {
-    expect(found('g5')).toEqual(['renderer-imports-no-main src/renderer/imports-main.ts'])
+    // The direct rule and the reach rule both report the import.
+    expect(found('g5')).toEqual([
+      'renderer-imports-no-main src/renderer/imports-main.ts',
+      'renderer-reaches-no-main src/renderer/imports-main.ts'
+    ])
   }, 60_000)
 })
 
@@ -84,8 +88,10 @@ describe('G7: fixtures that break a rule', () => {
   }, 60_000)
 
   it('fails on a domain file that imports Node', () => {
+    // The direct rule and the reach rule both report the import.
     expect(found('g7-domain')).toEqual([
-      'domain-imports-no-node-electron-react src/features/sessions/session.ts'
+      'domain-imports-no-node-electron-react src/features/sessions/session.ts',
+      'domain-reaches-no-impure src/features/sessions/session.ts'
     ])
   }, 60_000)
 })
@@ -95,9 +101,13 @@ describe('the other import rules', () => {
     expect(found('g-imports-more')).toEqual(
       [
         'domain-imports-no-node-electron-react src/features/sessions/session.ts',
+        'domain-reaches-no-impure src/features/sessions/session.ts',
         'only-app-main-imports-providers src/features/sessions/stop/stop.handler.ts',
         'renderer-imports-no-main src/renderer/view.tsx',
         'renderer-imports-only-allowed src/renderer/view.tsx',
+        // The reach rule reports each main file that the view reaches: list.handler and wiring.
+        'renderer-reaches-no-main src/renderer/view.tsx',
+        'renderer-reaches-no-main src/renderer/view.tsx',
         'slice-imports-no-other-feature-root src/features/sessions/list/list.handler.ts',
         'slice-imports-only-allowed src/features/sessions/list/list.handler.ts',
         'slice-imports-only-allowed src/features/sessions/stop/stop.handler.ts'
@@ -115,17 +125,26 @@ describe('the other import rules', () => {
   }, 60_000)
 
   it('fails on a domain file that reaches Node through a store', () => {
+    // The reach rule of the domain reports it too.
     expect(found('g-shared-domain')).toEqual([
+      'domain-reaches-no-impure src/features/sessions/session.ts',
       'shared-imports-no-main src/features/sessions/session.ts'
     ])
   }, 60_000)
 
   it('fails on a shared file that imports main code, which renderer code then reaches', () => {
-    expect(found('g-shared-main')).toEqual(['shared-imports-no-main src/shared/x.ts'])
+    // The reach rules report the same chains: the renderer reaches main code, and the shared
+    // folder is a domain zone that reaches Node.
+    expect(found('g-shared-main')).toEqual([
+      'domain-reaches-no-impure src/shared/x.ts',
+      'renderer-reaches-no-main src/renderer/view.ts',
+      'shared-imports-no-main src/shared/x.ts'
+    ])
   }, 60_000)
 
   it('fails on a contract that imports its handler, which renderer code then reaches', () => {
     expect(found('g-shared-contract')).toEqual([
+      'renderer-reaches-no-main src/features/sessions/send-message/send-message.ui.tsx',
       'shared-imports-no-main src/features/sessions/send-message/send-message.contract.ts'
     ])
   }, 60_000)
@@ -137,6 +156,24 @@ describe('the other import rules', () => {
   it('lets src/main/index.ts import a provider and refuses src/main/other.ts', () => {
     expect(found('g-composition-root')).toEqual([
       'only-app-main-imports-providers src/main/other.ts'
+    ])
+  }, 60_000)
+
+  it('fails on a renderer file that reaches main code through a building-blocks helper', () => {
+    expect(found('g-reach-helper')).toEqual(['renderer-reaches-no-main src/renderer/view.ts'])
+  }, 60_000)
+
+  it('fails on a renderer file that reaches a handler and a store through the registry', () => {
+    // One finding for each main file that the renderer file reaches.
+    expect(found('g-reach-registry')).toEqual([
+      'renderer-reaches-no-main src/renderer/view.ts',
+      'renderer-reaches-no-main src/renderer/view.ts'
+    ])
+  }, 60_000)
+
+  it('fails on a domain file that reaches Node through a building-blocks file', () => {
+    expect(found('g-reach-domain')).toEqual([
+      'domain-reaches-no-impure src/features/sessions/domain-bb.ts'
     ])
   }, 60_000)
 
@@ -222,6 +259,17 @@ describe('G9: a changed list of violations', () => {
 describe('the rule names of the known violations', () => {
   it('belong to a gate in the official list', () => {
     expect(describeUnownedEntries(readKnownViolations())).toEqual([])
+  })
+
+  it('include the reach rules', () => {
+    expect(importRuleNames()).toEqual(
+      expect.arrayContaining(['renderer-reaches-no-main', 'domain-reaches-no-impure'])
+    )
+    const known = [
+      { rule: 'renderer-reaches-no-main', file: 'src/a.ts', count: 1 },
+      { rule: 'domain-reaches-no-impure', file: 'src/b.ts', count: 1 }
+    ]
+    expect(describeUnownedEntries(known)).toEqual([])
   })
 
   it('name a typo', () => {

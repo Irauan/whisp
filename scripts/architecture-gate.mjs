@@ -56,7 +56,7 @@ export function runDepcruise({ cwd = ROOT, targets = ['src'] } = {}) {
     column: 0,
     message: v.cycle
       ? `cycle ${[v.from, ...v.cycle.map((step) => step.name)].join(' -> ')}`
-      : `imports ${v.to}`
+      : `${v.type === 'reachability' ? 'reaches' : 'imports'} ${v.to}`
   }))
   return { diagnostics, modules: report.modules.map((module) => module.source) }
 }

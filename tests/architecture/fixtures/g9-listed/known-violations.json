@@ -3,5 +3,10 @@
     "rule": "renderer-imports-no-main",
     "file": "src/renderer/view.ts",
     "count": 1
+  },
+  {
+    "rule": "renderer-reaches-no-main",
+    "file": "src/renderer/view.ts",
+    "count": 1
   }
 ]
