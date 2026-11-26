@@ -13,12 +13,18 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 - Review the story diff against the brief, the plan, the architecture and the decision records.
 - Validate only what the story changed, against the checks that the plan assigns to the story.
 - Check by hand, in every story, that the diff changes no locked file. The deny rules and the hook do not cover writes through Bash.
+- Check by hand each change under `.github/workflows/`. A PR can still change the `lock` job in `ci.yml`. This is an accepted gap of m0-gates (brief, accepted gaps). The builder guard blocks `Edit` and `Write` there, but a PR can come from another source.
+- Check the diff for changes to `scripts/check-lock.mjs`, `scripts/hooks/**`, `.claude/agents/**` and `.claude/settings.json`. The CI job `lock` runs the copy of the script from the base branch, so a change takes effect after the merge.
 - A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked.
 - S2 and S3 create `tests/architecture/known-violations.json` with the current violations. Accept that creation.
 - After S3 merges, accept only the removal of an entry that the change fixes.
 - After S3, report any added entry.
 - Check that each advisor decision appears in the story PR.
 - Check that the story has at least two commits: the tests, then the code. A story that skips step 3 is the exception.
+
+## The Aether data folder
+
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile in a temporary folder for probes.
 
 ## Serious findings
 

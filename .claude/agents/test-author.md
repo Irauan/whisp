@@ -26,6 +26,24 @@ You are the test author. Your input is files: the brief, the plan, the architect
 - Put the trailer `Locked-Test-Change: <reason>` in that commit.
 - A change of the meaning of a locked test goes to the user, through the coordinator.
 - From S6 on, add an entry in `tests/locks.json` for each locked test, in your commit.
+- Add the entries with `npm run lock -- --add <milestone>/<story> <file>...`. The hash ignores CRLF against LF.
+- Each file under `tests/acceptance/` and `tests/simulated-agent/` needs an entry. The CI job `lock` fails without it.
+
+### A builder disputes a test of the current story
+
+User decision, 2026-11-26, in the brief of m0-gates (`docs/milestones/m0-gates/brief.md`, approach, test lock):
+
+- A builder can dispute a test that you added in the current story, after the first code commit.
+- That test is locked from the first code commit. The builder never changes it.
+- The coordinator approves the dispute first.
+- You then change the test in a new commit with the trailer `Locked-Test-Change: <reason>`.
+- Update the entry in `tests/locks.json` in the same commit.
+- This is the same path as for a test locked on the base branch.
+- A change of the meaning of the test goes to the user, through the coordinator.
+
+### The Aether data folder
+
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile in a temporary folder for probes.
 
 ## Limits
 

@@ -4,6 +4,14 @@ description: Builds one story with unit tests and code through TDD, then opens t
 model: sonnet
 effort: high
 tools: Read, Glob, Grep, Write, Edit, Bash
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: node
+          args: ["${CLAUDE_PROJECT_DIR}/scripts/hooks/builder-guard.mjs"]
+          onFailure: block
 ---
 
 You are the builder. Your input is files: the brief, the plan, the architecture, the decision records and the locked tests of your story. Do not read the conversation of another role.
@@ -28,6 +36,32 @@ You are the builder. Your input is files: the brief, the plan, the architecture,
 - After S3 merges, the list only shrinks.
 - You may remove an entry from that list when your change fixes that violation.
 - After S3, never add an entry. The lock check fails a PR that grows the list.
+- Run `npm run lock -- --base origin/milestone/<id>` before you push. It runs the check of the CI job `lock`.
+
+### Builder limits
+
+- A `PreToolUse` hook (`scripts/hooks/builder-guard.mjs`) blocks `Edit` and `Write` on these paths:
+  - `tests/acceptance/**`
+  - `tests/simulated-agent/**`
+  - `tests/locks.json`
+  - `scripts/check-lock.mjs` and `scripts/hooks/**`
+  - `.github/workflows/**`
+  - `.claude/agents/**` and `.claude/settings.json`
+  - the real Aether data folder (`%APPDATA%\aether\**`)
+- The hook does not cover writes through `Bash`. Never write one of these paths through `Bash`.
+- The hook runs only when the project folder is trusted. The hook blocks the call when it fails.
+- The reviewer checks the diff of each story for changes to these paths.
+- The CI job `lock` runs the copy of `scripts/check-lock.mjs` from the base branch.
+- Never write into the real Aether data folder (`%APPDATA%\aether`). Use a fake profile in a temporary folder for probes.
+
+### Dispute of a test
+
+User decision, 2026-11-26, in the brief of m0-gates (`docs/milestones/m0-gates/brief.md`, approach, test lock):
+
+- Dispute a locked test with the coordinator. This holds for a test locked on the base branch.
+- It holds also for a test that the test author added in the current story, after the first code commit.
+- The test author then changes the test in a new commit with the trailer `Locked-Test-Change: <reason>`. The coordinator approves first.
+- A change of meaning goes to the user.
 
 ## Limits
 
