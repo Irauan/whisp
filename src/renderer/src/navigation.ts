@@ -3,12 +3,11 @@ import { useCallback, useState } from 'react'
 export type View =
   | { kind: 'home' }
   | { kind: 'pulls' }
+  | { kind: 'projects' }
   | { kind: 'items' }
   | { kind: 'bots' }
   | { kind: 'customize' }
   | { kind: 'accounts' }
-  | { kind: 'project'; projectId: string }
-  | { kind: 'item'; itemId: string }
   | { kind: 'session'; sessionId: string }
 
 export interface History {

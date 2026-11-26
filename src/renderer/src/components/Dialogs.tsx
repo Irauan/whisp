@@ -25,58 +25,6 @@ export function Modal(props: { label: string; className?: string; onClose(): voi
   )
 }
 
-export function NewProjectDialog(props: { onClose(): void; onCreate(name: string, path?: string): void }) {
-  const [name, setName] = useState('')
-  const [path, setPath] = useState<string | undefined>()
-  const trimmed = name.trim()
-  const chooseFolder = async () => {
-    const chosen = await window.aether.chooseFolder()
-    if (!chosen) return
-    setPath(chosen)
-    // Name the project after its folder unless the user typed a name.
-    if (!trimmed) setName(chosen.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
-  }
-  return (
-    <Modal label="New project" onClose={props.onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (trimmed) props.onCreate(trimmed, path)
-        }}
-      >
-        <h2>New project</h2>
-        <label className="field">
-          Name
-          <input
-            value={name}
-            maxLength={80}
-            autoFocus
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <div className="field">
-          Folder
-          <div className="folder-field">
-            <span className={path ? 'folder-path' : 'folder-path muted'}>{path ?? 'None'}</span>
-            <button type="button" className="button" onClick={() => void chooseFolder()}>
-              Choose
-            </button>
-          </div>
-        </div>
-        <p className="muted">Agents work in this folder. You can choose it later.</p>
-        <div className="dialog-actions">
-          <button type="button" className="button" onClick={props.onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="button primary" disabled={!trimmed}>
-            Create project
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
 export function ConfirmDialog(props: {
   title: string
   body: string
@@ -107,28 +55,15 @@ export function SearchDialog(props: {
 }) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
-  const { projects, workItems, sessions } = props.content
+  const { sessions } = props.content
 
-  const results: { key: string; title: string; note: string; view: View }[] = [
-    ...projects.map((project) => ({
-      key: project.id,
-      title: project.name,
-      note: 'Project',
-      view: { kind: 'project', projectId: project.id } as const
-    })),
-    ...workItems.map((item) => ({
-      key: item.id,
-      title: item.title,
-      note: projects.find((project) => project.id === item.projectId)?.name ?? '',
-      view: { kind: 'item', itemId: item.id } as const
-    })),
-    ...sessions.map((session) => ({
+  const results: { key: string; title: string; note: string; view: View }[] = sessions
+    .map((session) => ({
       key: session.id,
       title: session.title,
       note: 'Session',
       view: { kind: 'session', sessionId: session.id } as const
     }))
-  ]
     .filter((result) => result.title.toLowerCase().includes(needle))
     .slice(0, 20)
 
@@ -142,8 +77,8 @@ export function SearchDialog(props: {
         }}
       >
         <input
-          aria-label="Search projects, work items and sessions"
-          placeholder="Search projects, work items and sessions"
+          aria-label="Search sessions"
+          placeholder="Search sessions"
           value={query}
           autoFocus
           onChange={(event) => setQuery(event.target.value)}

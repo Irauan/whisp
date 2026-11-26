@@ -8,15 +8,14 @@ import {
 } from '../../shared/model'
 import { AccountDialog } from './components/AccountDialog'
 import { AccountSwitcher } from './components/AccountSwitcher'
-import { ConfirmDialog, NewProjectDialog, SearchDialog } from './components/Dialogs'
+import { ConfirmDialog, SearchDialog } from './components/Dialogs'
 import {
   AccountsPage,
   BotsPage,
   CustomizePage,
   EmptyPage,
   HomePage,
-  ItemPage,
-  ProjectPage,
+  ProjectsPage,
   PullRequestsPage,
   WorkItemsPage
 } from './components/Pages'
@@ -26,13 +25,10 @@ import { useNavigation, type View } from './navigation'
 import { useWorkspace } from './useWorkspace'
 
 type OpenDialog =
-  | { kind: 'new-project' }
   | { kind: 'search' }
   | { kind: 'add-account' }
   | { kind: 'edit-account'; accountId: string }
   | { kind: 'delete-account'; accountId: string }
-  | { kind: 'delete-project'; projectId: string }
-  | { kind: 'delete-item'; itemId: string }
   | { kind: 'delete-session'; sessionId: string }
 
 const now = () => new Date().toISOString()
@@ -68,7 +64,6 @@ export function App() {
   // Show only the current account, so that the accounts stay apart.
   const content = contentOf(workspace, account.id)
   const closeDialog = () => setDialog(null)
-  const openNewProject = () => setDialog({ kind: 'new-project' })
   const goFromDialog = (next: View) => {
     closeDialog()
     go(next)
@@ -89,33 +84,10 @@ export function App() {
     reset()
   }
 
-  const addProject = (name: string, path?: string) => {
-    const id = crypto.randomUUID()
-    dispatch({ type: 'project-added', id, name, path, at: now() })
-    closeDialog()
-    go({ kind: 'project', projectId: id })
-  }
-
-  const addItem = (projectId: string, request: { title: string; description: string }) => {
-    const id = crypto.randomUUID()
-    dispatch({ type: 'item-added', id, projectId, ...request, at: now() })
-    go({ kind: 'item', itemId: id })
-  }
-
   const addSession = (prompt: string, settings: SessionSettings) => {
     const id = crypto.randomUUID()
     dispatch({ type: 'session-added', id, prompt, settings, at: now() })
     go({ kind: 'session', sessionId: id })
-  }
-
-  const chooseFolder = async (projectId: string) => {
-    const path = await window.aether.chooseFolder()
-    if (path) dispatch({ type: 'project-folder-set', id: projectId, path })
-  }
-
-  // The agent conversations live outside the workspace, so they go separately.
-  const forgetRuns = (itemIds: string[]) => {
-    for (const itemId of itemIds) void window.aether.forgetAgentRun(itemId).catch(() => undefined)
   }
 
   const renderPage = () => {
@@ -131,8 +103,10 @@ export function App() {
         )
       case 'pulls':
         return <PullRequestsPage />
+      case 'projects':
+        return <ProjectsPage />
       case 'items':
-        return <WorkItemsPage content={content} onGo={go} />
+        return <WorkItemsPage />
       case 'bots':
         return <BotsPage />
       case 'customize':
@@ -157,35 +131,6 @@ export function App() {
           />
         )
       }
-      case 'project': {
-        const project = content.projects.find((candidate) => candidate.id === view.projectId)
-        if (!project) break
-        return (
-          <ProjectPage
-            project={project}
-            items={content.workItems.filter((item) => item.projectId === project.id)}
-            onAddItem={addItem}
-            onGo={go}
-            onChooseFolder={() => void chooseFolder(project.id)}
-            onDelete={() => setDialog({ kind: 'delete-project', projectId: project.id })}
-          />
-        )
-      }
-      case 'item': {
-        const item = content.workItems.find((candidate) => candidate.id === view.itemId)
-        const project = content.projects.find((candidate) => candidate.id === item?.projectId)
-        if (!item || !project) break
-        return (
-          <ItemPage
-            item={item}
-            project={project}
-            onMove={(stage) => dispatch({ type: 'item-moved', id: item.id, stage, at: now() })}
-            onGo={go}
-            onChooseFolder={() => void chooseFolder(project.id)}
-            onDelete={() => setDialog({ kind: 'delete-item', itemId: item.id })}
-          />
-        )
-      }
     }
     return (
       <EmptyPage icon={<SearchX size={36} />} title="Not found" body="This page no longer exists." />
@@ -194,8 +139,6 @@ export function App() {
 
   const renderDialog = () => {
     switch (dialog?.kind) {
-      case 'new-project':
-        return <NewProjectDialog onClose={closeDialog} onCreate={addProject} />
       case 'search':
         return <SearchDialog content={content} onClose={closeDialog} onGo={goFromDialog} />
       case 'add-account':
@@ -216,53 +159,17 @@ export function App() {
       case 'delete-account': {
         const { accountId } = dialog
         const target = workspace.accounts.find((candidate) => candidate.id === accountId)
-        const { projects, workItems, sessions } = contentOf(workspace, accountId)
+        const { sessions } = contentOf(workspace, accountId)
         return (
           <ConfirmDialog
             title={`Remove ${target?.label ?? 'account'}?`}
-            body={`This also deletes its projects (${projects.length}), work items (${workItems.length}) and sessions (${sessions.length}). You cannot undo this. The GitHub CLI stays signed in.`}
+            body={`This also deletes its sessions (${sessions.length}). You cannot undo this. The GitHub CLI stays signed in.`}
             confirmLabel="Remove account"
             onClose={closeDialog}
             onConfirm={() => {
-              forgetRuns(workItems.map((item) => item.id))
               dispatch({ type: 'account-deleted', id: accountId })
               closeDialog()
               if (accountId === account.id) reset()
-            }}
-          />
-        )
-      }
-      case 'delete-project': {
-        const project = content.projects.find((candidate) => candidate.id === dialog.projectId)
-        const count = content.workItems.filter((item) => item.projectId === dialog.projectId).length
-        return (
-          <ConfirmDialog
-            title={`Delete ${project?.name ?? 'project'}?`}
-            body={`This also deletes its work items (${count}). You cannot undo this.`}
-            confirmLabel="Delete project"
-            onClose={closeDialog}
-            onConfirm={() => {
-              forgetRuns(
-                workspace.workItems.filter((item) => item.projectId === dialog.projectId).map((item) => item.id)
-              )
-              dispatch({ type: 'project-deleted', id: dialog.projectId })
-              goFromDialog({ kind: 'home' })
-            }}
-          />
-        )
-      }
-      case 'delete-item': {
-        const item = content.workItems.find((candidate) => candidate.id === dialog.itemId)
-        return (
-          <ConfirmDialog
-            title={`Delete ${item?.title ?? 'work item'}?`}
-            body="You cannot undo this."
-            confirmLabel="Delete work item"
-            onClose={closeDialog}
-            onConfirm={() => {
-              forgetRuns([dialog.itemId])
-              dispatch({ type: 'item-deleted', id: dialog.itemId })
-              goFromDialog(item ? { kind: 'project', projectId: item.projectId } : { kind: 'home' })
             }}
           />
         )
@@ -328,7 +235,7 @@ export function App() {
       {sidebarOpen && (
         <aside className="sidebar">
           {toolbar}
-          <Sidebar content={content} view={view} onGo={go} onNewProject={openNewProject} />
+          <Sidebar content={content} view={view} onGo={go} />
           <AccountSwitcher
             accounts={workspace.accounts}
             current={account}
