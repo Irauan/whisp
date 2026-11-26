@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 # Each job is one gate. The rulesets require these job names.
-# Later stories add the jobs architecture, acceptance and lock.
+# Later stories add the jobs acceptance and lock.
 jobs:
   typecheck:
     runs-on: windows-latest
@@ -62,3 +62,18 @@ jobs:
         run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
       - run: npm ci
       - run: npm test
+
+  # The gate fails when dependency-cruiser crashes or the swc parser is missing.
+  architecture:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Check the Node version
+        run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
+      - run: npm ci
+      - run: npm run architecture
