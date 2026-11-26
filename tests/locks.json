@@ -1,6 +1,6 @@
 {
   "tests/acceptance/m0-gates/s5/app.spec.ts": {
-    "sha256": "4afe6d45c222b707d544a710a449d6dadd31eeefdf0a1a8a10e6043815f097bd",
+    "sha256": "ede324943df14d201260139b7f7a4aed837edba463abf34b66852aa0db408166",
     "story": "m0-gates/s5"
   },
   "tests/acceptance/m0-gates/s5/fixture.ts": {
