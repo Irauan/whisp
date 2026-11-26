@@ -43,7 +43,8 @@ The baseline in `docs/architecture.md` stays. This milestone adds these items.
 ### Acceptance tests
 
 - Playwright starts the built app with `_electron.launch`.
-- A fixture makes a temporary folder, sets `APPDATA` to it for the app process, and writes `Aether/agents.json` there.
+- A fixture makes a temporary folder, starts the app with `--user-data-dir=<temp>/data`, and writes `agents.json` and `workspace.json` there.
+- The product keeps `AETHER_DATA_DIR` as a documented user feature (`README.md`). The test removes it from the app environment. User decision, 2026-11-26.
 - The fixture for GitHub puts a fake `gh` program first on `PATH`.
 - Tests live in `tests/acceptance/<milestone>/<story>/`.
 
