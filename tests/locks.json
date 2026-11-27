@@ -36,7 +36,7 @@
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s3/fixture.ts": {
-    "sha256": "43ca5e79f8d19de5db8b41bc91da049df99cca51a2f3a0e63e640f71b8027cc8",
+    "sha256": "3373e3f9bf90249a2d8ca8afbe6effbb5e6752ecb764b0f64a51a319fe962177",
     "story": "m1-chat/s3"
   },
   "tests/acceptance/m1-chat/s3/new-session-mode.spec.ts": {

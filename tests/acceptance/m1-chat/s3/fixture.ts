@@ -28,13 +28,38 @@
 //   prompt, and the Mode control with its mode.
 // - Delete: the session window has the button "Delete session". It opens a `dialog` whose name
 //   starts with "Delete". The dialog has the buttons "Cancel" and "Delete session".
+//
+// From m1-chat S4, "Start session" starts an agent. The fixture registers the simulated agent in
+// `agents.json` of the temporary data folder, under the id `claude-code`, so that Claude Code
+// runs the simulated agent and never the real one. The agent replies with its default scenario.
+// The tests do not check the reply. Coordinator decision, 2026-11-26: the meaning of each test stays.
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { answerDirectoryDialog, expect, type AetherApp, type Mode } from '../s2/fixture'
+import { ControlServer } from '../../../simulated-agent/control'
+import { answerDirectoryDialog, expect, test as appTest, type AetherApp, type Mode } from '../s2/fixture'
 
-export { answerDirectoryDialog, expect, holds, holdsPath, modesOf, readFiles, test } from '../s2/fixture'
+export { answerDirectoryDialog, expect, holds, holdsPath, modesOf, readFiles } from '../s2/fixture'
 export type { AetherApp, Mode, Row, SavedData } from '../s2/fixture'
+
+/** The app fixture of S2, with the simulated agent as Claude Code in `agents.json` before the first start. */
+export const test = appTest.extend<{ aether: AetherApp }>({
+  aether: async ({ aether }, use) => {
+    const control = await ControlServer.start()
+    const { command, args } = control.agent
+    await writeFile(
+      join(aether.dataDir, 'agents.json'),
+      JSON.stringify({ agents: [{ id: 'claude-code', name: 'Claude Code', command, args }] }, null, 2)
+    )
+    try {
+      await use(aether)
+    } finally {
+      // Stop the app before the control server, so that no agent loses its pipe while the app runs.
+      await aether.stop()
+      await control.close()
+    }
+  }
+})
 
 /** The label of each mode, in the order of the Mode control (brief, approach). */
 export const MODE_LABELS: Record<Mode, string> = {
