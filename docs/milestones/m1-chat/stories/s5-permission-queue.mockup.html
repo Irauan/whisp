@@ -149,6 +149,10 @@ button:disabled { cursor: default; opacity: .5; }
    options grouped by meaning into split buttons. Buttons size to content on one line, and stack
    at full width, at equal size, when they would wrap. */
 .question .ctx { color: var(--muted); font-size: 12.5px; }
+/* Changed (user decision, 2026-11-27): the answered decision card. Question in secondary, answer in primary, no buttons. */
+.question.answered-decision { border-color: var(--line); gap: 2px; }
+.question.answered-decision .muted { font-size: 12.5px; }
+.question.answered-decision .chosen { color: var(--text); font-size: 13.5px; display: flex; gap: 6px; align-items: center; }
 .question .ask { color: var(--text); font-size: 14px; font-weight: 500; }
 .decision-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .decision-actions .button { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
@@ -171,7 +175,7 @@ button:disabled { cursor: default; opacity: .5; }
   <h1>S5 Permission queue</h1>
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
-  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Decision cards (permission requests) and question cards of Claude show inside the transcript, at its end, after the last entry, in the order of arrival. They scroll with the chat. An answered card disappears.</p>
+  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Decision cards (permission requests) and question cards of Claude show inside the transcript, at its end, after the last entry, in the order of arrival. They scroll with the chat. An answered decision card stays as "Permission answered" (question in secondary, answer in primary). An answered question card turns into the saved card "Claude asked". No card shows disabled buttons.</p>
   <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact. On a safety ask, the refuse option that the agent puts first is the recommended one.</p>
   <p class="muted">Frame (S8): the header holds only the title and "Delete session". The transcript is the only scroll area. Bottom dock, from the top: status line, plan widget (S8), composer. The trust and directory questions of S6 stay an app-level dialog.</p>
 </header>
@@ -345,21 +349,17 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>4. Answer sent, and answer refused</h2>
-  <p class="muted">First card: the user clicked Allow. Its buttons are disabled until the card disappears. Second card: the main process refused the answer. The card stays, shows the reason, and its buttons work again.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): no disabled buttons. First card: the user clicked Allow. The card switches at once to its answered layout, with a small spinner after the chosen label, while the answer is sent. Second card: the main process refused the answer. The card goes back to its buttons and shows the reason.</p>
   <div class="window frame" style="height:520px">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">Edit src\math.ts</span><span>Pending</span></div>
-      <div class="mark"><span class="mark-label">New: sending and error states. Changed: decision card layout</span>
+      <div class="mark"><span class="mark-label">Changed: sending shows the answered layout, no disabled buttons</span>
         <div class="permission-queue">
-          <div class="question" role="article" aria-label="Permission request">
-            <p class="ctx">execute · <span class="mono">npm test</span></p>
-            <p class="ask">Run this command?</p>
-            <div class="decision-actions">
-              <button class="button primary" type="button" disabled>Allow</button>
-              <button class="button" type="button" disabled>Refuse</button>
-            </div>
+          <div class="question answered-decision" role="article" aria-label="Permission request">
+            <p class="muted">Run this command?</p>
+            <p class="chosen">Allow <span class="spin" aria-label="Sending">◌</span></p>
           </div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">edit · <span class="mono">Edit src\math.ts</span></p>
@@ -383,7 +383,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>5. After the first answer (A4)</h2>
-  <p class="muted">The user allowed the first request. Its card disappeared, and its tool runs. The second card stays at the end of the log and is now the oldest.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): the user allowed the first request. Its card stays as the answered card "Permission answered": the question in the secondary color, the answer in the primary color, and no buttons. It is a saved entry. Its tool runs. The second card stays open at the end of the log and is now the oldest.</p>
   <div class="window frame" style="height:460px">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -391,6 +391,12 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool"><span class="spin">◌</span><span class="tool-title">npm test</span><span>Running</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
+      <div class="mark"><span class="mark-label">Changed: the answered decision card stays</span>
+        <div class="question answered-decision" role="article" aria-label="Permission answered">
+          <p class="muted">Run this command?</p>
+          <p class="chosen">Allow</p>
+        </div>
+      </div>
       <div class="permission-queue">
         <div class="question" role="article" aria-label="Permission request">
           <p class="ctx">read · <span class="mono">Read C:\work\logs\last-run.txt</span></p>
@@ -412,7 +418,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>6. After Stop (A5)</h2>
-  <p class="muted">Two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards disappeared. The open tool calls show "Failed". The composer is ready.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards stay as answered cards with "Cancelled", and no buttons. The open tool calls show "Failed". The composer is ready.</p>
   <div class="window frame" style="height:460px">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -420,10 +426,17 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">npm test</span><span>Failed</span></div>
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
-      <p class="notice">Stopped.</p>
-      <div class="mark"><span class="mark-label">Changed: no card after Stop</span>
-        <p class="muted" style="font-size:13px">No card at the end of the log. No status line: the session is idle.</p>
+      <div class="mark"><span class="mark-label">Changed: answered cards with "Cancelled" after Stop</span>
+        <div class="question answered-decision" role="article" aria-label="Permission answered">
+          <p class="muted">Run this command?</p>
+          <p class="chosen">Cancelled</p>
+        </div>
+        <div class="question answered-decision" role="article" aria-label="Permission answered" style="margin-top:8px">
+          <p class="muted">Read this?</p>
+          <p class="chosen">Cancelled</p>
+        </div>
       </div>
+      <p class="notice">Stopped.</p>
     </div>
     <div class="dock">
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>

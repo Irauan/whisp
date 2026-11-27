@@ -55,9 +55,9 @@ Status: draft for the design review. Not approved.
 |---|---|
 | Working, queue empty | Today's screen: the transcript and "Working". |
 | Waiting for permission | One card for each open request, at the end of the transcript. The status line says "Waiting for your answer". Stop is available. This holds with any status, also outside a turn. |
-| Answer sent | The buttons of that card are disabled until the card closes. |
+| Answer sent | The card switches at once to its answered layout, with a small spinner after the chosen label. No disabled buttons show. |
 | Answer refused by the main process | The card stays. It shows the reason under its buttons. The buttons work again. |
-| After Stop | No card. The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
+| After Stop | No open card. Each card that was open shows its answered layout with "Cancelled". The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
 
 The session status does not get a new value. "Waiting for permission" is any status with a queue that is not empty. See open choice 3.
 
@@ -89,7 +89,8 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-17 | Two open cards show inside the log "Transcript", after the last entry, in the order of arrival. A later entry comes before them. The dock holds no card. | Acceptance |
 | S5-18 | The user scrolled up. A new card comes. The log does not move. The status line shows "Waiting for your answer" and "Show request". A click brings the oldest open card into view and focuses it. | Acceptance |
 | S5-19 | A new card does not take the focus: a key typed in "Prompt" goes to the composer. | Acceptance |
-| S5-20 | An answered permission card disappears. No entry is saved for it. | Acceptance |
+| S5-20 | After the user picks "Allow", the decision card stays in the transcript with no buttons. It shows the question in the secondary color and "Allow" in the primary color. After a restart it shows the same. Stop on an open decision card shows "Cancelled". | Acceptance |
+| S5-27 | While an answer is being sent, the card shows no disabled button: it shows the answered layout with a spinner. When the main process refuses the answer, the card goes back to its buttons, with the error line. | Acceptance |
 | S5-21 | The user answers a single select and a multi select with "Other". The card turns into the answered card "Claude asked", with one row for each question and the answer below it. After a restart it shows the same. | Acceptance |
 | S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Cancelled" in each row. | Acceptance |
 | S5-23 | A click on an option row selects it and sends nothing. "Submit" is disabled until a pick or a text. No row is preselected. | Acceptance |
@@ -98,7 +99,7 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-25 | An MCP form with a text field saves "Answered", not the typed text. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-26 are not in the brief. They cover the rules above.
+S5-1 to S5-27 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -184,7 +185,7 @@ The user said: "For ask question tool, We should Claude design, where each optio
   - "Submit" (primary). It sends `accept` with the picks and the texts. It is disabled until at least one question has a pick or a text.
   - "Skip" (plain). It sends `decline`.
 - Stop sends `cancel`.
-- The card follows the rules of a permission card: oldest first, one answer only, the buttons disabled after a click, and the error line under the buttons.
+- The card follows the rules of a decision card: oldest first, one answer only, no disabled buttons, the answered layout with a spinner while the answer is sent, and the error line on a refusal.
 - The refusal fallback is the binary case of decision A. It keeps its two buttons: "Keep the refusal" (primary) and "Retry with <fallback>".
 
 #### The answered card (user decision, 2026-11-27)
@@ -208,7 +209,20 @@ The user said: "On Claude desktop the card changes and shows a list with the que
   - the exit or a crash of the process: yes, "Cancelled"
   - the quit of Aether: yes, "Cancelled", while `releaseAll` closes the processes
   - a form that got -32602: no, because no card showed
-- Permission cards still disappear after the answer. The tool call shows the result.
+- Decision cards (permission cards) also stay after the answer. See "The answered decision card".
+
+#### The answered decision card (user decision, 2026-11-27)
+
+The user said: "when we have already answered we shouldn't show the button disabled. We show only the question in secondary and the answer in primary inside the card."
+
+- After an answer, the decision card stays in the transcript, at its place. It drops its buttons. No disabled button shows.
+- It shows only the question in the secondary color, and the chosen answer (the label of Claude's option) in the primary color.
+- A cancel (Stop, the cancel of the agent, the exit of the process, the quit of Aether) shows "Cancelled" as the answer.
+- It is an `article` with the fixed name "Permission answered". It does not reuse "Permission request", so a locator for an open card never matches it.
+- It is a saved entry of the approved kind `answers`, with one row. A reload or a restart keeps it. See "Data".
+- While the answer is being sent, the card shows the answered layout at once, with a small spinner after the chosen label. When the main process accepts the answer, the spinner goes and the entry is saved. When it refuses the answer, the card goes back to its buttons and shows the error line.
+- The same rule applies to the question cards: no disabled button while "Submit" or "Skip" is sent. The card shows its answered layout with a spinner.
+- Color order, as the user said each one: a decision card shows the question in the secondary color and the answer in the primary color. A question card shows the question in the primary color and the answer in the secondary color. The coordinator asks the user if both should match.
 
 #### Decision cards (user decision, 2026-11-27)
 
@@ -330,7 +344,7 @@ The advisor answered on the shape. Not hard to revert. The user likely agrees.
 
 The advisor answered. Not hard to revert.
 
-- An answered permission card disappears. It leaves no saved entry (open choice 4 stays A for permissions). The tool entry shows the result.
+- An answered decision card stays, as a saved entry (user decision, 2026-11-27). See "The answered decision card".
 - Reason: an open card can stay last in the log, but a folded line needs a fixed place among later entries, and only an entry has one. After a revision gap, the window rebuilds its view from a new snapshot, so a line in view only would be lost.
 - An answered question card does not disappear. It turns into a saved answered card (user decision, 2026-11-27). See "The answered card".
 
@@ -376,20 +390,21 @@ The status line keeps the S6 condition: it shows no "Starting Claude Code" while
 - On a decision card, the main part of a split button and each plain button are named with the label of the option. The dropdown part is a `button` named "More allow options" or "More refuse options", with a `menu` of `menuitem` elements.
 - On a question card, the buttons are "Submit" and "Skip".
 - A single select is a `radiogroup` with `radio` rows. A multi select is a `group` with `checkbox` rows. The name of a row is its option label; its explanation is its description. The free text field has the name "Other".
-- An answered question card is an `article` with the fixed name "Claude asked".
+- An answered question card is an `article` with the fixed name "Claude asked". An answered decision card is an `article` with the fixed name "Permission answered". Neither has a button.
 - The cards inside the log keep the S4 checks of the log text: A2 and A6 use `toHaveText` with a pattern that allows text between the turns (`s4/chat.spec.ts` 119, `s4/restart.spec.ts` 78 and 85). A3 and A5 check the log after Stop, when no card is open.
 
 ## Data
 
 - No migration. No new column.
 - The queue of permission requests and elicitations lives in main memory. `docs/architecture.md` says that open questions live in memory only.
-- The answer to a permission request adds no entry to the transcript. The tool call entry shows the result: "Completed" after an allowed tool, and "Failed" after a refused one. See open choice 4.
+- The answer to a permission request adds one entry of the kind `answers`, with `card: "decision"` and one row (user decision, 2026-11-27). The tool call entry still shows the result: "Completed" after an allowed tool, and "Failed" after a refused one.
 - The answer to a question of Claude adds one entry: the answered card (user decision, 2026-11-27).
   - New entry kind `answers` in `entrySchema` (`entry.ts`):
 
 ```ts
 z.strictObject({
   kind: z.literal('answers'),
+  card: z.enum(['decision', 'question']),  // added on 2026-11-27 for the answered decision card
   toolId: z.string().nullable(),          // the toolCallId of the elicitation, if any
   outcome: z.enum(['submitted', 'skipped', 'cancelled']),
   rows: z.array(z.strictObject({
@@ -401,6 +416,8 @@ z.strictObject({
 
   - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to "Skipped" or "Cancelled" by the outcome. A later change of a text then needs no data change.
   - Main builds the rows at answer time, and adds the entry with `addEntry` where the open card was: at the end of the entries.
+  - A decision card saves one row: `question` is the question text of the card, for example "Run this command?", and `answer` is the label of the chosen option, or null for a cancel. The outcome is `submitted` or `cancelled`. `toolId` names the tool call, which shows the command or the path just above.
+  - The only change of the approved shape is the field `card`. No other field changes.
   - No migration. Migration 002 has no CHECK that lists the kinds of entry; its only CHECK keeps the column `kind` equal to the key `kind` of the JSON. zod validates the kinds.
   - Hard to revert: yes. `entrySchema` is strict on each read, so a database that holds this kind fails on a build without it.
   - **Approved by the user on 2026-11-27.** It is an approved hot item. A change of it goes to the user.
@@ -528,7 +545,8 @@ export type ElicitationAnswer =
 | A choice on a card | the label of the agent, for example "Yes" or "Allow" | `PermissionOption` | none |
 | The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
 | A question of Claude | "Claude asks" (card heading) | `Elicitation`, `ElicitationView` | none |
-| An answered question | "Claude asked" (card name) | entry kind `answers` | `entries.kind` = `answers` |
+| An answered question | "Claude asked" (card name) | entry kind `answers`, `card: "question"` | `entries.kind` = `answers` |
+| An answered decision | "Permission answered" (card name) | entry kind `answers`, `card: "decision"` | `entries.kind` = `answers` |
 | A permission card | "decision card" in this spec; `article` named "Permission request" | `PermissionCard` | none |
 | The menu of the other allow options | "More allow options" | split button | none |
 | The menu of the other refuse options | "More refuse options" | split button | none |
@@ -552,7 +570,7 @@ export type ElicitationAnswer =
 | A request when no turn runs | The card shows. Stop shows and cancels it. See "Requests outside a turn". |
 | A request with an unknown session ID | See open choice 6. |
 | The process exits with open requests | The cards close. The turn writes the error notice of S4. |
-| A double click on a button | The first click disables the buttons of the card. Only one answer goes out. |
+| A double click on a button | The first click switches the card to its answered layout, so the second click finds no button. Only one answer goes out. |
 | A form with an unsupported field | The provider answers -32602. No card shows. |
 | A question card when the process exits | The card closes. The agent gets nothing more. |
 | No pick and no text | "Submit" is disabled. "Skip" sends `decline`. |
@@ -648,7 +666,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 ### 4. A trace of the answer in the transcript
 
 - **Decided by the user on 2026-11-27, for questions only: a saved answered card.** The user said: "On Claude desktop the card changes and shows a list with the question and the answer. I would follow this pattern. Each question in primary, answers in secondary, and both in their own row inside the card. When multiple questions and answers we have separators between each row delimiting their space."
-- Permission requests keep option A: no entry. See "The answered card" and "Data".
+- **Decided by the user on 2026-11-27, for permissions too: a saved answered decision card.** The user said: "when we have already answered we shouldn't show the button disabled. We show only the question in secondary and the answer in primary inside the card." See "The answered decision card" and "Data".
 - The text below is the record of the options as they were offered.
 
 - User column: no. The saved format does not change.
