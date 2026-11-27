@@ -103,6 +103,12 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
               <dt className="muted">Repository</dt>
               <dd>{question.repository}</dd>
             </div>
+            {question.repositoryRoot !== null && (
+              <div>
+                <dt className="muted">Repository root</dt>
+                <dd>{question.repositoryRoot}</dd>
+              </div>
+            )}
             <div>
               <dt className="muted">Folder</dt>
               <dd>{question.folder}</dd>
@@ -112,6 +118,11 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
               <dd>{question.profileName}</dd>
             </div>
           </dl>
+          {question.holdsWorkspace && question.workspaceDirectory !== null && (
+            <p className="warning" role="note">
+              {`This repository holds the workspace directory ${question.workspaceDirectory}. Trust covers every plain folder under ${question.workspaceDirectory} for the profile ${question.profileName}.`}
+            </p>
+          )}
           <Findings found={question} emptyText="Aether found no .claude/settings*.json file and no .mcp.json file here." />
           <Buttons answers={[{ answer: 'trust', label: 'Trust', primary: true }]} onAnswer={onAnswer} />
         </Modal>

@@ -498,10 +498,10 @@ class AcpProcess implements AgentProcess {
     if (sessionId === null || !this.connection) return
     // A request that comes while the cancel of the turn runs gets "cancelled" at once.
     if (this.turnActive) this.cancelling = true
-    // The open requests get their answer before the agent gets the cancel. The agent then sees the
-    // answer first, and a request that it withdraws on the cancel finds its answer already sent.
-    await this.cancelRequests()
+    // The agent gets the cancel first, so it ends the turn as cancelled when its tools get their answers.
     await this.connection.agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
+    // Each request that the agent did not withdraw on the cancel gets "cancelled". The agent waits for it.
+    await this.cancelRequests()
   }
 
   answer(requestId: string, optionId: string): Result<true, 'unknown-request' | 'unknown-option'> {

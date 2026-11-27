@@ -222,8 +222,7 @@ describe('AcpAgents', () => {
     const turn = process.prompt('go')
     await control.waitForGate('never')
     await process.cancel()
-    // The turn ends by the cancel, or by the answers when they came first. Both are normal.
-    expect(await turn).toMatchObject({ ok: true })
+    expect(await turn).toEqual({ ok: true, value: 'cancelled' })
     expect(control.received('session/cancel')[0]?.params).toMatchObject({ sessionId: 's1' })
   })
 
@@ -642,7 +641,7 @@ describe('AcpAgents, permission requests', () => {
     await turn
   })
 
-  it('answers cancelled to each open request on cancel, before the agent gets the cancel, and reports nothing', async () => {
+  it('sends the cancel, then answers cancelled to each open request that the agent did not withdraw, and reports nothing', async () => {
     await control.scenario('steps', { prompt: [{ do: 'ask', withdrawOnCancel: true, requests: [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }] }, { do: 'answers' }] })
     const listened = listen()
     const process = start({}, listened)
@@ -654,7 +653,7 @@ describe('AcpAgents, permission requests', () => {
     expect(await control.waitForPermission('b')).toEqual({ id: 'b', outcome: { outcome: 'cancelled' } })
     // The turn ends by the cancel, or by the answers when they came first. Both are normal.
     expect(await turn).toMatchObject({ ok: true })
-    // The agent also withdrew the requests (withdrawOnCancel), after it had its answers.
+    // The agent withdrew the requests on the cancel (withdrawOnCancel), and each of them still got exactly one answer.
     expect(control.permissionAnswers.map((answer) => answer.outcome)).toEqual([{ outcome: 'cancelled' }, { outcome: 'cancelled' }])
     expect(listened.closed).toEqual([])
     expect(process.answer(listened.permissions[0]!.id, 'yes')).toMatchObject({ ok: false, error: { code: 'unknown-request' } })

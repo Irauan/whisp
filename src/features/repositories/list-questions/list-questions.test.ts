@@ -17,7 +17,7 @@ describe('listQuestionsController', () => {
   it('returns a snapshot that the contract accepts, with the revision that matches the events', async () => {
     const events: QuestionEvent[] = []
     const questions = new Questions((event) => events.push(event), { next: () => 'q1' })
-    void questions.ask({ kind: 'trust', sessionId: 's1', profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', ...found })
+    void questions.ask({ kind: 'trust', sessionId: 's1', profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', repositoryRoot: 'C:\\r\\repo-b', holdsWorkspace: false, workspaceDirectory: 'C:\\r', ...found })
     const snapshot = await listQuestionsController(questions)()
     expect(listQuestions.output.safeParse(snapshot).success).toBe(true)
     expect(snapshot).toMatchObject({ ok: true, value: { revision: 1, questions: [{ id: 'q1', kind: 'trust' }] } })
