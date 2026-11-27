@@ -35,6 +35,22 @@
     "sha256": "9035305b8bb175053ac002be676fae564d54833aa120f6c1d619c04f2c6c68fc",
     "story": "m1-chat/s2"
   },
+  "tests/acceptance/m1-chat/s3/fixture.ts": {
+    "sha256": "43ca5e79f8d19de5db8b41bc91da049df99cca51a2f3a0e63e640f71b8027cc8",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/new-session-mode.spec.ts": {
+    "sha256": "d511234347c36504d5d8cbb14222977c0747d193cabfaf48ba5a6b0d21caaff9",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/sessions.spec.ts": {
+    "sha256": "ff06c7d3987ab9c80cdc809ba4e32462891204d1509a682b76cdb6a9649dc9ee",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/settings-menu.spec.ts": {
+    "sha256": "04ad4aa9b606a6aafbaed0195d603360215eb262b21d625d96ac99d1e2421029",
+    "story": "m1-chat/s3"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
