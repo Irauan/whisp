@@ -94,7 +94,7 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
               <dd>{question.profileName}</dd>
             </div>
           </dl>
-          <Findings found={question} emptyText="Aether found no hook and no MCP server here." />
+          <Findings found={question} emptyText="Aether found no SessionStart hook in .claude/settings.json and no server in .mcp.json. It checked nothing else." />
           <Buttons answers={[{ answer: 'trust', label: 'Trust', primary: true }]} onAnswer={onAnswer} />
         </Modal>
       )
