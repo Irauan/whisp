@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { Database } from '../../building-blocks/database'
 import type { Mode } from '../../building-blocks/mode'
 import { entrySchema, isOpenTool, type EntryView } from './entry'
-import { attachmentSchema, sessionSchema, type Session } from './session'
+import { attachmentSchema, sessionSchema, starterSchema, type Session, type Starter } from './session'
 
 const attachmentsSchema = z.array(attachmentSchema)
 
@@ -72,11 +72,12 @@ export class SessionStore {
     return this.database.prepare('SELECT 1 FROM profiles WHERE id = ?').get(profileId) !== undefined
   }
 
-  insert(session: Session): void {
+  /** Saves a session. `startedBy` is `person` unless an automation creates the session. */
+  insert(session: Session, startedBy: Starter = 'person'): void {
     this.database
       .prepare(
-        `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at, started_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         session.id,
@@ -88,8 +89,15 @@ export class SessionStore {
         session.sourcePath,
         session.model,
         JSON.stringify(session.attachments),
-        session.createdAt
+        session.createdAt,
+        starterSchema.parse(startedBy)
       )
+  }
+
+  /** Who started the session, or null when it does not exist. An unknown value in the row is a defect, so it throws. */
+  startedByOf(id: string): Starter | null {
+    const row = this.database.prepare('SELECT started_by FROM sessions WHERE id = ?').get(id)
+    return row ? starterSchema.parse(row.started_by) : null
   }
 
   /** Deletes the session. Returns false when it does not exist. */

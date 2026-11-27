@@ -28,6 +28,7 @@ import type {
 } from '../../building-blocks/agent.port'
 import type { Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
+import { endSurvivors, processTree } from './process-tree'
 import type { AcpRecipe } from './recipe'
 
 /** The ACP error code for "nobody is signed in". */
@@ -396,13 +397,18 @@ class AcpProcess implements AgentProcess {
     return this.closing
   }
 
-  /** Cancel the turn, close the session, close stdin, then kill the whole process tree after a limit. */
+  /**
+   * Cancel the turn, close the session, close stdin, then kill the whole process tree after a limit.
+   * At the end, end each process of the tree that still runs.
+   */
   private async shutdown(): Promise<void> {
     this.aborted = true
     const child = this.child
     if (!child) return
     if (child.exitCode === null && child.signalCode === null) {
       const limit = this.options.closeLimitMs ?? CLOSE_LIMIT_MS
+      // List the tree while the agent runs: a child that outlives it has no parent to find later (spec S9, S9-4).
+      const tree = child.pid === undefined ? [] : await processTree(child.pid)
       const sessionId = this.sessionId
       if (this.connection && sessionId !== null && this.isReady) {
         const { agent } = this.connection
@@ -416,6 +422,8 @@ class AcpProcess implements AgentProcess {
         await killTree(child)
         await within(this.ended, limit)
       }
+      // A child of the agent never outlives the close. This also ends a child that `taskkill` cannot find any more.
+      await endSurvivors(tree)
     }
     this.connection?.close()
   }

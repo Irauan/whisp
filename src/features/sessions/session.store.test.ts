@@ -198,3 +198,27 @@ describe('SessionStore: the entries of a session', () => {
     expect(store.entryCount('s1')).toBe(0)
   })
 })
+
+describe('SessionStore: who started a session', () => {
+  it('gives person for a session that the row left at the default, and for a new session by default', () => {
+    const { store } = setup()
+    expect(store.startedByOf('s1')).toBe('person')
+    const session = store.find('s1')!
+    store.insert({ ...session, id: 's4' })
+    expect(store.startedByOf('s4')).toBe('person')
+  })
+
+  it('saves automation when the caller says so, and gives null for an unknown session', () => {
+    const { store } = setup()
+    store.insert({ ...store.find('s1')!, id: 's5' }, 'automation')
+    expect(store.startedByOf('s5')).toBe('automation')
+    expect(store.startedByOf('missing')).toBeNull()
+  })
+
+  it('refuses a value that is not a starter, on write and on read', () => {
+    const { database, store } = setup()
+    expect(() => store.insert({ ...store.find('s1')!, id: 's6' }, 'robot' as never)).toThrow()
+    database.prepare("UPDATE sessions SET started_by = 'robot' WHERE id = 's1'").run()
+    expect(() => store.startedByOf('s1')).toThrow()
+  })
+})

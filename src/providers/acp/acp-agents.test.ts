@@ -8,6 +8,7 @@ import { err, ok } from '../../building-blocks/result'
 import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate } from '../../building-blocks/agent.port'
 import { claudeCodeRecipe } from '../claude-code/claude-code'
 import { AcpAgents, translateUpdate } from './acp-agents'
+import { isRunning } from './process-tree'
 
 let control: ControlServer
 let folder: string
@@ -337,6 +338,23 @@ describe('AcpAgents', () => {
     expect(listened.exits).toHaveLength(1)
     expect(await control.waitForClose()).toBeTypeOf('number')
   })
+
+  it('ends the child process of the agent on close, also when the agent ends by itself after its stdin closed (S9-4)', async () => {
+    await control.scenario('child-process', { chunks: ['Hello'] })
+    const process = start()
+    await process.ready
+    await process.prompt('go')
+    const child = await control.waitForChild()
+    try {
+      expect(isRunning(child.pid), 'the child runs before the close').toBe(true)
+      await process.close()
+      // The close waits for the end of the tree, so no poll is needed.
+      expect(isRunning(child.pid), 'the child of the agent outlived the close').toBe(false)
+    } finally {
+      // The test never leaves the child alive, also when the close failed.
+      if (isRunning(child.pid)) globalThis.process.kill(child.pid)
+    }
+  }, 30_000)
 
   it('answers a permission request with "cancelled" until the permission queue exists', async () => {
     await control.scenario('tool', { title: 'Edit README.md' })
