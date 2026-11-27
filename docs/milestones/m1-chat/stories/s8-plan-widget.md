@@ -17,6 +17,7 @@ Status: draft for the design review. Not approved.
 3. `addPlan` compares the step texts with the latest plan entry of the session.
    - Same texts, in the same order: this is progress. `addPlan` replaces the latest plan entry in place and sends `entry-replaced`.
    - Other texts, another number of steps, or no plan entry yet: this is a new plan. `addPlan` adds a new plan entry and sends `entry-added`.
+   - In both cases, `addPlan` first closes the open text of the agent, as `updateTool` does. The locked Progress test sends text, a plan update, then text. Without this rule, the two texts join in one entry.
 4. The renderer reads the latest plan entry of the snapshot. The plan widget shows it.
 5. The transcript shows "Updated the plan" at each plan entry except the first one of the session.
 

@@ -32,6 +32,7 @@ Status: draft for the design review. Not approved.
   2. The provider answers each open request with `cancelled`.
   3. Each card closes.
 - The agent can cancel one request itself (`$/cancel_request`). Then only that card closes.
+- A request closes one time only. When Stop and a cancel of the agent arrive together, the agent gets one answer and the window gets one `permission-removed`.
 - The end of a turn closes each card that is left. A process exit, a crash and the deletion of the session also close the cards.
 - The queue lives in memory only. It does not survive a restart of Aether (`docs/architecture.md`, Agents).
 - The main process accepts an answer only for an open request of that session, and only with an option that the request offered.
@@ -101,7 +102,10 @@ Order in the session window, from the top. The S8 mockup uses the same order.
 - The tool kind, for example `execute` or `edit`.
 - The locations of the request (file paths), when the request has them.
 - One button for each option, in the order of the agent.
-- Real Claude puts the command in the tool title, for example `` `npm test` ``. So the card shows the command without extra fields.
+- The request of the Claude adapter carries `toolCallId`, `title` and `rawInput` (`permissions/presentation.js`, version 0.112.0).
+- For a shell tool, the title is the command itself (`tool-calls/reporters/bash.js`). So the card shows the command without extra fields.
+- For the plan exit, the title is "Ready to code?".
+- The validator confirms the title of a shell request in the live run of A4 (step 7).
 
 ### Accessibility
 
@@ -258,12 +262,14 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - User column: yes (permissions, security).
 - Hard to revert: no.
 - Facts from the Claude adapter (`@agentclientprotocol/claude-agent-acp` 0.112.0):
-  - A shell, web or tool "always" option adds an allow rule with the destination `localSettings`. Claude writes it in the settings of the repository (`.claude/settings.local.json`). It stays after the session.
+  - The "always" options of WebFetch, Skill, MCP tools and the fallback tools add an allow rule with the destination `localSettings` (`permissions/effects.js`). Claude keeps such a rule in the settings of the repository folder (`.claude/settings.local.json`). It stays after the session.
+  - The "always" option of a shell command uses the suggestions of Claude Code. This read did not confirm their destination.
   - A file edit "always" option is for "this session" only.
   - Aether stores no rule of its own in each case.
 - Options:
   - A. Show each "always" option that the agent offers. Impact: the same choices as the native Claude apps; one click can add a permanent rule in the repository.
   - B. Hide the `allow-always` and `refuse-always` options in m1. Impact: no permanent rule from Aether; the user answers each tool again.
+- More impact of A: a rule in the repository folder applies in each profile that opens the repository. Trust is per profile (S6), so this rule crosses the profile line.
 - Recommendation: A, with the label of the agent, so the user sees the scope.
 - Advisor: A. The preference patterns 3 (close a security gap) and 4 (keep the scope small) conflict here, so the advisor predicts that the user may disagree.
 
@@ -291,20 +297,36 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 - User column: yes (permissions; bypass needs a user choice, decision 0007).
 - Hard to revert: no.
-- Facts: in the mode Plan, the Claude adapter asks to exit the plan with options such as "Yes, and use auto mode" and "Yes, and bypass permissions". The adapter offers bypass by default. Such an option changes the mode of the agent session. The header of Aether then shows the old mode.
+- Facts:
+  - In the mode Plan, the Claude adapter asks to exit the plan with options such as "Yes, and use auto mode" and "Yes, and bypass permissions". The adapter offers bypass by default.
+  - Such an option changes the mode of the agent session. The adapter then sends `current_mode_update` (`exit-plan.js`). Aether ignores it today.
+  - The Mode control of Aether then shows the saved mode, not the live mode.
+  - `applySettings` sets the saved mode at each start. After a release (S9) or a restart, the session is in Plan again.
 - Options:
-  - A. Show these options as the agent offers them. Impact: the click is a user choice, as decision 0007 asks; the header mode can be out of date until a later story reads `current_mode_update`.
+  - A. Show these options as the agent offers them. Impact: the click is a user choice, as decision 0007 asks; the Mode control can show an old mode; a new process goes back to the saved mode.
   - B. Filter the bypass option in `providers/claude-code`. Impact: Aether never moves a session to bypass after the start; Aether needs Claude-specific option IDs.
-- Recommendation: A, and record the out-of-date header as a known gap.
-- Advisor: not consulted on this choice before the draft. See the report of this story spec.
+  - C. A, and the Mode control shows the live mode of the agent, in memory only. Impact: the user sees the real mode; more scope in S5; a new process still goes back to the saved mode.
+- Recommendation: A for m1. Record the old mode in the Mode control, and the return to the saved mode, as known gaps.
+- Advisor: A for m1. "The click on a labelled option is the user choice that decision 0007 asks for." The preference patterns 3 and 4 conflict, so the advisor predicts that the user may disagree. It is a hot item.
 
 ### 6. A request with another ACP session ID
 
 - User column: no (interface between modules).
 - Hard to revert: no.
-- Facts: the Claude adapter sends the request of a subagent with the session ID of the child session of that subagent. The owner session waits for it.
+- Facts:
+  - The code of the Claude adapter can send the request of a subagent with the session ID of the child session of that subagent. The owner session waits for it.
+  - This read found the code path. It does not prove that the path runs for a client with the capabilities of Aether.
+  - The S4 filter drops the updates of other session IDs. So such a card can have no tool entry for its title. The card then uses the title of the request.
 - Options:
   - A. Accept each request on the connection of the process. Impact: subagent tools work; one process serves one Aether session (decision 0006), so no request reaches another session.
   - B. Answer `cancelled` for a session ID that is not the session of the process. Impact: each tool of a subagent that needs a permission fails.
 - Recommendation: A.
-- Advisor: the first answer said B. The adapter facts above came after it. See the report of this story spec.
+- Advisor: A, after a second consultation with the adapter facts. Not hard to revert. The user likely agrees.
+
+## Skim list
+
+Small texts and details that the advisor accepted. The user can veto each one.
+
+- The status text "Waiting for your answer".
+- The button "Cancel request" for a request with no options.
+- The card heading "Permission request".

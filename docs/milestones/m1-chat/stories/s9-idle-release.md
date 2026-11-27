@@ -185,7 +185,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Hard to revert: no.
 - Facts:
   - Decision 0006 says: idle means no turn, no open permission request and no background task.
-  - The Claude adapter tracks background shells and background subagents inside its process. ACP version 1 sends no signal of them to Aether.
+  - The Claude adapter tracks background shells and background subagents inside its process. This read of the adapter found no signal of them over ACP version 1.
   - So after a release, a background command of the agent, for example a dev server, ends with the process.
 - Options:
   - A. Count no background task in m1. Record an accepted gap against decision 0006. Impact: a background command ends after the release time; no new protocol work.
