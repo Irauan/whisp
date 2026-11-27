@@ -1,9 +1,10 @@
 // G18 of milestone m0-gates, on the built app.
 //
-// G18: the renderer calls `invoke('workspaces.list-github-accounts', {})`. A fake `gh` reports two
+// G18: the renderer calls `invoke('profiles.list-github-accounts', {})`. A fake `gh` reports two
 // accounts. The account dialog lists both.
 // The brief names the contract `github.list-accounts`. The plan names it
-// `workspaces.list-github-accounts`, and the coordinator chose the plan name.
+// `workspaces.list-github-accounts`, and the coordinator chose the plan name. User decision,
+// 2026-11-26: "Profile" everywhere, so the name is now `profiles.list-github-accounts`.
 //
 // From m1-chat S2, accounts are profiles (decision 0004, and the user decision of 2026-11-26).
 // The account dialog is now the dialog "Add profile", in the profile menu "Profiles". The first

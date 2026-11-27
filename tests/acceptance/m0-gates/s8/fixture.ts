@@ -21,8 +21,12 @@ import { _electron, expect, test as base, type ElectronApplication, type Page } 
 
 const ROOT = resolve(__dirname, '../../../..')
 
-/** The contract of the GitHub accounts query. The plan names it, see `docs/milestones/m0-gates/plan.md`. */
-export const LIST_GITHUB_ACCOUNTS = 'workspaces.list-github-accounts'
+/**
+ * The contract of the GitHub accounts query. The plan of m0-gates named it
+ * `workspaces.list-github-accounts`. User decision, 2026-11-26: "Profile" everywhere, so its name
+ * is now `profiles.list-github-accounts`.
+ */
+export const LIST_GITHUB_ACCOUNTS = 'profiles.list-github-accounts'
 
 /** The two fake accounts that the fake `gh` reports. */
 export const ACCOUNTS = [
