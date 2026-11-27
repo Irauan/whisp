@@ -83,6 +83,22 @@
     "sha256": "b5edd0479a06424004ecf07dc3f7cabc334396c2946aa94e7098ff65d185b0ed",
     "story": "m1-chat/s4"
   },
+  "tests/acceptance/m1-chat/s6/claude-hooks.mjs": {
+    "sha256": "6bf7c216d9d578bedd5bd1cb000b65667dda6d726a9896fa16c335db366ded90",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/directories.spec.ts": {
+    "sha256": "cba55017a2b42e4f46d65e0ba839651b3404c3a18004a3f425c75a40cbd91935",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/fixture.ts": {
+    "sha256": "ab26768efe60c937faf9048299a88b9735751463a45414e97d4dce64533ccc7d",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/trust.spec.ts": {
+    "sha256": "4dc103f6b238ff49258ac4d9bd9ecd90c072ae0364552d20d7d18a9109ddc1ed",
+    "story": "m1-chat/s6"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
