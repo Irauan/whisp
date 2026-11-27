@@ -18,6 +18,7 @@ import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { _electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
+import { windowArgs } from '../../support/windows'
 
 const ROOT = resolve(__dirname, '../../../..')
 
@@ -140,7 +141,7 @@ export const test = base.extend<{ aether: AetherApp }>({
     await writeFile(join(dataDir, 'workspace.json'), JSON.stringify(oldProfile(projectDir), null, 2))
 
     const app = await _electron.launch({
-      args: [ROOT, `--user-data-dir=${dataDir}`],
+      args: windowArgs([ROOT, `--user-data-dir=${dataDir}`]),
       cwd: ROOT,
       env: appEnvironment(root)
     })
