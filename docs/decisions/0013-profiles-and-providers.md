@@ -17,7 +17,7 @@ Decision 0004 named the unit of usage a "workspace" and gave it a root directory
 2. "Root" becomes "Workspace directory": the folder of a profile that holds its repositories. A folder outside it still gets the directory question (check A10).
 3. A new table `providers` holds the providers of a profile.
    - A profile owns its rows, one for each provider kind: `UNIQUE (profile_id, kind)`. A removed profile removes its rows.
-   - The kind `claude-code` exists now. Its settings are the Claude configuration folder and the Claude profile name, as JSON. Aether validates the JSON with a zod schema for each kind.
+   - The kind `claude-code` exists now. Its settings are the Claude configuration folder and the Claude profile name, as JSON. Aether validates the JSON with a zod schema for each kind, on every write and every read. The table has no CHECK for the kind, so a new kind needs no rebuild of the table. The code refuses an unknown kind.
    - Aether stores no key and no token.
    - The Claude columns leave the table `profiles`. The settings of a profile edit the Claude provider row.
    - The import creates no provider row, because the old accounts had no Claude settings.
@@ -25,7 +25,17 @@ Decision 0004 named the unit of usage a "workspace" and gave it a root directory
    - Aether sets `provider_id` at the first start of the session. The session keeps it.
    - `source_path` is the repository or folder that the session started from. The sidebar groups sessions by it.
 5. The GitHub account stays on the profile. Its login chooses `GH_TOKEN` (check A16).
-6. Migration `001` is written for this model. The database was not released, so the file could change. It keeps only the checks of type, NOT NULL, mode, JSON and foreign keys. It has no check of a blank text and no check of the GitHub name or avatar, because a later change of a CHECK needs a rebuild of the table.
+   - A change of the settings edits the one row of the profile in place.
+6. Migration `001` is written for this model. The database was not released, so the file could change. It keeps only the checks of type, NOT NULL, mode, JSON and foreign keys. It has no CHECK for the provider kind. It has no check of a blank text and no check of the GitHub name or avatar, because a later change of a CHECK needs a rebuild of the table.
+
+## A later change of the provider settings
+
+A change of the settings of a provider applies to new sessions only (`docs/architecture.md`, Profiles). Claude keeps its session history in the config folder, so a session must resume with the folder that it started with.
+
+- Story S4 adds a column to `sessions` in migration `002`. At the first start of a session, Aether saves a snapshot of the provider settings in that column.
+- A resume of the session uses the snapshot, not the current row.
+- S4 creates the provider row at the first start when the profile has none.
+- Migration `001` does not change for this.
 
 ## Replaces in 0004
 

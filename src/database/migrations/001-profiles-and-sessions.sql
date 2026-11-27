@@ -25,8 +25,9 @@ CREATE TABLE profiles (
 CREATE TABLE providers (
   id         TEXT PRIMARY KEY,
   profile_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
-  -- The kind of provider. Each kind has its own settings.
-  kind       TEXT NOT NULL CHECK (kind IN ('claude-code')),
+  -- The kind of provider, for example claude-code. Each kind has its own settings. No CHECK lists the
+  -- kinds, so that a new kind needs no rebuild of the table. Aether refuses an unknown kind.
+  kind       TEXT NOT NULL,
   -- A JSON object. Aether validates it for the kind before it saves.
   -- The kind claude-code has the Claude configuration folder (CLAUDE_CONFIG_DIR)
   -- and the Claude profile name (ANTHROPIC_PROFILE).

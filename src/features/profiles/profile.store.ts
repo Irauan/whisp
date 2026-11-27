@@ -1,7 +1,7 @@
 import type { Database } from '../../building-blocks/database'
 import type { Ids } from '../../building-blocks/ids'
 import type { Profile } from './profile'
-import { claudeCodeSettingsSchema, claudeSettingsOf, type ClaudeChoice } from './provider'
+import { claudeSettingsOf, parseSettings, type ClaudeChoice } from './provider'
 
 const CURRENT = 'current_profile'
 const CLAUDE = 'claude-code'
@@ -13,7 +13,7 @@ const text = (value: unknown): string | null => (typeof value === 'string' ? val
 /** The profile with the settings of its Claude provider row. A settings value that breaks its schema is a defect. */
 function toProfile(row: Row): Profile {
   const login = text(row.github_login)
-  const settings = row.claude_settings === null ? {} : claudeCodeSettingsSchema.parse(JSON.parse(String(row.claude_settings)))
+  const settings = row.claude_settings === null ? {} : parseSettings(CLAUDE, JSON.parse(String(row.claude_settings)))
   return {
     id: String(row.id),
     name: String(row.name),
@@ -85,20 +85,28 @@ export class ProfileStore {
     return changes > 0
   }
 
-  /**
-   * Saves the Claude settings of a profile in its provider row. A session keeps the ID of its
-   * provider, so the row stays when the user clears both settings: it then holds an empty object.
-   * Without a row and without a choice, no row is made.
-   */
+  /** Saves the Claude settings of a profile in its provider row. See `saveProvider`. */
   saveClaude(profileId: string, choice: ClaudeChoice, ids: Ids, createdAt: string): void {
-    const settings = JSON.stringify(claudeSettingsOf(choice))
+    this.saveProvider(profileId, CLAUDE, claudeSettingsOf(choice), ids, createdAt)
+  }
+
+  /**
+   * Saves the settings of the provider of this kind. Each profile has one row for each kind, and a
+   * change edits that row in place. The settings pass through the schema of the kind, so an unknown
+   * kind and a setting that the schema does not know throw. A session keeps the ID of its provider,
+   * so the row stays when the user clears all settings: it then holds an empty object. Without a
+   * row and without a setting, no row is made.
+   */
+  saveProvider(profileId: string, kind: string, settings: unknown, ids: Ids, createdAt: string): void {
+    const checked = parseSettings(kind, settings)
+    const json = JSON.stringify(checked)
     const changed = this.database
       .prepare('UPDATE providers SET settings = ? WHERE profile_id = ? AND kind = ?')
-      .run(settings, profileId, CLAUDE).changes
-    if (changed === 0 && (choice.configFolder !== null || choice.profileName !== null)) {
+      .run(json, profileId, kind).changes
+    if (changed === 0 && Object.keys(checked).length > 0) {
       this.database
         .prepare('INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(ids.next(), profileId, CLAUDE, settings, createdAt)
+        .run(ids.next(), profileId, kind, json, createdAt)
     }
   }
 

@@ -8,7 +8,7 @@ import { MIGRATIONS, orderMigrations } from './migrations'
  * so a change of one of these files fails this test. A later change is a new file: add its hash.
  */
 const HASHES: Record<number, string> = {
-  1: '17b6852cc0b0a7324226becacdd998961564daceaf9082df1f319b67cb0bdd49'
+  1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -60,11 +60,10 @@ describe('the migrations of the product', () => {
     insertSession.run('s1', 'p1', 'v1', 'plan')
     insertSession.run('s2', 'p1', null, 'ask')
 
-    // The mode, the foreign keys, the kind, the JSON and the unique kind of a profile.
+    // The mode, the foreign keys, the JSON and the unique kind of a profile. The code checks the kind, not the table.
     expect(() => insertSession.run('s3', 'p1', null, 'interactive')).toThrow()
     expect(() => insertSession.run('s4', 'missing', null, 'ask')).toThrow()
     expect(() => insertSession.run('s5', 'p1', 'missing', 'ask')).toThrow()
-    expect(() => insertProvider.run('v2', 'p2', 'copilot', '{}')).toThrow()
     expect(() => insertProvider.run('v3', 'p2', 'claude-code', 'not json')).toThrow()
     expect(() => insertProvider.run('v4', 'p2', 'claude-code', '[]')).toThrow()
     expect(() => insertProvider.run('v5', 'p1', 'claude-code', '{}')).toThrow()
