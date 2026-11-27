@@ -72,6 +72,32 @@ export type AgentEvent =
   | ({ type: 'child' } & ChildProcessReport)
   /** The control server adds this when the agent closes its pipe. The pid is absent when no hello came. */
   | { type: 'closed'; pid?: number }
+  /** The client answered the permission request of the tool call `id` (`requests.mjs`). */
+  | ({ type: 'permission' } & PermissionAnswer)
+  /** The client answered the elicitation `id` (`requests.mjs`). */
+  | ({ type: 'elicitation' } & ElicitationAnswer)
+
+/** The error of an answer: the JSON-RPC error that the client sent. */
+export interface AnswerError {
+  code: number | null
+  message: string
+}
+
+/** What the client answered to one permission request: the ACP `outcome`, or an error. */
+export interface PermissionAnswer {
+  /** The toolCallId of the request. */
+  id: string
+  outcome?: { outcome: 'selected'; optionId: string } | { outcome: 'cancelled' }
+  error?: AnswerError
+}
+
+/** What the client answered to one elicitation: the ACP response, or an error. */
+export interface ElicitationAnswer {
+  /** The id of the step `elicit`. */
+  id: string
+  response?: { action: 'accept'; content?: Record<string, unknown> } | { action: 'decline' } | { action: 'cancel' }
+  error?: AnswerError
+}
 
 interface Connection {
   socket: Socket
@@ -115,6 +141,10 @@ export class ControlServer {
   readonly environments: AgentEnvironment[] = []
   /** Each child process that an agent started with the step 'child', in the order of their reports. */
   readonly children: ChildProcessReport[] = []
+  /** Each answer to a permission request, in the order of the reports (`requests.mjs`). */
+  readonly permissionAnswers: PermissionAnswer[] = []
+  /** Each answer to an elicitation, in the order of the reports (`requests.mjs`). */
+  readonly elicitationAnswers: ElicitationAnswer[] = []
 
   private chosen: { name: string; options: Record<string, unknown> } = { name: 'text', options: {} }
   private readonly opened = new Set<string>()
@@ -207,6 +237,24 @@ export class ControlServer {
     return { pid: event.pid, parent: event.parent }
   }
 
+  /** Waits for the answer of the client to the permission request of the tool call `id`. */
+  async waitForPermission(id: string): Promise<PermissionAnswer> {
+    const { type: _type, ...answer } = (await this.inbox.take((e) => e.type === 'permission' && e.id === id)) as Extract<
+      AgentEvent,
+      { type: 'permission' }
+    >
+    return answer
+  }
+
+  /** Waits for the answer of the client to the elicitation `id`. */
+  async waitForElicitation(id: string): Promise<ElicitationAnswer> {
+    const { type: _type, ...answer } = (await this.inbox.take((e) => e.type === 'elicitation' && e.id === id)) as Extract<
+      AgentEvent,
+      { type: 'elicitation' }
+    >
+    return answer
+  }
+
   /** The ACP messages of one method that agents received so far. */
   received(method: string): AcpMessage[] {
     return this.messages.filter((message) => message.method === method)
@@ -262,6 +310,14 @@ export class ControlServer {
     }
     if (event.type === 'environment') this.environments.push({ pid: event.pid, cwd: event.cwd, env: event.env, args: event.args })
     if (event.type === 'child') this.children.push({ pid: event.pid, parent: event.parent })
+    if (event.type === 'permission') {
+      const { type: _type, ...answer } = event
+      this.permissionAnswers.push(answer)
+    }
+    if (event.type === 'elicitation') {
+      const { type: _type, ...answer } = event
+      this.elicitationAnswers.push(answer)
+    }
     if (event.type === 'message') {
       this.messages.push(event.message)
       // A message comes after the hello of its agent, so the pid is known. A bare test socket may skip the hello.
