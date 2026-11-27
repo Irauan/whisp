@@ -83,6 +83,18 @@
     "sha256": "b5edd0479a06424004ecf07dc3f7cabc334396c2946aa94e7098ff65d185b0ed",
     "story": "m1-chat/s4"
   },
+  "tests/acceptance/m1-chat/s8/fixture.ts": {
+    "sha256": "5ccbdcb6d8963083f5e2519f6ada30c1f1c71c04c5783700edcef8db286dd9ed",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-updates.spec.ts": {
+    "sha256": "df90a2e54cefda22f3d9fed8f573444374138d10bd0d0bb4c36147c9f0561702",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-widget.spec.ts": {
+    "sha256": "c596aac6507b7a20156f2dc2d1a8a01f729c13b00fcbf99e3cc3af6a15e7bcd4",
+    "story": "m1-chat/s8"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
