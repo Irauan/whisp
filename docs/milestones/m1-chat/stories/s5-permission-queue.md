@@ -101,7 +101,12 @@ Order in the session window, from the top. The S8 mockup uses the same order.
 - The tool title. It comes from the request. Without it, the card uses the title of the known tool entry. Without both, it shows "Tool call".
 - The tool kind, for example `execute` or `edit`.
 - The locations of the request (file paths), when the request has them.
-- One button for each option, in the order of the agent.
+- One button for each option.
+- Rule (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.
+  - The recommended option is the first `allow-once` option of the request. Example: "Yes, manually approve edits" at the plan exit.
+  - The other options follow in the order of the agent.
+  - A request with no `allow-once` option has no primary button. Its options keep the order of the agent.
+  - Compact means like the buttons of the Claude desktop app: less height and padding, and smaller text than `.button`.
 - The request of the Claude adapter carries `toolCallId`, `title` and `rawInput` (`permissions/presentation.js`, version 0.112.0).
 - For a shell tool, the title is the command itself (`tool-calls/reporters/bash.js`). So the card shows the command without extra fields.
 - For the plan exit, the title is "Ready to code?".
@@ -233,7 +238,7 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 - `src/renderer/src/session-view.ts`: the new changes.
 - `src/renderer/src/components/SessionPage.tsx`: the queue and the status line. Shared with S6 and S8.
 - New `src/renderer/src/components/PermissionQueue.tsx`.
-- `src/renderer/src/styles.css`: reuse `.question`, `.question-actions` and `.button`. Shared with S8.
+- `src/renderer/src/styles.css`: reuse `.question` and `.question-actions`. Add a compact button variant for the cards. Shared with S8.
 - `tests/simulated-agent/agent.mjs`, `scenarios.mjs`, `control.ts`: the new steps. Shared with S7 and S9.
 - `docs/architecture.md`: remove the sentence "Until the permission queue exists, Aether answers each permission request with cancelled." Remove the S5 row from "Known defects".
 
@@ -254,7 +259,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Options:
   - A. One button for each option, with the label of the agent. Impact: the label states the scope of a grant, for example "Yes, and don't ask again for npm commands". Real Claude shows "Yes" and "No", not "Allow" and "Refuse".
   - B. Fixed Aether labels by kind: "Allow", "Always allow", "Refuse", "Always refuse". Impact: the brief terms show, but the scope of an "always" grant is lost, and the plan exit options with two "allow" kinds look the same.
-- Recommendation: A. Style each button by its kind: the first `allow-once` option is primary, each refuse option is plain.
+- Recommendation: A. The first `allow-once` option comes first and is primary. Each other option is plain. See "Card content".
 - Advisor: A. "Only the agent's label states the scope of a grant." The user may disagree, because the brief says "refuses" and the user owns the terms.
 
 ### 2. The "always" options

@@ -82,7 +82,12 @@ button:disabled { cursor: default; opacity: .5; }
 .question h3 { font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 8px; }
 .question .age { margin-left: auto; font-weight: 400; color: var(--muted); }
 .question-tool { display: flex; gap: 8px; align-items: baseline; }
-.question-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.question-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* New: compact card buttons, like the Claude desktop app (user decision, 2026-11-27).
+   The recommended option comes first, as the primary button. */
+.question-actions .button { height: 26px; padding: 0 10px; gap: 4px; font-size: 12.5px; line-height: 1; border-radius: 6px; }
+.question-actions .button:not(.primary) { background: transparent; border: 1px solid var(--line); }
+.question-actions .button:not(.primary):hover:not(:disabled) { background: var(--hover); }
 .locations li { font-size: 12px; }
 </style>
 </head>
@@ -92,6 +97,7 @@ button:disabled { cursor: default; opacity: .5; }
   <h1>S5 Permission queue</h1>
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
+  <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.</p>
   <p class="muted">Order from the top: header and facts, transcript, status line, plan widget (S8, not shown here), permission queue, composer.</p>
 </header>
 
@@ -174,7 +180,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>3. A card with the "always" options of real Claude</h2>
-  <p class="muted">Real Claude labels its options itself. One button for each option, in the order of the agent. The first allow-once option is primary. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed.</p>
+  <p class="muted">Real Claude labels its options itself. One compact button for each option. The recommended option (the first allow-once option) comes first, as the primary button. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed.</p>
   <div class="window">
     <div class="mark"><span class="mark-label">New: options as the agent offers them</span>
       <div class="permission-queue" role="region" aria-label="Permission requests" style="margin-top:0">
@@ -190,11 +196,11 @@ button:disabled { cursor: default; opacity: .5; }
         <div class="question" role="group" aria-label="Ready to code?">
           <h3>Permission request</h3>
           <div class="question-tool"><span class="mono">Ready to code?</span><span class="muted">switch_mode</span></div>
-          <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: two options change the mode of the agent.</p>
+          <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: two options change the mode of the agent. The recommended option (the first allow-once option) moves to the front. The others keep the order of the agent.</p>
           <div class="question-actions">
+            <button class="button primary" type="button">Yes, manually approve edits</button>
             <button class="button" type="button">Yes, and use auto mode</button>
             <button class="button" type="button">Yes, and bypass permissions</button>
-            <button class="button primary" type="button">Yes, manually approve edits</button>
             <button class="button" type="button">No, keep planning</button>
           </div>
         </div>
