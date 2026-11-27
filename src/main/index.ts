@@ -6,8 +6,11 @@ import iconPng from '../../resources/icon.png?asset'
 import { contracts, events } from '../app/contracts'
 import { composeMain, type Composition } from '../app/main/composition'
 import { createInvoke, createSubscribe } from '../app/main/ipc'
+import { AcpAgents } from '../providers/acp/acp-agents'
+import { claudeCodeRecipe } from '../providers/claude-code/claude-code'
 import { GithubCli } from '../providers/github-cli/github-cli'
 import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
+import { AgentRegistry } from './agents/registry'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
 import { git, listRepositoryFiles } from './repository'
 
@@ -39,7 +42,12 @@ let main: Composition | null = null
 
 /** Opens the database, runs the import and connects the handlers of `invoke` and `subscribe`. */
 function startMain(): void {
-  const composed = composeMain({ dataDir: app.getPath('userData'), github })
+  const dataDir = app.getPath('userData')
+  // An entry `claude-code` in `agents.json` replaces only the program and the arguments of the Claude recipe.
+  const registry = new AgentRegistry(join(dataDir, 'agents.json'))
+  const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: () => registry.claudeCodeOverride() }) })
+  const subscription = createSubscribe({ events, isTrusted: isAppFrame })
+  const composed = composeMain({ dataDir, github, agents, publish: subscription.publish })
   if (!composed.ok) {
     // A newer database, or a failure that Aether cannot repair. Aether writes nothing and exits.
     dialog.showErrorBox('Aether could not start', composed.error.message)
@@ -53,7 +61,6 @@ function startMain(): void {
     isTrusted: isAppFrame,
     log: (message, cause) => console.error(message, cause)
   })
-  const subscription = createSubscribe({ events, isTrusted: isAppFrame })
   ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
   ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
 }
@@ -106,7 +113,23 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
   )
 )
 
-// Each change is one transaction, so no save is in progress at the exit. Close the database.
+// Before Aether quits, end the agent processes: cancel, close, and kill the process trees after a limit.
+// The quit goes on when they are gone. Each change is one transaction, so no save is in progress at the exit.
+let quitting = false
+app.on('before-quit', (event) => {
+  if (quitting || !main) return
+  quitting = true
+  event.preventDefault()
+  void main.shutdown().then(
+    () => app.quit(),
+    (cause: unknown) => {
+      console.error('Aether could not end the agent processes.', cause)
+      app.quit()
+    }
+  )
+})
+
+// Close the database.
 app.on('will-quit', () => main?.close())
 
 app.on('second-instance', () => {

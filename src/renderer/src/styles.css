@@ -588,11 +588,6 @@ button:disabled {
   font-size: 13px;
 }
 
-.prompt {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .facts {
   margin: 0;
 }

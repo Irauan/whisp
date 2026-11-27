@@ -6,6 +6,7 @@ import { openDatabase } from '../../../building-blocks/database'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
 import { ProfileStore } from '../profile.store'
 import { editProfile } from './edit.contract'
+import { AccountsInStart } from '../../../building-blocks/accounts-in-start'
 import { editProfileController } from './edit.controller'
 
 let folder: string
@@ -30,7 +31,7 @@ function setup() {
     claudeProfileName: null,
     createdAt: '2026-01-01T00:00:00.000Z'
   })
-  return { edit: editProfileController(database, { now: () => new Date("2026-01-02T03:04:05.000Z") }, { next: () => "provider-1" }), database, store }
+  return { edit: editProfileController(database, { now: () => new Date("2026-01-02T03:04:05.000Z") }, { next: () => "provider-1" }, new AccountsInStart()), database, store }
 }
 
 const settings = (workspaceDirectory: string) => ({

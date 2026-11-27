@@ -36,7 +36,7 @@
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s3/fixture.ts": {
-    "sha256": "43ca5e79f8d19de5db8b41bc91da049df99cca51a2f3a0e63e640f71b8027cc8",
+    "sha256": "3373e3f9bf90249a2d8ca8afbe6effbb5e6752ecb764b0f64a51a319fe962177",
     "story": "m1-chat/s3"
   },
   "tests/acceptance/m1-chat/s3/new-session-mode.spec.ts": {
@@ -51,16 +51,48 @@
     "sha256": "04ad4aa9b606a6aafbaed0195d603360215eb262b21d625d96ac99d1e2421029",
     "story": "m1-chat/s3"
   },
+  "tests/acceptance/m1-chat/s4/chat.spec.ts": {
+    "sha256": "46713b66affdc0875bda766328e1e93456459d35d1be1fe8d2234e31eb19503e",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/environment.spec.ts": {
+    "sha256": "505e4ec97d09ce88a007ecea7b9518281e31abb783872bd867f3d31c020d284f",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/fixture.ts": {
+    "sha256": "2a89a40214acf50015b1843a803ebece361202c158de702022dd41abd8e9ae0e",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/mode.spec.ts": {
+    "sha256": "2acff407e2e194d10cae0d9eb9530f8594299d07e4415cf0a1a2bad87d191eb3",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/processes.spec.ts": {
+    "sha256": "7b22ee2fc1c9b51686009c1b076a51139dc426f42ffe59360b6984b5bdf2c32b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/provider-snapshot.spec.ts": {
+    "sha256": "9b5d2bfd90b3f71a0e42237eace674c4643b421f350e0e6d3f0a3e1fadd7b75b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/restart.spec.ts": {
+    "sha256": "f8984f112a23faad380a3d5ba0a76e0031840949e420f45701d06a2c00c11a5b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/sign-in.spec.ts": {
+    "sha256": "b5edd0479a06424004ecf07dc3f7cabc334396c2946aa94e7098ff65d185b0ed",
+    "story": "m1-chat/s4"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
   },
   "tests/simulated-agent/agent.mjs": {
-    "sha256": "2a56a52920ecaee2a2c5e5ad5b681b973c193f5e079ee9aa7006227bb3755996",
+    "sha256": "c6542f8d7ec4c45ca817bacf2ff148e6ca4cf9c974cbe1e83b372863b7964402",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/agent.test.ts": {
-    "sha256": "36310c6ef5795ef8d1a12ec82ef3c910697df3182813d126791bb4c5c0a01b6a",
+    "sha256": "21bbad148cedf89321ffc6e4eaac2e8f170ff0780c3cd9457f458ab12e345d82",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.test.ts": {
@@ -68,11 +100,11 @@
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.ts": {
-    "sha256": "1a469c4c6ccfcd9f8d4164a565defe2295e27fde61f20f232d2b634a12bbaa87",
+    "sha256": "27a01bf70b6e810013a88a846bd1baabfad4f4722fdd3377e058fedd83d6e09c",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/scenarios.mjs": {
-    "sha256": "aaaedd34158983d4bba9c035a500d016dc6762accdd7f5cc4097fcbd5e059754",
+    "sha256": "e68bfbf5b7711994c3cf4d863e47521ce99c53bb08bd4656d9dd66d765e928c0",
     "story": "m0-gates/s4"
   }
 }

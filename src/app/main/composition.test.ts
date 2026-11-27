@@ -3,8 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { err } from '../../building-blocks/result'
-import type { GithubPort } from '../../building-blocks/github.port'
+import type { AgentPort } from '../../building-blocks/agent.port'
+import { err, ok } from '../../building-blocks/result'
+import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.port'
+import { ControlServer } from '../../../tests/simulated-agent/control'
+import { AcpAgents } from '../../providers/acp/acp-agents'
+import { claudeCodeRecipe } from '../../providers/claude-code/claude-code'
 import { contracts } from '../contracts'
 import { composeMain, DATABASE_FILE, type Composition } from './composition'
 import { createInvoke } from './ipc'
@@ -27,10 +31,49 @@ afterEach(async () => {
   await rm(join(dataDir, '..'), { recursive: true, force: true })
 })
 
-const github: GithubPort = { listAccounts: async () => err('github-cli-missing', 'No gh.') }
+const github: GithubPort & GithubTokenPort = {
+  listAccounts: async () => err('github-cli-missing', 'No gh.'),
+  tokenOf: async (login) => ok(`fake-token-of-${login}`)
+}
 
-function start() {
-  const composed = composeMain({ dataDir, github })
+/** A port for the tests that start no agent. */
+const noAgents: AgentPort = {
+  start: () => {
+    throw new Error('This test starts no agent.')
+  }
+}
+
+let published: { name: string; payload: unknown }[] = []
+let wake: (() => void) | null = null
+
+/** Waits until the check passes. It wakes at each published event, so no timer runs. */
+async function until(check: () => boolean): Promise<void> {
+  while (!check()) {
+    await new Promise<void>((resolve) => {
+      wake = resolve
+    })
+  }
+}
+
+interface Event {
+  sessionId: string
+  revision: number
+  change: { type: string; status?: string }
+}
+const events = () => published.map((entry) => entry.payload as Event)
+const isIdle = (event: Event) => event.change.type === 'status' && event.change.status === 'idle'
+
+function start(agents: AgentPort = noAgents) {
+  published = []
+  const composed = composeMain({
+    dataDir,
+    github,
+    agents,
+    publish: (name, payload) => {
+      published.push({ name, payload })
+      wake?.()
+    }
+  })
   if (!composed.ok) throw new Error(`${composed.error.code}: ${composed.error.message}`)
   open.push(composed.value)
   // The same entry as the app: the registry, the controllers and the checks of `invoke`.
@@ -186,6 +229,139 @@ describe('composeMain', () => {
     expect((await readdir(dataDir)).sort()).toEqual(['aether.db', 'runs', 'workspace.json'])
   })
 
+  it('chats with a real agent process through invoke: send, stream, save, resume after a restart, and end the process on shutdown', async () => {
+    const control = await ControlServer.start()
+    try {
+      await control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
+      const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => ({ ...process.env, ANTHROPIC_API_KEY: 'x' }) })
+      const first = start(agents)
+      const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null, claudeProfileName: null })) as { ok: true }
+      expect(added.ok).toBe(true)
+      const [profile] = (await snapshotOf(first.call)).profiles
+      const created = (await first.call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'plan', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+      const id = created.value.id
+
+      expect(await first.call('sessions.send-message', { id, text: 'Say hello' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect(control.received('session/set_mode')[0]?.params).toMatchObject({ modeId: 'plan' })
+      const opened = (await first.call('sessions.open', { id })) as { ok: true; value: { entries: { entry: object }[]; status: string; revision: number; draft: boolean } }
+      expect(opened.value.entries.map((view) => view.entry)).toEqual([
+        { kind: 'user', text: 'Say hello' },
+        { kind: 'agent', text: 'Hello from the agent.' }
+      ])
+      expect(opened.value).toMatchObject({ status: 'idle', draft: false, revision: events().at(-1)?.revision })
+      expect(published.every((entry) => entry.name === 'sessions.changed')).toBe(true)
+      // The mode of a session that started cannot change.
+      expect(await first.call('sessions.set-mode', { id, mode: 'ask' })).toMatchObject({ ok: false, error: { code: 'session-started' } })
+
+      // The agent has the token of the GitHub account of the profile, and nothing of the environment of Aether.
+      const { env } = await control.waitForEnvironment()
+      expect(env.GH_TOKEN).toBe('fake-token-of-example-user')
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+
+      // Shutdown ends the process. A restart resumes the same agent session.
+      await first.composition.shutdown()
+      expect(await control.waitForClose()).toBeTypeOf('number')
+      first.composition.close()
+      open = []
+
+      const second = start(agents)
+      published = []
+      await control.scenario('text', { chunks: ['Welcome ', 'back.'] })
+      expect(await second.call('sessions.send-message', { id, text: 'Are you still there?' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect(control.received('session/resume')[0]?.params).toMatchObject({ sessionId: 's1' })
+      expect(control.received('session/new')).toHaveLength(1)
+      expect(control.pids).toHaveLength(2)
+
+      // Deleting the session ends its process.
+      expect(await second.call('sessions.delete', { id })).toEqual({ ok: true, value: {} })
+      expect(await control.waitForClose()).toBeTypeOf('number')
+    } finally {
+      for (const composition of open) await composition.shutdown()
+      await control.close()
+    }
+  })
+
+  it('keeps the settings that a process started with: an edit of the account during the first start makes a new account, and the resume uses the old one (R2-1)', async () => {
+    // A port whose processes wait for the test.
+    interface Fake {
+      input: Parameters<AgentPort['start']>[0]
+      ready(id: string): void
+      end(): void
+    }
+    const fakes: Fake[] = []
+    let announce: () => void = () => undefined
+    const agents: AgentPort = {
+      start: (input, listener) => {
+        let resolveReady: (value: ReturnType<typeof ok<{ agentSessionId: string; resumed: boolean; resumeError: string | null }>>) => void = () => undefined
+        const readyPromise = new Promise<ReturnType<typeof ok<{ agentSessionId: string; resumed: boolean; resumeError: string | null }>>>((resolve) => {
+          resolveReady = resolve
+        })
+        fakes.push({
+          input,
+          ready: (agentSessionId) => resolveReady(ok({ agentSessionId, resumed: input.resume !== null, resumeError: null })),
+          end: () => listener.exited({ code: 0, logTail: '' })
+        })
+        announce()
+        return {
+          ready: readyPromise,
+          prompt: async () => ok('end_turn' as const),
+          cancel: async () => undefined,
+          close: async () => undefined
+        }
+      }
+    }
+    const started = async (count: number) => {
+      while (fakes.length < count) {
+        await new Promise<void>((resolve) => {
+          announce = resolve
+        })
+      }
+    }
+
+    const { composition, call } = start(agents)
+    const folders = { f1: join(rootDir, 'claude-f1'), f3: join(rootDir, 'claude-f3') }
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1, claudeProfileName: null })
+    const [profile] = (await snapshotOf(call)).profiles
+    const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+    const id = created.value.id
+
+    // The process starts with F1. It is not ready, so no agent run names the account yet.
+    expect(await call('sessions.send-message', { id, text: 'Say hello' })).toEqual({ ok: true, value: {} })
+    await started(1)
+    expect(fakes[0]!.input.settings).toEqual({ configFolder: folders.f1 })
+    // The user edits the Claude folder of the profile in this time.
+    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3, claudeProfileName: null })).toMatchObject({ ok: true })
+    fakes[0]!.ready('agent-1')
+    await until(() => events().some(isIdle))
+
+    // The account that the agent run names holds F1, and F3 is a new current account.
+    const readDatabase = () => new DatabaseSync(join(dataDir, DATABASE_FILE), { readOnly: true })
+    const database = readDatabase()
+    try {
+      const accounts = database.prepare('SELECT id, settings, is_current FROM providers ORDER BY created_at, rowid').all()
+      expect(accounts.map((row) => [row.settings, row.is_current])).toEqual([
+        [JSON.stringify({ configFolder: folders.f1 }), 0],
+        [JSON.stringify({ configFolder: folders.f3 }), 1]
+      ])
+      expect(database.prepare('SELECT provider_id, external_id FROM agent_sessions').all()).toEqual([{ provider_id: accounts[0]!.id, external_id: 'agent-1' }])
+    } finally {
+      database.close()
+    }
+
+    // The process ends. The resume uses the settings that the first process started with.
+    published = []
+    fakes[0]!.end()
+    expect(await call('sessions.send-message', { id, text: 'Are you still there?' })).toEqual({ ok: true, value: {} })
+    await started(2)
+    expect(fakes[1]!.input.settings).toEqual({ configFolder: folders.f1 })
+    expect(fakes[1]!.input.resume).toBe('agent-1')
+    fakes[1]!.ready('agent-1')
+    await until(() => events().some(isIdle))
+    await composition.shutdown()
+  })
+
   it('keeps an unreadable workspace.json in place, shows a notice and imports nothing', async () => {
     const unreadable = Buffer.from('{"version":4,"accounts":[{"id":"personal","label":"Personal"\r\n')
     await writeFile(join(dataDir, 'workspace.json'), unreadable)
@@ -217,7 +393,7 @@ describe('composeMain', () => {
     newer.exec('PRAGMA user_version = 99')
     newer.close()
     const before = await readFile(join(dataDir, DATABASE_FILE))
-    expect(composeMain({ dataDir, github })).toMatchObject({ ok: false, error: { code: 'database-newer' } })
+    expect(composeMain({ dataDir, github, agents: noAgents, publish: () => undefined })).toMatchObject({ ok: false, error: { code: 'database-newer' } })
     expect((await readFile(join(dataDir, DATABASE_FILE))).equals(before)).toBe(true)
     expect(await readdir(dataDir)).toEqual([DATABASE_FILE])
   })

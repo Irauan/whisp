@@ -6,6 +6,9 @@
 //   { do: 'gate', name }                          wait until the test opens the gate `name`
 //   { do: 'say', text }                           stream a chunk of the reply
 //   { do: 'tool', title, kind, allowed, refused } show a tool call, ask permission, then reply
+//   { do: 'update', update }                      send one `session/update` with this update as it is,
+//                                                 for example a tool call without a permission request
+//   { do: 'log', text }                           write a line to the log of the agent (stderr)
 //   { do: 'fail', code, message }                 answer the request with a JSON-RPC error
 //   { do: 'exit', code }                          end the agent process
 //
@@ -34,10 +37,10 @@ export const scenarios = {
     prompt: [{ do: 'fail', code: -32000, message }]
   }),
 
-  // Ends the agent process when it gets a prompt.
-  crash: ({ exitCode = 3 } = {}) => ({
+  // Ends the agent process when it gets a prompt. With `log`, it first writes that line to its log.
+  crash: ({ exitCode = 3, log } = {}) => ({
     initialize: [],
-    prompt: [{ do: 'exit', code: exitCode }]
+    prompt: [...(log === undefined ? [] : [{ do: 'log', text: log }]), { do: 'exit', code: exitCode }]
   }),
 
   // Waits at a gate before `initialize` returns. The prompt then streams a reply.

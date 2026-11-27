@@ -1,21 +1,41 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { err, ok, type Result } from '../../building-blocks/result'
-import type { GithubAccountsError, GithubPort } from '../../building-blocks/github.port'
+import type {
+  GithubAccountsError,
+  GithubPort,
+  GithubTokenError,
+  GithubTokenPort
+} from '../../building-blocks/github.port'
 import type { Listing } from '../../shared/bridge'
 import type { Attachment, GithubProfile } from '../../shared/model'
 
-export type GhRun = (args: string[], token?: string) => Promise<{ stdout: string; missing: boolean }>
+export interface GhOptions {
+  /** Runs `gh` without the token variables of Aether, so that a `GH_TOKEN` of Aether cannot answer a token query. */
+  withoutTokens?: boolean
+}
+
+export type GhRun = (args: string[], token?: string, options?: GhOptions) => Promise<{ stdout: string; missing: boolean }>
+
+/** The variables of the GitHub CLI that hold a token. */
+const TOKEN_VARIABLES = /^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)$/i
+
+function environmentOf(token: string | undefined, options: GhOptions | undefined): NodeJS.ProcessEnv {
+  if (options?.withoutTokens) {
+    return Object.fromEntries(Object.entries(process.env).filter(([name]) => !TOKEN_VARIABLES.test(name)))
+  }
+  return token ? { ...process.env, GH_TOKEN: token } : process.env
+}
 
 /** Runs the GitHub CLI. It never changes the active account. */
-export const runGh: GhRun = (args, token) =>
+export const runGh: GhRun = (args, token, options) =>
   new Promise((resolve) => {
     execFile(
       'gh',
       args,
       {
         cwd: homedir(),
-        env: token ? { ...process.env, GH_TOKEN: token } : process.env,
+        env: environmentOf(token, options),
         timeout: 15_000,
         windowsHide: true
       },
@@ -56,8 +76,17 @@ async function readAvatar(address: string): Promise<string | null> {
 export type ReadRemote = (folder: string) => Promise<string | null>
 
 /** The GitHub port, through the GitHub CLI (`gh`). */
-export class GithubCli implements GithubPort {
+export class GithubCli implements GithubPort, GithubTokenPort {
   constructor(private readonly run: GhRun = runGh) {}
+
+  async tokenOf(login: string): Promise<Result<string, GithubTokenError>> {
+    const { stdout, missing } = await this.run(['auth', 'token', '--hostname', 'github.com', '--user', login], undefined, {
+      withoutTokens: true
+    })
+    if (missing) return err('github-cli-missing', 'The GitHub CLI (gh) is not installed.')
+    const token = stdout.trim()
+    return token ? ok(token) : err('github-token-missing', `The GitHub CLI has no token for @${login}.`)
+  }
 
   async listAccounts(): Promise<Result<GithubProfile[], GithubAccountsError>> {
     const { stdout, missing } = await this.run(['auth', 'status', '--json', 'hosts'])

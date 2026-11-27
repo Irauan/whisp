@@ -15,7 +15,11 @@ function setup() {
   )
   insert.run('s1', 'First', 'First')
   insert.run('s2', 'Second', 'Second')
-  return { remove: deleteSessionController(database), store: new SessionStore(database), database }
+  const released: string[] = []
+  const release = async (id: string) => {
+    released.push(id)
+  }
+  return { remove: deleteSessionController(database, release), store: new SessionStore(database), database, released }
 }
 
 describe('sessions.delete', () => {
@@ -26,6 +30,22 @@ describe('sessions.delete', () => {
     expect(deleteSession.output.safeParse(result).success).toBe(true)
     expect(store.listByProfile('w1').map((session) => session.id)).toEqual(['s2'])
     expect(database.prepare('SELECT count(*) AS total FROM profiles').get()).toMatchObject({ total: 1 })
+  })
+
+  it('releases the agent process of the deleted session, and only of that session', async () => {
+    const { remove, released } = setup()
+    await remove({ id: 'missing' })
+    expect(released).toEqual([])
+    await remove({ id: 's1' })
+    expect(released).toEqual(['s1'])
+  })
+
+  it('deletes the entries of the session with it', async () => {
+    const { remove, store, database } = setup()
+    store.insertEntry('s1', { id: 'e1', entry: { kind: 'user', text: 'First' } }, 0, '2026-01-02')
+    store.insertEntry('s2', { id: 'e2', entry: { kind: 'user', text: 'Second' } }, 0, '2026-01-02')
+    await remove({ id: 's1' })
+    expect(database.prepare('SELECT id FROM entries').all()).toEqual([{ id: 'e2' }])
   })
 
   it('refuses a session that does not exist, also a second delete of the same session', async () => {

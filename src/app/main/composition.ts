@@ -1,8 +1,10 @@
 import { basename, join } from 'node:path'
 import { systemClock, type Clock } from '../../building-blocks/clock.port'
+import { AccountsInStart } from '../../building-blocks/accounts-in-start'
+import type { AgentPort } from '../../building-blocks/agent.port'
 import { openDatabase, type OpenError } from '../../building-blocks/database'
 import { randomIds, type Ids } from '../../building-blocks/ids'
-import type { GithubPort } from '../../building-blocks/github.port'
+import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.port'
 import { MIGRATIONS } from '../../building-blocks/migrations'
 import { ok, type Result } from '../../building-blocks/result'
 import { addProfile } from '../../features/profiles/add/add.contract'
@@ -17,12 +19,23 @@ import { listGithubAccounts } from '../../features/profiles/list-github-accounts
 import { listGithubAccountsController } from '../../features/profiles/list-github-accounts/list-github-accounts.controller'
 import { listProfiles } from '../../features/profiles/list/list.contract'
 import { listProfilesController } from '../../features/profiles/list/list.controller'
-import { removeProfile } from '../../features/profiles/remove/remove.contract'
+import { removeProfile as removeProfileContract } from '../../features/profiles/remove/remove.contract'
 import { removeProfileController } from '../../features/profiles/remove/remove.controller'
 import { switchProfile } from '../../features/profiles/switch/switch.contract'
 import { switchProfileController } from '../../features/profiles/switch/switch.controller'
 import type { Notice } from '../../features/profiles/profile'
 import { ProfileStore } from '../../features/profiles/profile.store'
+import { SESSIONS_CHANGED } from '../../features/sessions/entry'
+import { Processes } from '../../features/sessions/processes.store'
+import { recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
+import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
+import { sendMessageController } from '../../features/sessions/send-message/send-message.controller'
+import { SessionStore } from '../../features/sessions/session.store'
+import { setMode } from '../../features/sessions/set-mode/set-mode.contract'
+import { setModeController } from '../../features/sessions/set-mode/set-mode.controller'
+import { stopSession } from '../../features/sessions/stop/stop.contract'
+import { stopSessionController } from '../../features/sessions/stop/stop.controller'
+import { Transcript } from '../../features/sessions/transcript.store'
 import { createSession } from '../../features/sessions/create/create.contract'
 import { createSessionController } from '../../features/sessions/create/create.controller'
 import { deleteSession } from '../../features/sessions/delete/delete.contract'
@@ -44,6 +57,12 @@ export interface Composition {
   controllers: Record<string, Controller>
   /** The messages about the start. The snapshot of the profiles carries them to the window. */
   notices: Notice[]
+  /**
+   * Ends the agent processes: it cancels the turns, closes the sessions and the stdin of the
+   * processes, and kills the process trees after a limit. The caller waits for it before it quits,
+   * and closes the database after it.
+   */
+  shutdown(): Promise<void>
   /** Closes the database. */
   close(): void
 }
@@ -51,9 +70,14 @@ export interface Composition {
 export interface CompositionDeps {
   /** The data folder: `userData`. */
   dataDir: string
-  github: GithubPort
+  github: GithubPort & GithubTokenPort
+  /** The agent port. The entry point of the app passes the ACP port with the recipe of Claude Code. */
+  agents: AgentPort
+  /** Sends an event to the subscribers of its name. */
+  publish(name: string, payload: unknown): void
   clock?: Clock
   ids?: Ids
+  log?(message: string, cause?: unknown): void
 }
 
 /**
@@ -62,7 +86,15 @@ export interface CompositionDeps {
  * cannot repair. The caller then tells the user and exits, and Aether writes nothing.
  * An unreadable database or `workspace.json` is not an error: the start goes on, with a notice.
  */
-export function composeMain({ dataDir, github, clock = systemClock, ids = randomIds }: CompositionDeps): Result<Composition, OpenError> {
+export function composeMain({
+  dataDir,
+  github,
+  agents,
+  publish,
+  clock = systemClock,
+  ids = randomIds,
+  log = (message, cause) => console.error(message, cause)
+}: CompositionDeps): Result<Composition, OpenError> {
   const opened = openDatabase(join(dataDir, DATABASE_FILE), MIGRATIONS, () => clock.now())
   if (!opened.ok) return opened
   const { database, keptAside } = opened.value
@@ -84,21 +116,45 @@ export function composeMain({ dataDir, github, clock = systemClock, ids = random
   })
   if (!imported.ok) notices.push({ code: 'workspace-file-unreadable', message: imported.error.message })
 
+  // The state of the sessions that lives in memory: the conversation and the agent processes.
+  const sessionStore = new SessionStore(database)
+  const transcript = new Transcript(sessionStore, (event) => publish(SESSIONS_CHANGED, event), clock, ids)
+  const processes = new Processes()
+  // The edit of an account and the first start of a session share this set (decision 0014).
+  const startingAccounts = new AccountsInStart()
+  // The slices never call each other, so the composition root connects them: the agent process of a
+  // session reports its progress to `record-agent-update`.
+  const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
+    recordAgentUpdateHandler({ transcript }, { sessionId, update })
+  const release = async (sessionId: string) => {
+    transcript.forget(sessionId)
+    await processes.release(sessionId)
+  }
+  const removeProfile = removeProfileController(database)
+
   return ok({
     controllers: {
       [listGithubAccounts.name]: listGithubAccountsController(github),
       [listProfiles.name]: listProfilesController(database, () => notices),
       [chooseDirectories.name]: chooseDirectoriesController(database),
       [addProfile.name]: addProfileController(database, clock, ids),
-      [editProfile.name]: editProfileController(database, clock, ids),
+      [editProfile.name]: editProfileController(database, clock, ids, startingAccounts),
       [switchProfile.name]: switchProfileController(database),
-      [removeProfile.name]: removeProfileController(database),
+      // Removing a profile removes its sessions. Their agent processes end first.
+      [removeProfileContract.name]: async (input: { id: string }) => {
+        for (const sessionId of sessionStore.idsByProfile(input.id)) await release(sessionId)
+        return removeProfile(input)
+      },
       [listSessions.name]: listSessionsController(database),
       [createSession.name]: createSessionController(database, clock, ids),
-      [openSession.name]: openSessionController(database),
-      [deleteSession.name]: deleteSessionController(database)
+      [openSession.name]: openSessionController(database, transcript),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, clock, ids, log }),
+      [stopSession.name]: stopSessionController({ store: sessionStore, transcript, processes }),
+      [setMode.name]: setModeController({ store: sessionStore, transcript }),
+      [deleteSession.name]: deleteSessionController(database, release)
     },
     notices,
+    shutdown: () => processes.releaseAll(),
     close: () => database.close()
   })
 }

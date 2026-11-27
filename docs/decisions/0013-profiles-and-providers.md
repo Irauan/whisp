@@ -2,7 +2,7 @@
 
 Date: 2026-11-26
 Decided by: the user, during story S2 of milestone m1-chat.
-Status: accepted
+Status: accepted, partly replaced by decision 0014 (2026-11-27). 0014 replaces the rule of one provider row for each kind (item 3) and the snapshot of the provider settings (the section "A later change of the provider settings"). The other points stay.
 
 ## Context
 

@@ -16,7 +16,9 @@ import { OpenSession } from './components/OpenSession'
 import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
+import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import type { SessionSettings } from '../../shared/model'
+import { invokeContract } from './invoke'
 import { useNavigation, type View } from './navigation'
 import { useProfiles } from './useProfiles'
 
@@ -28,7 +30,7 @@ type OpenDialog =
   | { kind: 'delete-session'; sessionId: string }
 
 export function App() {
-  const { state, error, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
+  const { state, error, reload, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
@@ -102,7 +104,11 @@ export function App() {
       attachments: settings.attachments
     })
     if ('message' in created) return created.message
+    // Flow 2: the session window opens, and the prompt goes as the first message. The session exists
+    // already, so a refusal leaves a draft with its prompt. The window of the draft shows it.
+    const sent = await invokeContract(sendMessage, { id: created.id, text: prompt })
     go({ kind: 'session', sessionId: created.id })
+    setProblem(sent.ok ? null : sent.error.message)
     return null
   }
 
@@ -145,6 +151,8 @@ export function App() {
           <OpenSession
             key={view.sessionId}
             id={view.sessionId}
+            profileNameOf={(profileId) => profiles.find((profile) => profile.id === profileId)?.name ?? null}
+            onModeSaved={() => void reload()}
             onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
           />
         )

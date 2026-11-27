@@ -74,6 +74,9 @@ The user did not decide these points. The builder of story S3 recorded them, wit
 - Two sessions with one creation time keep the order of insertion. A profile without sessions starts with Ask. Source: the advisor.
 - A session that the user creates with Approve all keeps Approve all. Only the next new session shows Ask. Source: the locked test of check A14.
 - The rule of item 3 is a pure function of the domain of the feature `sessions`. Source: the coordinator.
+- The "last session" of the brief, in check A14, is the newest created session of the current profile. Source: the coordinator.
+- The "settings menu" of check A13 is the set of the composer controls of a new session. Source: the coordinator.
+- The `&` suggestion counts as the session attachment of check A13. Source: the coordinator.
 
 ## Rejected
 

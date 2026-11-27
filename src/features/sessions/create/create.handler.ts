@@ -36,6 +36,7 @@ export function createSessionHandler(
     prompt: input.prompt,
     // The mode is saved as the user chose it. Only a new session never copies Approve all.
     mode: input.mode,
+    // The first start sets the account: the current account of the profile at that moment (decision 0014).
     providerId: null,
     sourcePath: input.sourcePath,
     model: input.model,

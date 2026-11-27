@@ -14,7 +14,8 @@ Status: baseline from step 0 of `docs/process.md`. The records in `docs/decision
 |---|---|
 | Profile | One usage, for example personal work or one customer. It has a workspace directory, zero or one GitHub account, and zero or more providers. |
 | Workspace directory | The folder of a profile that holds its repositories. |
-| Provider | A way to run agents, with the settings of one profile. One row for each kind and profile. The kind `claude-code` is the only one now. Aether stores no key and no token. |
+| Provider | One account that runs agents, with its settings and a label. A profile can have many, also of one kind. One account of each kind is current for new sessions. The kind `claude-code` is the only one now. Aether stores no key and no token. |
+| Agent session | One agent run of a session, with one provider and the ID that the agent gave to it. A resume uses the provider of its row. |
 | Claude settings | The settings of the provider `claude-code`: a Claude configuration folder (`CLAUDE_CONFIG_DIR`) and a Claude profile name (`ANTHROPIC_PROFILE`). |
 | Repository | A Git repository under the workspace directory of a profile. Aether finds it on disk and does not save it. |
 | Session | One conversation with one agent in one profile. It has a source path, a main directory and a list of additional directories. |
@@ -48,12 +49,15 @@ src/
         send-message.handler.ts
         send-message.ui.tsx
         send-message.test.ts
-      create/  list/  open/  stop/  delete/
+      create/  list/  open/  stop/  delete/  set-mode/
       answer-permission/
-      record-agent-update/       event consumer
+      record-agent-update/       event consumer (handler and test, no contract)
+      entry.ts                   entries and events, pure
+      transcript.store.ts        the conversation in memory and in the database
+      processes.store.ts         the agent process and the turn of each session
     repositories/
     agents/
-  building-blocks/      result, contract, database, agent port, clock, ids, base UI
+  building-blocks/      result, contract, database, agent port, agent environment, clock, ids, base UI
   providers/            acp, claude-code, git, github-cli
   database/migrations/  001-<name>.sql
 tests/
@@ -108,6 +112,8 @@ Rules from the template that do not apply: a container for dependency injection,
 - The renderer does not use `localStorage` for data that must last.
 - A query returns a snapshot. Events then carry only the change and a revision number.
 - When the renderer sees a gap in the revisions, it loads a new snapshot.
+- The event `sessions.changed` carries one change of one session and its revision. The revision counts from 1 in memory, and it starts again after a restart.
+- `sessions.open` returns the snapshot: the session, its entries, its status and its revision. The renderer subscribes before it opens, and drops the events at or below the revision of the snapshot.
 
 ## IPC and the renderer boundary
 
@@ -143,9 +149,15 @@ Decision 0013 records this model.
 - A profile owns its providers and its sessions.
 - Each current account becomes a profile at import. The user chooses its workspace directory.
 - The import creates no provider row, because the old accounts had no Claude settings.
+- Decision 0014 gives the provider model: many accounts for each profile, one current account for each kind, and the table `agent_sessions`.
 - Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
 - A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
-- A session has a nullable provider. Aether sets it at the first start, and the session keeps it. A later change of the provider settings applies to new sessions only.
+- A session has a nullable provider. It is null until the first start. The first start reads the current account of the profile at that moment, and saves it in the session and in the agent run. A session never keeps an account from its creation.
+- The table `agent_sessions` has one row for each agent run. Aether saves it, in one transaction, when the agent session exists. The row names the provider that the process started with and the agent session ID. A resume uses that provider. Milestone m1-chat has one row for each session.
+- The first start creates an empty current account when the profile has none. A failed first start keeps this account and saves no agent run. The retry reads the current account again, so it uses the account that the user fixed.
+- An account that a first start uses counts as used until the start ends, because no agent run names it before the process is ready. An edit in that time makes a new current account. The set of these accounts lives in memory. The account that an agent run names always holds the settings that its process started with.
+- A trigger locks the Claude folder of an account that an agent run used. The label stays editable.
+- "Profile settings" edits the current Claude account. An account that no agent run used changes in place. For a used account, a change of the settings makes a new current account, or makes the account with the same settings current. The old account stays for its agent runs. A change applies to new sessions only.
 - A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
 - A session does not know its project. A later project refers to repositories and sessions.
 
@@ -171,6 +183,10 @@ The main process asks these questions, and stores the answers. The renderer cann
 - The agent port in `building-blocks` is neutral. Only `providers/acp` imports the ACP library.
 - `providers/claude-code` holds the launch recipe of Claude.
 - Each active session has its own agent process.
+- The port starts a process at once and returns a handle. The handle has `ready`, `prompt`, `cancel` and `close`. Stop in the state Starting cancels the start.
+- The start input holds the main directory, the additional directories, the model, the mode, the shared items, the settings of the provider account of the run, the environment, and the agent session to resume. The caller reads it from the session row, never from the renderer.
+- If the agent cannot resume a session, `providers/acp` starts a new agent session. Aether then shows a notice.
+- `providers/claude-code` also holds the sign-in steps and the reader of the settings. An entry `claude-code` in `agents.json` replaces only the program and the arguments of its launch recipe. If that program does not exist, the start fails with a notice that names the entry. Aether never falls back to the built-in program without a word. No call of the renderer writes `agents.json`.
 - A session is idle when it has no active turn, no open permission question and no background task.
 - An idle process closes after a release time. The release time is a setting, 30 minutes for a session that a person starts and 2 minutes for an automated session.
 - Each session records who started it: a person or an automation.
@@ -184,8 +200,10 @@ The main process asks these questions, and stores the answers. The renderer cann
 ### Agent environment
 
 - Aether builds the environment of an agent process from an allow list.
-- It sets the Claude variables from the Claude provider settings of the profile. It never passes on a Claude or Anthropic variable from its own environment.
+- The allow list is `ALLOWED_VARIABLES` in `src/building-blocks/agent-environment.ts`. It holds the Windows basics, the proxy settings and the certificate settings. Names match without case.
+- It sets `CLAUDE_CONFIG_DIR` and `ANTHROPIC_PROFILE` from the settings of the Claude account of the agent run. It never passes on a Claude, Anthropic, GH or GitHub variable from its own environment.
 - It sets `GH_TOKEN` to the token of the GitHub account of the profile. The agent can read this token.
+- Aether reads the token with `gh auth token --hostname github.com --user <login>`, without the token variables of its own environment. It never saves or logs the token. Every notice and log tail that Aether saves hides the values that Aether gave the agent.
 
 ### Permissions
 
@@ -193,6 +211,8 @@ The main process asks these questions, and stores the answers. The renderer cann
 - An answer names the request ID. Stop cancels all requests of the session.
 - A cancelled request removes only itself from the queue.
 - Aether sets the permission mode before the first message. Bypass is allowed only when the user chooses it.
+- The Mode control of a draft saves the mode in the session row (`sessions.set-mode`). After the first message the control is disabled.
+- Until the permission queue exists, Aether answers each permission request with "cancelled".
 - If the agent cannot apply the chosen mode, model or permission setting, the session does not start.
 - A new session never copies "Approve all" from another session.
 
@@ -259,18 +279,14 @@ dependency-cruiser does not support TypeScript 7.0 with its TypeScript parser. T
 
 Each step leaves a working app. Steps 3 to 6 are the first stories of the chat milestone.
 
-These parts stay as they are: React, the visual design and CSS tokens, navigation, menus, the composer, mentions, the Git and GitHub wrappers, the window security settings, the single instance lock, and the custom agents file. New slices use CSS Modules.
+These parts stay as they are: React, the visual design and CSS tokens, navigation, menus, the composer, mentions, the Git and GitHub wrappers, the window security settings, the single instance lock, and the custom agents file (`agents.json`, read only). New slices use CSS Modules.
 
 ## Known defects in the current code
 
 | Defect | Place | Fixed in step |
 |---|---|---|
-| Two sessions that start at the same time share a process before it is ready. The second fails. | `src/main/agents/host.ts` | 6 |
-| A second permission request cancels the first. | `src/main/agents/host.ts` | 6 |
-| A new session copies "Approve all". | `SessionComposer.tsx` | 5 |
-| Aether sets no permission mode. Claude then starts in `auto` mode with bypass allowed. | `src/main/agents/host.ts` | 6 |
-| The agent receives the whole environment of Aether. | `src/main/agents/host.ts` | 6 |
-| A repository runs its hooks and MCP servers at session start, without a question. | `src/main/agents/host.ts` | 6 |
+| Aether cancels each permission request, so a tool that needs a question fails. The queue replaces this. | `src/providers/acp/acp-agents.ts` | 6, story S5 |
+| A repository runs its hooks and MCP servers at session start, without a question. | `src/providers/acp/acp-agents.ts` | 6, story S6 |
 
 ## Open points
 
