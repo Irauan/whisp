@@ -1,6 +1,6 @@
 # S8 Plan widget: story spec
 
-Status: the user decided the hot items on 2026-11-27 (`docs/user-preferences.md`). The tests are locked. The builder follows this spec.
+Status: Approved by the user in the design review on 2026-11-27 (PR #31). The tests are locked. The builder follows this spec.
 
 - Milestone: m1-chat.
 - Check: A11, and the brief section "Plan widget".
@@ -54,7 +54,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - The header shows only the title and the button "Delete session" (`s3/sessions.spec.ts` 117).
   - User decision, 2026-11-27. The user said: "I don't think we need this header for sessions, at least this part detailing mode, folder, profile, and so on! The session name we can keep it and make it editable (not necessarily in this milestone)."
   - S8 removes the facts row: Profile, Folder, Model and Mode. Mode and model stay visible as the controls of the composer.
-  - A grep of the locked tests of S2, S3, S4 and S6 (milestone branch), S7 (`story/m1-s7-settings`) and S8 (`story/m1-s8-plan-widget`) found no read of the header facts. This was a grep, not a run.
+  - A grep of the locked tests of S2, S3, S4 and S6 (milestone branch), S7 (`story/m1-s7-settings`) and S8 (`story/m1-s8-frame-and-plan`) found no read of the header facts. This was a grep, not a run.
   - Later item, out of m1: the user can edit the title of a session.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again. This is decided by the user (2026-11-27).
@@ -117,9 +117,10 @@ The user decided on 2026-11-27, as part of the frame:
 - The line keeps the exit code in its text, for example "Claude Code stopped (exit code 7)."
 - The last log lines of the agent go in a fold-out under the line ("Show log"), as brief line 58 requires ("An error notice with the exit code and the last log lines"). The fold-out is a `<details>` inside the `alert` element, so the text of the log stays in the alert. The S4 test A20 (`s4/restart.spec.ts` 108) uses `toContainText`, which reads the text content, so it passes while the fold-out is closed.
 - The sign-in steps of "Claude Code is not signed in." stay visible, not folded.
-- The fold-out holds the log lines of a stopped agent (the notice code `agent-stopped`).
-  - The renderer splits the text at its first line break (`splitFailedTurn`).
-  - Another error notice has no reliable boundary, so it stays whole.
+- The fold-out holds the last log lines of a stopped agent and of a failed start. No entry schema change.
+  - The provider (`providers/acp`) writes the log lines after the marker line `Last log lines:`, behind the message. `LOG_MARKER` in `src/shared/log-marker.ts` is the one value of both sides.
+  - The renderer splits the text at the marker (`splitFailedTurn`). The marker line does not show.
+  - A notice without the marker stays whole, as the sign-in steps do.
 - An info notice, such as "Stopped.", does not change.
 
 ### More rules of the widget
@@ -276,6 +277,7 @@ The advisor answered on the shape: mirror `sessions.set-mode`. Not hard to rever
 - `src/renderer/src/components/Transcript.tsx` and `styles.css`: the muted line with an info icon for an error notice. The role `alert` stays.
 - `COMPOSER_MAX_LINES` in the renderer, for example in `SessionPage.tsx` or a small composer module.
 - `src/features/sessions/set-model/`: new slice with contract, controller, handler and test (decision C).
+- `src/shared/log-marker.ts`: the marker line of the log lines. `src/providers/acp/acp-agents.ts` writes it, and `src/renderer/src/session-view.ts` splits at it.
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the contract `sessions.set-model`. Shared with S5, S7 and S9.
 - `docs/architecture.md`, "Permissions": the sentence on `sessions.set-mode` also names `sessions.set-model` for a draft.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
@@ -287,8 +289,8 @@ The advisor answered on the shape: mirror `sessions.set-mode`. Not hard to rever
 ### Dependencies
 
 - Needs: S4 (merged).
-- No dependency on S5, S6, S7 or S9. S8 does not touch the agent process code.
-- S8 builds the frame, the follow rule and the bottom dock. S5 needs S8 merged: it puts its cards at the end of the log, and its jump button in the status line. This changes the plan: S5 depended on S4 only.
+- No dependency on S5, S6, S7 or S9. S8 changes only the text of the log tail in `providers/acp/acp-agents.ts` (the marker line), not the process code.
+- S8 builds the frame, the follow rule and the bottom dock. S5 needs S8 merged: it puts each card at the place of its entry, where Claude asked, inside the log, and its jump button in the status line. This changes the plan: S5 depended on S4 only.
 - S5 and S8 both change `SessionPage.tsx`, `transcript.store.ts` and `styles.css`. They merge one at a time, S8 first.
 - S6 is merged (`50bd85a`). Its questions stay an app-level dialog. S8 keeps its `asking` condition on the status line.
 

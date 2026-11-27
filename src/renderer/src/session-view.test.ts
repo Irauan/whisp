@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LOG_MARKER } from '../../shared/log-marker'
 import {
   applyChange,
   emptyWindowState,
@@ -7,6 +8,7 @@ import {
   markedPlanIds,
   planCount,
   reduceSessionWindow,
+  shownModel,
   splitFailedTurn,
   type SessionEvent,
   type SessionSnapshot,
@@ -209,22 +211,39 @@ describe('isAtBottom', () => {
 })
 
 describe('splitFailedTurn', () => {
-  it('splits the notice of a stopped agent at its first line: the line, then the last log lines', () => {
-    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 7).\nline one\nline two' })).toEqual({
+  it('splits a failed turn at the marker line: the line, then the last log lines', () => {
+    expect(splitFailedTurn({ text: `Claude Code stopped (exit code 7).\n${LOG_MARKER}\nline one\nline two` })).toEqual({
       line: 'Claude Code stopped (exit code 7).',
       log: 'line one\nline two'
     })
   })
 
-  it('gives no log when the stopped agent wrote none', () => {
-    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 1).' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
-    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 1).\n  \n' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
+  it('splits a failed start with log lines too, also when its message has many lines', () => {
+    expect(splitFailedTurn({ text: `Claude Code did not start. A\nB\n${LOG_MARKER}\nsimulated agent: no config` })).toEqual({
+      line: 'Claude Code did not start. A\nB',
+      log: 'simulated agent: no config'
+    })
   })
 
-  it('keeps the text of each other notice whole: the sign-in steps stay visible', () => {
+  it('gives no log when the agent wrote none', () => {
+    expect(splitFailedTurn({ text: 'Claude Code stopped (exit code 1).' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
+  })
+
+  it('keeps the text without the marker whole: the sign-in steps stay visible', () => {
     const text = 'Claude Code is not signed in.\n1. Open a terminal.\n2. Run claude.'
-    expect(splitFailedTurn({ code: 'not-signed-in', text })).toEqual({ line: text, log: null })
     expect(splitFailedTurn({ text })).toEqual({ line: text, log: null })
-    expect(splitFailedTurn({ code: 'start-failed', text: 'Claude Code did not start. A\nB' })).toEqual({ line: 'Claude Code did not start. A\nB', log: null })
+  })
+})
+
+describe('shownModel', () => {
+  it('shows the chosen model of a draft, also after Send makes the session no draft', () => {
+    // The user picks Opus in a draft. The snapshot of the window still holds the model Default.
+    expect(shownModel('claude-opus-5-5', 'default')).toBe('claude-opus-5-5')
+    // Send starts the session. The window keeps its old snapshot, and the button keeps the chosen model.
+    const afterSend = applyChange(snapshot({ draft: true }), { type: 'entry-added', entry: user })
+    expect(afterSend?.draft).toBe(false)
+    expect(shownModel('claude-opus-5-5', afterSend?.session.model ?? '')).toBe('claude-opus-5-5')
+    // With no choice in this window, the button shows the saved model.
+    expect(shownModel(null, 'claude-opus-5-5')).toBe('claude-opus-5-5')
   })
 })

@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { openSession, sessionEventSchema } from '../../features/sessions/open/open.contract'
+import { splitLog } from '../../shared/log-marker'
 
 /** The snapshot of `sessions.open`: the view of one session window. */
 export type SessionSnapshot = z.output<typeof openSession.result>
@@ -97,18 +98,21 @@ export function markedPlanIds(entries: readonly EntryView[]): Set<string> {
 }
 
 /**
- * The line of a failed turn and the fold-out under it. The notice of a stopped agent is its line
- * (`<agent> stopped (exit code <n>).`), then the last log lines of the agent, split at the first
- * line break (`providers/acp`). Any other notice has no reliable boundary, so it stays whole: the
- * sign-in steps stay visible, and the text of a start error can have many lines.
+ * The line of a failed turn or a failed start, and the fold-out under it. The provider writes the
+ * last log lines of the agent after the marker line `LOG_MARKER`, for a stopped agent (exit code) and
+ * for a start that failed. A notice without the marker stays whole: the sign-in steps stay visible.
  */
-export function splitFailedTurn(notice: { code?: string | undefined; text: string }): { line: string; log: string | null } {
-  if (notice.code !== 'agent-stopped') return { line: notice.text, log: null }
-  const at = notice.text.indexOf('\n')
-  if (at < 0) return { line: notice.text, log: null }
-  const log = notice.text.slice(at + 1).trim()
-  return { line: notice.text.slice(0, at), log: log === '' ? null : log }
+export function splitFailedTurn(notice: { text: string }): { line: string; log: string | null } {
+  const { message, log } = splitLog(notice.text)
+  return { line: message, log }
 }
+
+/**
+ * The model that the model button shows. The user chose it in a draft, and the window keeps it as
+ * view state until the snapshot shows it: the snapshot of the window holds the model of its load,
+ * and no event changes the session row. After Send the model is fixed, so the choice stays.
+ */
+export const shownModel = (chosen: string | null, saved: string): string => chosen ?? saved
 
 /** True when a scroll area shows the end of its content. The tolerance is for the rounding of the browser. */
 export function isAtBottom(area: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {

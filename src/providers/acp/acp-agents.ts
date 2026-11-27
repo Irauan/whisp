@@ -28,6 +28,7 @@ import type {
 } from '../../building-blocks/agent.port'
 import type { Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
+import { LOG_MARKER } from '../../shared/log-marker'
 import type { AcpRecipe } from './recipe'
 
 /** The ACP error code for "nobody is signed in". */
@@ -183,9 +184,14 @@ class AcpProcess implements AgentProcess {
   }
 
   /** The last lines of the log, with the values that Aether gave the agent removed. */
+  private logLines(): string {
+    return this.redact(this.stderr.trim().split('\n').slice(-LOG_LINES).join('\n'))
+  }
+
+  /** The log lines after a message, behind the marker line that the session window splits at. Empty when there are none. */
   private logTail(): string {
-    const tail = this.redact(this.stderr.trim().split('\n').slice(-LOG_LINES).join('\n'))
-    return tail ? `\n${tail}` : ''
+    const tail = this.logLines()
+    return tail ? `\n${LOG_MARKER}\n${tail}` : ''
   }
 
   /** The text with the values that Aether gave the agent removed, for example `GH_TOKEN`. */
@@ -265,7 +271,7 @@ class AcpProcess implements AgentProcess {
       child.once('error', (error) => resolve(this.refuse('unavailable', `${this.name} did not start. ${error.message}`)))
       child.once('close', (code) => {
         this.markEnded()
-        this.listener.exited({ code, logTail: this.logTail().trim() })
+        this.listener.exited({ code, logTail: this.logLines() })
       })
       child.once('spawn', () => {
         this.connection = client({ name: 'Aether' })

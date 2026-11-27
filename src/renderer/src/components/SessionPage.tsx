@@ -5,7 +5,7 @@ import { setMode } from '../../../features/sessions/set-mode/set-mode.contract'
 import { setModel } from '../../../features/sessions/set-model/set-model.contract'
 import { stopSession } from '../../../features/sessions/stop/stop.contract'
 import { invokeContract } from '../invoke'
-import { latestPlan, type SessionSnapshot } from '../session-view'
+import { latestPlan, shownModel, type SessionSnapshot } from '../session-view'
 import type { Mode } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 import { Dock } from './Dock'
@@ -148,8 +148,8 @@ export function SessionPage({
         <ReplyComposer
           text={text}
           mode={chosenMode ?? session.mode}
-          // After the first message the model of the session is fixed. The snapshot holds it.
-          model={draft ? (chosenModel ?? session.model) : session.model}
+          // The chosen model stays after Send: the snapshot of this window holds the model of its load.
+          model={shownModel(chosenModel, session.model)}
           draft={draft}
           running={running}
           ready={ready}
