@@ -13,7 +13,7 @@ Status: draft for the design review. Not approved.
 ### Terms of the rule
 
 - A session is **idle** when its process is ready, and it has no turn, no open permission request and no background task.
-- The **idle time** of a session starts when it becomes idle: at the end of a turn.
+- The **idle time** of a session starts when it becomes idle: at the end of a turn, or when its last open permission request closes outside a turn. An agent update outside a turn restarts it (open choice 3, D).
 - The **release time** is 30 minutes for a session that a person started, and 2 minutes for a session that an automation started.
 - The **idle limit** is 6 idle processes.
 
@@ -33,7 +33,7 @@ Status: draft for the design review. Not approved.
 9. The close follows the shutdown of `docs/architecture.md`: cancel, close the session, close stdin, then kill the whole process tree after a limit.
 10. A child process of the agent never outlives the release. See open choice 6.
 11. A release silently puts the session back in its saved mode. `applySettings` sets the saved mode at each start. A mode that a plan exit option set during the session is lost (see S5, open choice 5).
-12. After a release, the S7 notice for the fallback of the mode Auto shows again at the next start. S9 accepts it, with the same reason as open choice 7: a release is rare, and a note per start is honest.
+12. After a release, the S7 notice for the fallback of the mode Auto can show again at the next start. See open choice 7.
 
 ### Busy state outside a turn
 
@@ -113,10 +113,10 @@ interface OpenSession {
   openRequests: number
 }
 interface ReleaseLimits { releaseMs: { person: number; automation: number }; idleLimit: number }
-function sessionsToRelease(open: readonly OpenSession[], now: Date, limits: ReleaseLimits): string[]
+function sessionsToRetire(open: readonly OpenSession[], now: Date, limits: ReleaseLimits): string[]
 ```
 
-- New handler without a contract, like `record-agent-update`: `src/features/sessions/release-idle/release-idle.handler.ts`. It reads the open sessions and their busy state, calls the pure function, and closes the processes.
+- New handler without a contract, like `record-agent-update`: `src/features/sessions/retire-idle/retire-idle.handler.ts`. It reads the open sessions and their busy state, calls the pure function, and closes the processes.
 - Name the idle close `retire` (or another name) inside the module. `Processes.release` and the composition `release` already mean "close for delete or quit". The term "release" stays for the rule in the docs.
 - `Processes` (`processes.store.ts`) gets:
   - the idle time of each process
@@ -159,7 +159,7 @@ The terms "person" and "automation" come from decision 0006 and `docs/architectu
 - `src/features/sessions/session.ts`, `session.store.ts`: `startedBy`. S7 also changes `session.ts`.
 - `src/features/sessions/create/create.handler.ts`: writes `person`.
 - New `src/features/sessions/idle-release.ts` and its test.
-- New `src/features/sessions/release-idle/release-idle.handler.ts` and its test.
+- New `src/features/sessions/retire-idle/retire-idle.handler.ts` and its test.
 - `src/features/sessions/processes.store.ts`: the idle time and the closing promise. Shared with S5.
 - `src/features/sessions/send-message/send-message.handler.ts`: the idle time at the turn end, and the wait for a close. Shared with S5, S6 and S7.
 - `src/providers/acp/acp-agents.ts`: the kill of the children that outlive the agent. Shared with S5 and S7. S6 does not touch it.
@@ -214,8 +214,8 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - B. Never release a session that ran a background command in its last turn. Impact: Aether must read the tool calls for a Claude-specific marker; such a process stays open until Aether quits.
   - C. Wait for ACP version 2, which has an idle state update. Impact: S9 cannot close its checks in m1.
   - D. Restart the idle time at each agent update outside a turn. Impact: a shell whose output wakes the agent keeps the process; a quiet shell still ends after the release time; small scope.
-- Recommendation: A.
-- Advisor: record an accepted gap if the adapter gives no signal. The adapter gives none over ACP version 1. It is a hot item.
+- Recommendation: A plus D.
+- Advisor: A plus D. D is a base rule, not an alternative: an update outside a turn means that the agent works. A records the gap for a quiet background shell. It is a hot item.
 
 ### 4. The test level of A21
 
@@ -263,3 +263,10 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - B. A notice that is not saved. Impact: a new change type and a mockup.
 - Recommendation: A.
 - Advisor: A. No mockup, with the reason in "Screens".
+- The repeated notice of the Auto fallback (S7):
+  - Facts: each start sets the saved mode again. If the model cannot use Auto, S7 adds its fallback notice at each start. A release after 30 minutes of idle time then adds the same saved line again.
+  - Options:
+    - A. Show the fallback notice once per session. Impact: the transcript has one line; a later start does not repeat it.
+    - B. Repeat it at each start. Impact: one more saved line after each release.
+  - Recommendation: A. The start checks the saved entries for an earlier fallback notice of the session.
+  - Advisor: A, once per session. Not hard to revert.

@@ -51,7 +51,9 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   4. the composer
 - The trust and directory questions of S6 stay an app-level dialog (`QuestionDialog` in `App.tsx`). They are not cards in the dock.
 - The status line keeps the S6 condition: no "Starting Claude Code" while `asking` is true.
-- The header keeps the title, the facts (profile, folder, model, mode) and the button "Delete session" (brief, Session window; `s3/sessions.spec.ts` 117).
+- The header shows the title, the facts and the button "Delete session" (`s3/sessions.spec.ts` 117).
+  - Today the page shows the facts profile, folder and model. The mode shows only in the Mode control.
+  - The brief (Session window) lists title, profile, folder, model and mode in the header. S8 adds the mode as a fact.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again.
 - The dock itself never scrolls. The composer is always fully in view.
@@ -63,7 +65,9 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 
 - The element with the role `log` and the name "Transcript" is the scroll element itself. A wrapper around it must not scroll. Reason: the locked test compares the box of the log with the box of the widget.
 - `.content` (`styles.css` 127-131) stops scrolling for the session page. Otherwise the page scrolls, and the frame fails.
-- The log always has a height above zero, also with no entries.
+- The log always has a height above zero, also with no entries and with a tall dock.
+  - The log has a minimum height, for example 120px.
+  - The parts of the dock that can grow have a cap: the list of the plan widget, the permission queue, and the text area with `COMPOSER_MAX_LINES`.
 - "Prompt" stays a `<textarea>`. The tests use `toHaveValue`.
 - The visible text of the Mode button is exactly the mode label, for example "Ask". The arrow is an icon with `aria-hidden`. The S3 check `expectMode` uses `toHaveText`.
 

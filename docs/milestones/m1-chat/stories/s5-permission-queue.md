@@ -43,11 +43,10 @@ Status: draft for the design review. Not approved.
 
 - Claude can start a model cycle after the prompt resolved (`v1/acp-agent.js` 3299, 6692-6712). An example is the wake-up after a background task.
 - So updates, and possibly permission requests, can come when Aether has no turn for the session.
-- S5 shows such a request as a card, like a request during a turn.
+- S5 shows such a request as a card, like a request during a turn. See open choice 9.
 - While a card is open, the status line says "Waiting for your answer", and Stop shows.
 - Stop with no turn cancels each open request of the session. `stop.handler.ts` changes for this: today it does nothing when the status is idle.
 - An open card keeps the session busy for S9. See the S9 spec.
-- The alternative is to answer `cancelled` at once. Then a background task of the agent fails without a word, so S5 does not do it.
 - The renderer cannot grant a permission without a request. A compromised renderer can still answer an open request. `docs/architecture.md` accepts this risk.
 
 ### States
@@ -55,12 +54,15 @@ Status: draft for the design review. Not approved.
 | State | What the user sees |
 |---|---|
 | Working, queue empty | Today's screen: the transcript and "Working". |
-| Waiting for permission | One card for each open request, above the composer. The status line says "Waiting for your answer". Stop is available. |
+| Waiting for permission | One card for each open request, above the composer. The status line says "Waiting for your answer". Stop is available. This holds with any status, also outside a turn. |
 | Answer sent | The buttons of that card are disabled until the card closes. |
 | Answer refused by the main process | The card stays. It shows the reason under its buttons. The buttons work again. |
 | After Stop | No card. The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
 
-The session status does not get a new value. "Waiting for permission" is the status `working` with a queue that is not empty. See open choice 3.
+The session status does not get a new value. "Waiting for permission" is any status with a queue that is not empty. See open choice 3.
+
+- While a card is open, the composer shows Stop, not Send.
+- `sessions.send-message` refuses a message while a card is open, with the existing error `turn-active`. The user answers the card or clicks Stop first.
 
 ### Checks
 
@@ -72,8 +74,11 @@ The session status does not get a new value. "Waiting for permission" is the sta
 | S5-2 | The agent cancels one of two requests. Only that card closes. | Slice |
 | S5-3 | An answer with an unknown request ID, or with an option that the request did not offer, fails. The agent gets nothing. | Slice |
 | S5-4 | The agent process exits while two requests are open. Both cards close. | Slice |
+| S5-5 | A request comes when no turn runs. A card shows. Stop cancels it, and the agent receives `cancelled`. | Slice |
 
-S5-1 to S5-4 are not in the brief. They cover the rules above.
+S5-1 to S5-5 are not in the brief. They cover the rules above.
+
+The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
 ### Not in this story
 
@@ -229,7 +234,7 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 | One request of the agent | Permission request (card heading) | `PermissionRequest`, `PermissionView` | none |
 | The list of open requests | Permission requests (region name) | queue, `permissions` | none |
 | A choice on a card | the label of the agent, for example "Yes" or "Allow" | `PermissionOption` | none |
-| The status while a card shows | "Waiting for your answer" | status `working` and a queue that is not empty | none |
+| The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
 
 - S6 uses "question" for the trust question and the directory question. S5 does not use "question", so the two stay apart.
 - The brief says "allow or refuse". Real Claude labels its options "Yes" and "No". See open choice 1.
@@ -261,7 +266,7 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 - `src/features/sessions/entry.ts`: the new changes. Shared with S7 and S8.
 - `src/features/sessions/transcript.store.ts`: the queue in memory and its events. Shared with S8.
 - `src/features/sessions/open/open.contract.ts` and `open.handler.ts`: the snapshot.
-- `src/features/sessions/send-message/send-message.handler.ts`: the listener, and the close of the cards at the end of a turn. Shared with S6, S7 and S9.
+- `src/features/sessions/send-message/send-message.handler.ts`: the listener, and the refusal of a message while a card is open. The end of a turn does not close the cards. Shared with S6, S7 and S9.
 - `src/features/sessions/stop/stop.handler.ts`: Stop with no turn but open requests cancels them. The provider cancels the requests in `cancel`.
 - `src/features/sessions/processes.store.ts`: only if the queue needs the process of a session. Shared with S9.
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the new contract. Shared with S6, S7 and S9.
@@ -315,7 +320,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - User column: no.
 - Hard to revert: no.
 - Options:
-  - A. No new status value. Waiting is `working` with a queue that is not empty. Impact: no change of the status contract; S9 needs no new value.
+  - A. No new status value. Waiting is any status with a queue that is not empty. Impact: no change of the status contract; S9 needs no new value.
   - B. A new status `waiting`. Impact: a change of `sessionStatusSchema`, the renderer and S9.
 - Recommendation: A.
 - Advisor: A. The user likely agrees.
@@ -346,6 +351,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - C. A, and the Mode control shows the live mode from the port update `mode` of S7, in memory only. Impact: the user sees the real mode; small scope, because S7 already delivers the update; S5 then needs S7 merged; a new process still goes back to the saved mode.
 - Recommendation: A for m1. Record the old mode in the Mode control, and the return to the saved mode, as known gaps.
 - Advisor: A for m1. "The click on a labelled option is the user choice that decision 0007 asks for." The preference patterns 3 and 4 conflict, so the advisor predicts that the user may disagree. It is a hot item.
+- Advisor, second consultation in the design review: C, if the `mode` update of S7 already reaches the session view; otherwise A. On `story/m1-s7-settings`, `record-agent-update.handler.ts` uses the `mode` update only for the notice of the Auto fallback. It does not reach the session view. So the answer stays A.
 
 ### 6. A request with another ACP session ID
 
@@ -363,14 +369,16 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 7. A safety ask with a refuse option first
 
-- User column: no. It follows the approved button rule.
+- User column: yes. It is a permission prompt, and option A is an exception to the button rule of the user.
 - Hard to revert: no.
-- Facts: for a safety ask, Claude sets `defaultToNo`. The adapter then puts the refuse options first (`permissions/options.js` 6-10, 52-60). ACP has no other field for a default option.
+- Facts:
+  - For a safety ask, Claude sets `defaultToNo`. The adapter then puts the refuse options first (`permissions/options.js` 6-10, 52-60). ACP has no other field for a default option.
+  - In every other case, the adapter already sorts the `allow_once` option first. So the user rule moves no button for Claude outside a safety ask.
 - Options:
   - A. When the first option of the agent is a refuse option, keep the order of the agent and make no button primary. Impact: the safety hint of Claude stays; the user rule "recommended first" applies to every other request.
   - B. Always put the first `allow-once` option first, as the primary button. Impact: one rule for each card; a safety ask then invites an allow.
-- Recommendation: A.
-- Advisor: see the report of this design-review fix.
+- Recommendation: A. The mockup shows a safety ask in state 3.
+- Advisor: A. Not hard to revert. The user likely agrees (pattern 3: close a security gap).
 
 ### 8. `AskUserQuestion` without elicitation
 
@@ -381,7 +389,17 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - A. Accept the gap in m1. Record it in `docs/architecture.md`. Impact: no new scope; Claude cannot show a choice list to the user.
   - B. A new story declares form elicitation and shows the question as a card in the dock. Impact: more scope in m1; a new card type and a mockup.
 - Recommendation: A.
-- Advisor: see the report of this design-review fix.
+- Advisor: A. Not hard to revert. The user likely agrees (pattern 4: keep the scope small).
+
+### 9. A request outside a turn
+
+- User column: no (an error or empty state not in the brief).
+- Hard to revert: no.
+- Options:
+  - A. Show the card, as during a turn. Stop shows and cancels it. Impact: a background task of the agent can still ask the user; `stop.handler.ts` and `send-message.handler.ts` change.
+  - B. Answer `cancelled` at once, with no card. Impact: no change of Stop and Send; a tool of a background task fails without a word.
+- Recommendation: A.
+- Advisor: A. Not hard to revert. The user likely agrees.
 
 ## Skim list
 

@@ -99,7 +99,7 @@ button:disabled { cursor: default; opacity: .5; }
 .frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
 .dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); }
 .dock > * { max-width: 760px; width: 100%; }
-.dock .permission-queue { max-height: 240px; overflow: auto; }
+.dock .permission-queue { max-height: 360px; overflow: auto; }
 /* The header keeps the title, the facts and the button "Delete session". */
 .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .delete { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
@@ -238,7 +238,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>3. Cards with the "always" options of real Claude</h2>
-  <p class="muted">Real Claude labels its options itself. One compact button for each option. The recommended option (the first allow-once option) comes first, as the primary button. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed. When the cards are tall, the dock scrolls inside, and the composer stays in view.</p>
+  <p class="muted">Real Claude labels its options itself. One compact button for each option. The recommended option (the first allow-once option) comes first, as the primary button. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed. When the cards are tall, the queue scrolls inside its own area. The dock never scrolls, so the composer stays in view.</p>
   <div class="window frame">
     <div class="frame-head">
       <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
@@ -264,12 +264,21 @@ button:disabled { cursor: default; opacity: .5; }
           <div class="question" role="group" aria-label="Approve Plan">
             <h3>Permission request</h3>
             <div class="question-tool"><span class="mono">Approve Plan</span><span class="muted">switch_mode</span></div>
-            <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: each approval changes the mode of the agent. Every option except "Yes, manually approve edits" is an allow-always option. The recommended option moves to the front. The others keep the order of the agent.</p>
+            <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: each approval changes the mode of the agent. Every option except "Yes, manually approve edits" is an allow-always option. The adapter already puts the allow-once option first, so the order of the agent stays.</p>
             <div class="question-actions">
               <button class="button primary" type="button">Yes, manually approve edits</button>
               <button class="button" type="button">Yes, and use auto mode</button>
               <button class="button" type="button">Yes, and bypass permissions</button>
               <button class="button" type="button">No, keep planning</button>
+            </div>
+          </div>
+          <div class="question" role="group" aria-label="rm -rf build">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">rm -rf build</span><span class="muted">execute</span></div>
+            <p class="muted" style="font-size:13px">A safety ask. Claude puts "No" first. Open choice 7, option A: keep the order of the agent and make no button primary.</p>
+            <div class="question-actions">
+              <button class="button" type="button">No</button>
+              <button class="button" type="button">Yes</button>
             </div>
           </div>
         </div>
