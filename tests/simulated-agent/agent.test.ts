@@ -497,6 +497,67 @@ describe('simulated agent', () => {
     })
   })
 
+  // Added for story S9 of milestone m1-chat: a child process that outlives its parent
+  // (`docs/architecture.md`, Tests), and a gate before the agent ends after its stdin closes.
+  describe('scenarios child-process and slow-exit', () => {
+    /** Whether a process runs. Signal 0 only checks it. */
+    const isRunning = (pid: number) => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    const started: number[] = []
+    afterEach(() => {
+      // The child outlives the agent by design, so the test ends it.
+      for (const pid of started.splice(0)) if (isRunning(pid)) process.kill(pid)
+    })
+
+    it('starts a child process, reports it with its parent, and the child still runs after the agent ends', async () => {
+      await control.scenario('child-process', { chunks: ['Started'] })
+      const agent = startAgent()
+      const pid = await control.waitForAgent()
+      await agent.initialize()
+      expect(await agent.prompt(await agent.newSession())).toEqual({ stopReason: 'end_turn' })
+      const child = await control.waitForChild()
+      started.push(child.pid)
+      expect(texts(agent.updates)).toEqual(['Started'])
+      expect(child.parent).toBe(pid)
+      expect(control.children).toEqual([child])
+      expect(isRunning(child.pid)).toBe(true)
+
+      agent.child.stdin!.end()
+      expect(await agent.exited).toBe(0)
+      expect(isRunning(child.pid)).toBe(true)
+    })
+
+    it('waits at the exit gate after its stdin closes, and ends when the test opens the gate', async () => {
+      await control.scenario('slow-exit', { gate: 'exit', chunks: ['Bye'] })
+      const agent = startAgent()
+      await agent.initialize()
+      expect(await agent.prompt(await agent.newSession())).toEqual({ stopReason: 'end_turn' })
+      expect(texts(agent.updates)).toEqual(['Bye'])
+
+      agent.child.stdin!.end()
+      await control.waitForGate('exit')
+      // The agent reports the gate before it waits there, so it still runs now.
+      expect(agent.child.exitCode).toBeNull()
+      await control.open('exit')
+      expect(await agent.exited).toBe(0)
+    })
+
+    it('ends at once after its stdin closes in every other scenario', async () => {
+      await control.scenario('text')
+      const agent = startAgent()
+      await agent.initialize()
+      await agent.prompt(await agent.newSession())
+      agent.child.stdin!.end()
+      expect(await agent.exited).toBe(0)
+    })
+  })
+
   describe('control channel', () => {
     it('changes the scenario of a running agent for the next prompt', async () => {
       await control.scenario('text')
