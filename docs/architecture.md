@@ -151,7 +151,7 @@ Decision 0013 records this model.
 - Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
 - A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
 - A session has a nullable provider. Aether sets it at the first start, and the session keeps it. A later change of the provider settings applies to new sessions only.
-- The first start that creates an agent session saves three values in one transaction: the provider, a snapshot of its settings, and the agent session ID. Before that, the session uses the current settings of its profile, so a failed first start can be fixed in the profile and tried again. A resume uses the snapshot. The first start creates the provider row when the profile has none. Story S4 reads "first start" in decision 0013 this way. The coordinator confirms the reading.
+- The first start that creates an agent session saves three values in one transaction: the provider, a snapshot of its settings, and the agent session ID. Before that, the session uses the current settings of its profile, so a failed first start can be fixed in the profile and tried again. A resume uses the snapshot. The first start creates the provider row when the profile has none. This is the meaning of "first start" in decision 0013. The coordinator confirmed it. The provider row is profile data, so the first attempt creates it, even when the start fails. A failed first start saves nothing on the session.
 - A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
 - A session does not know its project. A later project refers to repositories and sessions.
 
@@ -180,7 +180,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 - The port starts a process at once and returns a handle. The handle has `ready`, `prompt`, `cancel` and `close`. Stop in the state Starting cancels the start.
 - The start input holds the main directory, the additional directories, the model, the mode, the shared items, the settings snapshot of the provider, the environment, and the agent session to resume. The caller reads it from the session row, never from the renderer.
 - If the agent cannot resume a session, `providers/acp` starts a new agent session. Aether then shows a notice.
-- `providers/claude-code` also holds the sign-in steps and the reader of the settings. An entry `claude-code` in `agents.json` replaces only the program and the arguments of its launch recipe. No call of the renderer writes `agents.json`.
+- `providers/claude-code` also holds the sign-in steps and the reader of the settings. An entry `claude-code` in `agents.json` replaces only the program and the arguments of its launch recipe. If that program does not exist, the start fails with a notice that names the entry. Aether never falls back to the built-in program without a word. No call of the renderer writes `agents.json`.
 - A session is idle when it has no active turn, no open permission question and no background task.
 - An idle process closes after a release time. The release time is a setting, 30 minutes for a session that a person starts and 2 minutes for an automated session.
 - Each session records who started it: a person or an automation.
@@ -197,7 +197,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 - The allow list is `ALLOWED_VARIABLES` in `src/building-blocks/agent-environment.ts`. It holds the Windows basics, the proxy settings and the certificate settings. Names match without case.
 - It sets `CLAUDE_CONFIG_DIR` and `ANTHROPIC_PROFILE` from the Claude provider settings that the session saved. It never passes on a Claude, Anthropic, GH or GitHub variable from its own environment.
 - It sets `GH_TOKEN` to the token of the GitHub account of the profile. The agent can read this token.
-- Aether reads the token with `gh auth token --hostname github.com --user <login>`, without the token variables of its own environment. It never saves or logs the token. The notice of a stopped agent hides the values that Aether gave the agent.
+- Aether reads the token with `gh auth token --hostname github.com --user <login>`, without the token variables of its own environment. It never saves or logs the token. Every notice and log tail that Aether saves hides the values that Aether gave the agent.
 
 ### Permissions
 
