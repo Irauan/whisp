@@ -155,9 +155,8 @@ export function App() {
           <OpenSession
             key={view.sessionId}
             id={view.sessionId}
-            profileNameOf={(profileId) => profiles.find((profile) => profile.id === profileId)?.name ?? null}
             asking={questions.some((question) => question.sessionId === view.sessionId)}
-            onModeSaved={() => void reload()}
+            onSettingsSaved={() => void reload()}
             onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
           />
         )

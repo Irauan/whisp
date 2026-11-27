@@ -99,9 +99,20 @@ export const isOpenTool = (entry: Entry): entry is ToolEntry =>
 /** The tool entry of a call that never finished, for example because the turn stopped. */
 export const failedTool = (entry: ToolEntry): ToolEntry => ({ ...entry, status: 'failed' })
 
-/** The entry for a plan of the agent. Each plan update is a new entry: the latest one is the current plan. */
-export function planEntry(update: Extract<AgentUpdate, { type: 'plan' }>): Entry {
+export type PlanEntry = Extract<Entry, { kind: 'plan' }>
+
+/** The entry for a plan of the agent. */
+export function planEntry(update: Extract<AgentUpdate, { type: 'plan' }>): PlanEntry {
   return { kind: 'plan', steps: update.steps.map(({ text, status }) => ({ text, status })) }
+}
+
+/**
+ * True when the next plan is progress on the previous one: the same step texts, as exact strings,
+ * in the same order. Only the states can differ. Any other plan is a new plan. Two plans with no
+ * steps are the same plan. Progress replaces the entry in place, and a new plan adds an entry.
+ */
+export function isSamePlan(previous: PlanEntry, next: PlanEntry): boolean {
+  return previous.steps.length === next.steps.length && previous.steps.every((step, index) => step.text === next.steps[index]?.text)
 }
 
 /** The text that the user sees for a stop reason that is not a normal end, or null for a normal end. */

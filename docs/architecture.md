@@ -49,7 +49,7 @@ src/
         send-message.handler.ts
         send-message.ui.tsx
         send-message.test.ts
-      create/  list/  open/  stop/  delete/  set-mode/
+      create/  list/  open/  stop/  delete/  set-mode/  set-model/
       answer-permission/
       record-agent-update/       event consumer (handler and test, no contract)
       entry.ts                   entries and events, pure
@@ -230,7 +230,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 - An answer names the request ID. Stop cancels all requests of the session.
 - A cancelled request removes only itself from the queue.
 - Aether sets the permission mode before the first message. Bypass is allowed only when the user chooses it.
-- The Mode control of a draft saves the mode in the session row (`sessions.set-mode`). After the first message the control is disabled.
+- The Mode control and the model button of a draft save the mode and the model in the session row (`sessions.set-mode`, `sessions.set-model`). After the first message both are disabled.
 - Until the permission queue exists, Aether answers each permission request with "cancelled".
 - If the agent cannot apply the chosen mode, model or permission setting, the session does not start. Aether keeps no list of valid models in the main process: the agent refuses a model that it does not know, and the session shows a start notice.
 - A model that cannot use Auto makes Claude use Accept edits. The agent reports it, and the session shows a notice that names both modes.
@@ -300,7 +300,9 @@ dependency-cruiser does not support TypeScript 7.0 with its TypeScript parser. T
 
 Each step leaves a working app. Steps 3 to 6 are the first stories of the chat milestone.
 
-These parts stay as they are: React, the visual design and CSS tokens, navigation, menus, the composer, mentions, the Git and GitHub wrappers, the window security settings, the single instance lock, and the custom agents file (`agents.json`, read only). New slices use CSS Modules.
+These parts stay as they are: React, the visual design and CSS tokens, navigation, menus, the composer of a new session, mentions, the Git and GitHub wrappers, the window security settings, the single instance lock, and the custom agents file (`agents.json`, read only). New slices use CSS Modules.
+
+The session window is a fixed frame (story S8): the header, the transcript as the only scroll area, and the bottom dock with the status line, the plan widget and the composer. Its composer follows the composer of the GitHub app, with its control row inside the box. A plan update that only changes the states replaces the latest plan entry in place.
 
 ## Known defects in the current code
 

@@ -8,13 +8,15 @@ export function Menu(props: {
   disabled?: boolean
   /** Opens above the button. */
   above?: boolean
+  /** The class of the button. The default is the button of the bar below the composer of a new session. */
+  className?: string
   children: ReactNode
 }) {
   return (
     <>
       <button
         type="button"
-        className="bar-button"
+        className={props.className ?? 'bar-button'}
         aria-label={props.label}
         title={props.label}
         popoverTarget={props.id}

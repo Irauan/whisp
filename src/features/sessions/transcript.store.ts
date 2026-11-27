@@ -2,6 +2,7 @@ import type { Clock } from '../../building-blocks/clock.port'
 import type { Ids } from '../../building-blocks/ids'
 import {
   failedTool,
+  isSamePlan,
   mergeTool,
   planEntry,
   toolEntry,
@@ -117,9 +118,21 @@ export class Transcript {
     this.replace(sessionId, { id: known.id, entry: mergeTool(known.entry, update) })
   }
 
-  /** A new plan of the agent. Each plan is a new entry: the latest one is the current plan. */
+  /**
+   * A plan of the agent, with all its steps. The same step texts in the same order are progress:
+   * the latest plan entry of the session changes in place, with its ID and its position. Any other
+   * plan is a new plan, and it adds an entry. Both close the open text first, as `updateTool` does.
+   */
   addPlan(sessionId: string, update: Extract<AgentUpdate, { type: 'plan' }>): void {
-    this.addEntry(sessionId, planEntry(update))
+    if (this.gone.has(sessionId)) return
+    this.flush(sessionId)
+    const next = planEntry(update)
+    const latest = this.store.latestPlan(sessionId)
+    if (latest?.entry.kind === 'plan' && isSamePlan(latest.entry, next)) {
+      this.replace(sessionId, { id: latest.id, entry: next })
+      return
+    }
+    this.addEntry(sessionId, next)
   }
 
   /** Marks each tool call that did not finish as failed, for example after a stop or a crash. */

@@ -1,0 +1,17 @@
+/* The bottom dock. It never scrolls and it keeps its height: the log takes the rest of the frame. */
+
+.dock {
+  flex: none;
+  padding: 10px 32px 16px;
+  background: var(--canvas);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -12px 16px -12px rgb(0 0 0 / 80%);
+}
+
+.inner {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 796px;
+  margin: 0 auto;
+}

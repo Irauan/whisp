@@ -9,16 +9,14 @@ import { SessionPage } from './SessionPage'
  */
 export function OpenSession({
   id,
-  profileNameOf,
   asking,
-  onModeSaved,
+  onSettingsSaved,
   onDelete
 }: {
   id: string
-  profileNameOf(profileId: string): string | null
   /** True while a question of the main process waits for the user, for example the trust question. */
   asking: boolean
-  onModeSaved(): void
+  onSettingsSaved(): void
   onDelete(): void
 }) {
   const opened = useSession(id)
@@ -27,15 +25,7 @@ export function OpenSession({
     case 'loading':
       return null
     case 'opened':
-      return (
-        <SessionPage
-          view={opened.view}
-          profileName={profileNameOf(opened.view.session.profileId)}
-          asking={asking}
-          onModeSaved={onModeSaved}
-          onDelete={onDelete}
-        />
-      )
+      return <SessionPage view={opened.view} asking={asking} onSettingsSaved={onSettingsSaved} onDelete={onDelete} />
     case 'failed':
       return <p className="error" role="alert">{`Aether could not open the session. ${opened.message}`}</p>
     case 'missing':

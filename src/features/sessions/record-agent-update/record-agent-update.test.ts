@@ -58,14 +58,14 @@ describe('record-agent-update', () => {
     ])
   })
 
-  it('records each plan, with the three states of the steps (A11)', () => {
-    const { store, record } = setup()
+  it('records a plan, and replaces it in place when only the states change (A11)', () => {
+    const { store, events, record } = setup()
     record(
       { type: 'plan', steps: [{ text: 'One', status: 'pending' }, { text: 'Two', status: 'pending' }, { text: 'Three', status: 'pending' }] },
       { type: 'plan', steps: [{ text: 'One', status: 'completed' }, { text: 'Two', status: 'in_progress' }, { text: 'Three', status: 'pending' }] }
     )
     const plans = store.entriesOf('s1').map((view) => view.entry)
-    expect(plans).toHaveLength(2)
+    expect(plans).toHaveLength(1)
     expect(plans.at(-1)).toEqual({
       kind: 'plan',
       steps: [
@@ -74,6 +74,16 @@ describe('record-agent-update', () => {
         { text: 'Three', status: 'pending' }
       ]
     })
+    expect(events.map((event) => event.change.type)).toEqual(['entry-added', 'entry-replaced'])
+  })
+
+  it('records another plan as a new entry', () => {
+    const { store, record } = setup()
+    record(
+      { type: 'plan', steps: [{ text: 'One', status: 'pending' }] },
+      { type: 'plan', steps: [{ text: 'Other', status: 'pending' }, { text: 'Two', status: 'pending' }] }
+    )
+    expect(store.entriesOf('s1')).toHaveLength(2)
   })
 
   it('adds a notice when the row says Auto and the agent reports Accept edits (A12)', () => {

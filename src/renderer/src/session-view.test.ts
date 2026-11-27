@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   applyChange,
   emptyWindowState,
+  isAtBottom,
+  latestPlan,
+  markedPlanIds,
+  planCount,
   reduceSessionWindow,
+  splitFailedTurn,
   type SessionEvent,
   type SessionSnapshot,
   type SessionWindowAction,
@@ -154,5 +159,72 @@ describe('reduceSessionWindow', () => {
       { type: 'event', event: event(2, { type: 'entry-text', id: 'a', text: 'from the agent.' }) }
     ])
     expect(state.view?.entries).toEqual([{ id: 'a', entry: { kind: 'agent', text: 'Hello from the agent.' } }])
+  })
+})
+
+const step = (text: string, status: 'pending' | 'in_progress' | 'completed') => ({ text, status })
+const plan = (id: string, ...steps: ReturnType<typeof step>[]) => ({ id, entry: { kind: 'plan' as const, steps } })
+
+describe('latestPlan and planCount', () => {
+  it('finds the latest plan entry, and no plan when the session has none or the latest has no steps', () => {
+    expect(latestPlan([user])).toBeNull()
+    expect(latestPlan([plan('a', step('One', 'pending')), user, plan('b', step('Two', 'pending'))])).toEqual([step('Two', 'pending')])
+    // A plan with no steps clears the plan: the widget does not show.
+    expect(latestPlan([plan('a', step('One', 'pending')), plan('b')])).toBeNull()
+  })
+
+  it('counts the completed steps and all steps for the header "Plan N of M"', () => {
+    expect(planCount([step('One', 'completed'), step('Two', 'in_progress'), step('Three', 'pending')])).toEqual({ done: 1, total: 3 })
+    expect(planCount([step('One', 'pending')])).toEqual({ done: 0, total: 1 })
+    expect(planCount([step('One', 'completed'), step('Two', 'completed')])).toEqual({ done: 2, total: 2 })
+  })
+})
+
+describe('markedPlanIds', () => {
+  const text = { id: 't', entry: { kind: 'agent', text: 'hi' } } as const
+
+  it('marks each plan entry except the first plan entry of the session', () => {
+    const entries = [plan('a', step('One', 'pending')), text, plan('b', step('Two', 'pending')), plan('c')]
+    expect([...markedPlanIds(entries)]).toEqual(['b', 'c'])
+  })
+
+  it('marks nothing for one plan entry, or for a session with no plan', () => {
+    expect(markedPlanIds([text, plan('a', step('One', 'pending'))]).size).toBe(0)
+    expect(markedPlanIds([text]).size).toBe(0)
+  })
+
+  it('marks an empty plan that follows the first plan, and does not mark an empty first plan', () => {
+    expect([...markedPlanIds([plan('a'), plan('b', step('One', 'pending'))])]).toEqual(['b'])
+    expect([...markedPlanIds([plan('a', step('One', 'pending')), plan('b')])]).toEqual(['b'])
+  })
+})
+
+describe('isAtBottom', () => {
+  it('is true at the end of the content, within two pixels, and false above it', () => {
+    expect(isAtBottom({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })).toBe(true)
+    expect(isAtBottom({ scrollTop: 598.5, scrollHeight: 1000, clientHeight: 400 })).toBe(true)
+    expect(isAtBottom({ scrollTop: 590, scrollHeight: 1000, clientHeight: 400 })).toBe(false)
+    expect(isAtBottom({ scrollTop: 0, scrollHeight: 300, clientHeight: 400 })).toBe(true)
+  })
+})
+
+describe('splitFailedTurn', () => {
+  it('splits the notice of a stopped agent at its first line: the line, then the last log lines', () => {
+    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 7).\nline one\nline two' })).toEqual({
+      line: 'Claude Code stopped (exit code 7).',
+      log: 'line one\nline two'
+    })
+  })
+
+  it('gives no log when the stopped agent wrote none', () => {
+    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 1).' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
+    expect(splitFailedTurn({ code: 'agent-stopped', text: 'Claude Code stopped (exit code 1).\n  \n' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
+  })
+
+  it('keeps the text of each other notice whole: the sign-in steps stay visible', () => {
+    const text = 'Claude Code is not signed in.\n1. Open a terminal.\n2. Run claude.'
+    expect(splitFailedTurn({ code: 'not-signed-in', text })).toEqual({ line: text, log: null })
+    expect(splitFailedTurn({ text })).toEqual({ line: text, log: null })
+    expect(splitFailedTurn({ code: 'start-failed', text: 'Claude Code did not start. A\nB' })).toEqual({ line: 'Claude Code did not start. A\nB', log: null })
   })
 })

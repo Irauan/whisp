@@ -255,6 +255,8 @@ describe('composeMain', () => {
       expect(published.every((entry) => entry.name === 'sessions.changed')).toBe(true)
       // The mode of a session that started cannot change.
       expect(await first.call('sessions.set-mode', { id, mode: 'ask' })).toMatchObject({ ok: false, error: { code: 'session-started' } })
+      // The model of a session that started cannot change either (S8-7).
+      expect(await first.call('sessions.set-model', { id, model: 'claude-opus-5-5' })).toMatchObject({ ok: false, error: { code: 'session-started' } })
 
       // The agent has the token of the GitHub account of the profile, and nothing of the environment of Aether.
       const { env } = await control.waitForEnvironment()

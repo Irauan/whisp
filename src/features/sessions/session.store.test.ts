@@ -120,6 +120,13 @@ describe('SessionStore: the agent runs of a session', () => {
     expect(store.find('s1')?.mode).toBe('plan')
     expect(store.setMode('missing', 'plan')).toBe(false)
   })
+
+  it('saves the model of a session', () => {
+    const { store } = setup()
+    expect(store.setModel('s1', 'claude-opus-5-5')).toBe(true)
+    expect(store.find('s1')?.model).toBe('claude-opus-5-5')
+    expect(store.setModel('missing', 'claude-opus-5-5')).toBe(false)
+  })
 })
 
 describe('SessionStore: the entries of a session', () => {
@@ -196,5 +203,18 @@ describe('SessionStore: the entries of a session', () => {
     store.insertEntry('s1', { id: 'e1', entry: { kind: 'user', text: 'a' } }, 0, '2026-01-02')
     store.remove('s1')
     expect(store.entryCount('s1')).toBe(0)
+  })
+})
+
+describe('SessionStore: the latest plan entry', () => {
+  it('returns the latest plan entry of the session, and null when it has none', () => {
+    const { store } = setup()
+    expect(store.latestPlan('s1')).toBeNull()
+    store.insertEntry('s1', { id: 'a', entry: { kind: 'plan', steps: [{ text: 'One', status: 'pending' }] } }, 0, '2026-01-02')
+    store.insertEntry('s1', { id: 'b', entry: { kind: 'user', text: 'x' } }, 1, '2026-01-02')
+    store.insertEntry('s1', { id: 'c', entry: { kind: 'plan', steps: [] } }, 2, '2026-01-02')
+    store.insertEntry('s1', { id: 'd', entry: { kind: 'agent', text: 'y' } }, 3, '2026-01-02')
+    expect(store.latestPlan('s1')).toEqual({ id: 'c', entry: { kind: 'plan', steps: [] } })
+    expect(store.latestPlan('s2')).toBeNull()
   })
 })

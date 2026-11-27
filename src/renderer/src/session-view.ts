@@ -68,3 +68,49 @@ export function reduceSessionWindow(state: SessionWindowState, action: SessionWi
   }
   return next
 }
+
+type EntryView = SessionSnapshot['entries'][number]
+type Step = Extract<EntryView['entry'], { kind: 'plan' }>['steps'][number]
+
+/**
+ * The steps of the latest plan entry of the session, or null when the session has no plan or the
+ * latest plan has no steps. The plan widget shows these steps (story S8).
+ */
+export function latestPlan(entries: readonly EntryView[]): Step[] | null {
+  const latest = entries.findLast((item) => item.entry.kind === 'plan')?.entry
+  return latest?.kind === 'plan' && latest.steps.length > 0 ? latest.steps : null
+}
+
+/** The count of the header "Plan N of M": N completed steps of M steps. */
+export function planCount(steps: readonly Step[]): { done: number; total: number } {
+  return { done: steps.filter((step) => step.status === 'completed').length, total: steps.length }
+}
+
+/**
+ * The IDs of the plan entries that the transcript marks with "Updated the plan": each plan entry
+ * except the first one of the session. The main process writes a new entry only for a new plan, so
+ * progress adds no marker.
+ */
+export function markedPlanIds(entries: readonly EntryView[]): Set<string> {
+  const plans = entries.filter((item) => item.entry.kind === 'plan')
+  return new Set(plans.slice(1).map((item) => item.id))
+}
+
+/**
+ * The line of a failed turn and the fold-out under it. The notice of a stopped agent is its line
+ * (`<agent> stopped (exit code <n>).`), then the last log lines of the agent, split at the first
+ * line break (`providers/acp`). Any other notice has no reliable boundary, so it stays whole: the
+ * sign-in steps stay visible, and the text of a start error can have many lines.
+ */
+export function splitFailedTurn(notice: { code?: string | undefined; text: string }): { line: string; log: string | null } {
+  if (notice.code !== 'agent-stopped') return { line: notice.text, log: null }
+  const at = notice.text.indexOf('\n')
+  if (at < 0) return { line: notice.text, log: null }
+  const log = notice.text.slice(at + 1).trim()
+  return { line: notice.text.slice(0, at), log: log === '' ? null : log }
+}
+
+/** True when a scroll area shows the end of its content. The tolerance is for the rounding of the browser. */
+export function isAtBottom(area: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
+  return area.scrollTop + area.clientHeight >= area.scrollHeight - 2
+}

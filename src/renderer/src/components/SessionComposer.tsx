@@ -20,7 +20,6 @@ import { flushSync } from 'react-dom'
 import type { FolderInfo } from '../../../shared/bridge'
 import {
   baseName,
-  labelOf,
   MODELS,
   parseRequest,
   type Attachment,
@@ -32,6 +31,7 @@ import type { Mode, SessionView } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 import { Menu, MenuOption } from './Menu'
 import { ModeMenu } from './ModeMenu'
+import { ModelMenu } from './ModelMenu'
 
 const FIRST_SETTINGS: SessionSettings = {
   folder: '',
@@ -338,26 +338,7 @@ export function SessionComposer({ sessions, newSessionMode, githubLogin, onSubmi
               />
             </Menu>
             <ModeMenu mode={settings.mode} onChange={(mode) => change({ mode })} />
-            <Menu id="model-menu" label="Model" trigger={labelOf(MODELS, settings.model)}>
-              <p className="popover-title">Claude</p>
-              {MODELS.map((option) => (
-                <MenuOption
-                  key={option.id}
-                  menu="model-menu"
-                  title={option.label}
-                  checked={settings.model === option.id}
-                  onSelect={() => change({ model: option.id })}
-                />
-              ))}
-              <hr />
-              <MenuOption
-                menu="model-menu"
-                title="ChatGPT"
-                tag="Coming soon"
-                disabled
-                onSelect={() => undefined}
-              />
-            </Menu>
+            <ModelMenu model={settings.model} onChange={(model) => change({ model })} />
             <span className="spacer" />
             <span title="Voice input: coming soon">
               <button type="button" className="icon-button" aria-label="Voice input, coming soon" disabled>
