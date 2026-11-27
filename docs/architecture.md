@@ -14,7 +14,8 @@ Status: baseline from step 0 of `docs/process.md`. The records in `docs/decision
 |---|---|
 | Profile | One usage, for example personal work or one customer. It has a workspace directory, zero or one GitHub account, and zero or more providers. |
 | Workspace directory | The folder of a profile that holds its repositories. |
-| Provider | A way to run agents, with the settings of one profile. One row for each kind and profile. The kind `claude-code` is the only one now. Aether stores no key and no token. |
+| Provider | One account that runs agents, with its settings and a label. A profile can have many, also of one kind. One account of each kind is current for new sessions. The kind `claude-code` is the only one now. Aether stores no key and no token. |
+| Agent session | One agent run of a session, with one provider and the ID that the agent gave to it. A resume uses the provider of its row. |
 | Claude settings | The settings of the provider `claude-code`: a Claude configuration folder (`CLAUDE_CONFIG_DIR`) and a Claude profile name (`ANTHROPIC_PROFILE`). |
 | Repository | A Git repository under the workspace directory of a profile. Aether finds it on disk and does not save it. |
 | Session | One conversation with one agent in one profile. It has a source path, a main directory and a list of additional directories. |
@@ -148,10 +149,14 @@ Decision 0013 records this model.
 - A profile owns its providers and its sessions.
 - Each current account becomes a profile at import. The user chooses its workspace directory.
 - The import creates no provider row, because the old accounts had no Claude settings.
+- Decision 0014 gives the provider model: many accounts for each profile, one current account for each kind, and the table `agent_sessions`.
 - Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
 - A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
-- A session has a nullable provider. Aether sets it at the first start, and the session keeps it. A later change of the provider settings applies to new sessions only.
-- The first start that creates an agent session saves three values in one transaction: the provider, a snapshot of its settings, and the agent session ID. Before that, the session uses the current settings of its profile, so a failed first start can be fixed in the profile and tried again. A resume uses the snapshot. The first start creates the provider row when the profile has none. This is the meaning of "first start" in decision 0013. The coordinator confirmed it. The provider row is profile data, so the first attempt creates it, even when the start fails. A failed first start saves nothing on the session.
+- A session has a nullable provider: the account that the next agent of the session uses. Aether sets it at create from the current account of the profile. A session without one (an imported draft) takes the current account at its first start.
+- The table `agent_sessions` has one row for each agent run. Aether saves it, in one transaction, when the agent session exists. The row names the provider that the process started with and the agent session ID. A resume uses that provider. Milestone m1-chat has one row for each session.
+- The first start creates an empty current account when the profile has none. A failed first start keeps this account and saves no agent run, so the user can fix the profile and try again.
+- A trigger locks the Claude folder of an account that an agent run used. The label stays editable.
+- "Profile settings" edits the current Claude account. An account that no agent run used changes in place. For a used account, a change of the settings makes a new current account, or makes the account with the same settings current. The old account stays for its agent runs. A change applies to new sessions only.
 - A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
 - A session does not know its project. A later project refers to repositories and sessions.
 
@@ -178,7 +183,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 - `providers/claude-code` holds the launch recipe of Claude.
 - Each active session has its own agent process.
 - The port starts a process at once and returns a handle. The handle has `ready`, `prompt`, `cancel` and `close`. Stop in the state Starting cancels the start.
-- The start input holds the main directory, the additional directories, the model, the mode, the shared items, the settings snapshot of the provider, the environment, and the agent session to resume. The caller reads it from the session row, never from the renderer.
+- The start input holds the main directory, the additional directories, the model, the mode, the shared items, the settings of the provider account of the run, the environment, and the agent session to resume. The caller reads it from the session row, never from the renderer.
 - If the agent cannot resume a session, `providers/acp` starts a new agent session. Aether then shows a notice.
 - `providers/claude-code` also holds the sign-in steps and the reader of the settings. An entry `claude-code` in `agents.json` replaces only the program and the arguments of its launch recipe. If that program does not exist, the start fails with a notice that names the entry. Aether never falls back to the built-in program without a word. No call of the renderer writes `agents.json`.
 - A session is idle when it has no active turn, no open permission question and no background task.
@@ -195,7 +200,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 
 - Aether builds the environment of an agent process from an allow list.
 - The allow list is `ALLOWED_VARIABLES` in `src/building-blocks/agent-environment.ts`. It holds the Windows basics, the proxy settings and the certificate settings. Names match without case.
-- It sets `CLAUDE_CONFIG_DIR` and `ANTHROPIC_PROFILE` from the Claude provider settings that the session saved. It never passes on a Claude, Anthropic, GH or GitHub variable from its own environment.
+- It sets `CLAUDE_CONFIG_DIR` and `ANTHROPIC_PROFILE` from the settings of the Claude account of the agent run. It never passes on a Claude, Anthropic, GH or GitHub variable from its own environment.
 - It sets `GH_TOKEN` to the token of the GitHub account of the profile. The agent can read this token.
 - Aether reads the token with `gh auth token --hostname github.com --user <login>`, without the token variables of its own environment. It never saves or logs the token. Every notice and log tail that Aether saves hides the values that Aether gave the agent.
 
