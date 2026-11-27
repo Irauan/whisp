@@ -57,6 +57,8 @@ export interface AcpOptions {
   log?: Log
   /** Runs the PowerShell scripts of the process tree. A test passes a runner that it controls. */
   powershell?: Powershell
+  /** Ends a process and its tree. `taskkill /T /F` by default. A test passes a function that it watches. */
+  killTree?: (child: ChildProcess) => Promise<void>
 }
 
 /** The port to agents that speak ACP. It starts one process for each call. */
@@ -419,8 +421,8 @@ class AcpProcess implements AgentProcess {
    * parent to find. At the end, end each process of the tree that still runs.
    *
    * User decision 2026-11-27: when the list fails or times out (the log says so), the close ends the
-   * agent and its whole tree with `taskkill /T /F` at once, while the root still runs, so that `/T`
-   * finds the children. It skips the close of the session and of stdin. The process then counts as
+   * agent and its whole tree with `taskkill /T /F` at once, only while the root still runs (the exit
+   * state is read after the list), so that `/T` finds the children and no reused number is hit. It skips the close of the session and of stdin. The process then counts as
    * closed for the next start, as after any close.
    *
    * Each step has a limit, so the quit limit of the app covers the worst case: the list 5 s, the close
@@ -443,9 +445,16 @@ class AcpProcess implements AgentProcess {
         child.pid === undefined ? Promise.resolve([]) : processTree(child.pid, { from: this.spawnCalled, to: this.spawnedAt }, tools)
       const [, tree] = await Promise.all([cancelled, listing])
       if (tree === null) {
-        // The list failed: end the agent and its whole tree now, while the root runs.
-        await killTree(child)
-        await within(this.ended, limit)
+        // The list failed: end the agent and its whole tree now, but only while the agent still runs.
+        // The list took up to 5 s. If the agent ended meanwhile, Windows can have given its number to
+        // another process, so a kill by that number could end a foreign tree. The exit state of the
+        // child decides, not the reason of the failure: a clock jump fails the window check of a live agent.
+        if (child.exitCode === null && child.signalCode === null) {
+          await (this.options.killTree ?? killTree)(child)
+          if (!(await within(this.ended, limit))) tools.log('The agent did not end after the forced kill of its tree.')
+        } else {
+          tools.log('The agent ended while the list of its processes ran, so Aether does not kill by its number.')
+        }
       } else {
         // Step 2: close the session. Step 3: close stdin.
         if (live && this.capabilities?.agentCapabilities?.sessionCapabilities?.close) {

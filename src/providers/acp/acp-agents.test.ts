@@ -414,6 +414,63 @@ describe('AcpAgents', () => {
     }
   }, 30_000)
 
+  it('runs no taskkill when the agent ended while the failed list ran: its number can belong to another process now (round 3)', async () => {
+    await control.scenario('text', { chunks: ['Hello'] })
+    const logged: string[] = []
+    const killed: (number | undefined)[] = []
+    let called: () => void = () => undefined
+    const listCalled = new Promise<void>((resolve) => (called = resolve))
+    let failList: () => void = () => undefined
+    const listHeld = new Promise<void>((resolve) => (failList = resolve))
+    const powershell: Powershell = async () => {
+      called()
+      await listHeld
+      return { ok: false, detail: 'code 1, signal null, killed true' }
+    }
+    const listened = listen()
+    const process = start({}, listened, {
+      powershell,
+      log: (message) => logged.push(message),
+      killTree: async (child) => void killed.push(child.pid)
+    })
+    await process.ready
+    const agent = control.pids[0]!
+    const closing = process.close()
+    await listCalled
+    // The agent ends while the list runs.
+    globalThis.process.kill(agent)
+    await expect.poll(() => listened.exits.length, { message: 'the agent did not end' }).toBe(1)
+    failList()
+    await closing
+    expect(killed, 'taskkill ran on the number of an agent that had ended').toEqual([])
+    expect(logged).toHaveLength(2)
+    expect(logged[1]).toMatch(/ended while the list/)
+  }, 30_000)
+
+  it('runs taskkill on the agent while it still runs when the list fails, and logs a wait after the kill that times out (round 3)', async () => {
+    await control.scenario('text', { chunks: ['Hello'] })
+    const logged: string[] = []
+    const killed: (number | undefined)[] = []
+    const powershell: Powershell = async () => ({ ok: false, detail: 'code 1, signal null, killed false' })
+    // The kill does nothing, so the agent does not end and the wait after it times out.
+    const process = start({}, listen(), {
+      powershell,
+      log: (message) => logged.push(message),
+      killTree: async (child) => void killed.push(child.pid),
+      closeLimitMs: 300
+    })
+    await process.ready
+    const agent = control.pids[0]!
+    try {
+      await process.close()
+      expect(killed).toEqual([agent])
+      expect(logged).toHaveLength(2)
+      expect(logged[1]).toMatch(/did not end after the forced kill/)
+    } finally {
+      if (isRunning(agent)) globalThis.process.kill(agent)
+    }
+  }, 30_000)
+
   it('sends the cancel while the list of the process tree runs, and closes stdin after the list (S2, rule 9)', async () => {
     await control.scenario('text', { gate: 'hold', chunks: ['Hello'] })
     let called: () => void = () => undefined
