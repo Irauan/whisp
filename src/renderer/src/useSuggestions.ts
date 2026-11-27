@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Listing } from '../../shared/bridge'
 import type { Attachment } from '../../shared/model'
-import type { SessionDraft } from './useWorkspaces'
+import type { SessionDraft } from './useProfiles'
 import type { Mention } from './mention'
 
 const MAX_SHOWN = 20

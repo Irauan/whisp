@@ -12,17 +12,19 @@ Status: baseline from step 0 of `docs/process.md`. The records in `docs/decision
 
 | Term | Meaning |
 |---|---|
-| Workspace | One usage, for example personal work or one customer. It has a root directory, zero or one GitHub account, and zero or one Claude sign-in. |
-| Claude sign-in | A Claude configuration folder (`CLAUDE_CONFIG_DIR`) and an optional profile name (`ANTHROPIC_PROFILE`). Aether stores no key and no token. |
-| Repository | A Git repository under the root of a workspace. Aether finds it on disk and does not save it. |
-| Session | One conversation with one agent in one workspace. It has a main directory and a list of additional directories. |
+| Profile | One usage, for example personal work or one customer. It has a workspace directory, zero or one GitHub account, and zero or more providers. |
+| Workspace directory | The folder of a profile that holds its repositories. |
+| Provider | A way to run agents, with the settings of one profile. One row for each kind and profile. The kind `claude-code` is the only one now. Aether stores no key and no token. |
+| Claude settings | The settings of the provider `claude-code`: a Claude configuration folder (`CLAUDE_CONFIG_DIR`) and a Claude profile name (`ANTHROPIC_PROFILE`). |
+| Repository | A Git repository under the workspace directory of a profile. Aether finds it on disk and does not save it. |
+| Session | One conversation with one agent in one profile. It has a source path, a main directory and a list of additional directories. |
 | Turn | One user message and the reply of the agent. |
 | Entry | One saved item of a conversation: user text, agent text, thought, tool call, plan or notice. |
 | Slice | One use case, from the UI to the saved data, in one folder. |
 | Contract | The name, input schema, result and errors of one slice. |
 | Agent process | One ACP adapter process and its Claude process, for one session. |
 
-A project is a logical group of repositories in one workspace. Its meaning is an open point.
+A project is a logical group of repositories in one profile. Its meaning is an open point.
 
 ## Layout
 
@@ -36,7 +38,7 @@ src/
     renderer/           shell and navigation
     contracts.ts        registry of all contracts
   features/
-    workspaces/
+    profiles/
     sessions/
       session.ts                 aggregate, pure
       session.store.ts           persistence
@@ -134,12 +136,17 @@ A fully compromised renderer could still answer a permission question. These rul
 - Streamed text is joined before it is saved.
 - The import reads the accounts and the sessions of the old `workspace.json` once. It never changes the old `workspace.json` or `runs/` (decision 0005).
 
-## Workspaces
+## Profiles
 
-- A workspace owns its sessions.
-- Each current account becomes a workspace at import. The user chooses its root.
-- Two workspaces can use the same GitHub account.
-- A session keeps the Claude sign-in that it started with. A later change applies to new sessions only.
+Decision 0013 records this model.
+
+- A profile owns its providers and its sessions.
+- Each current account becomes a profile at import. The user chooses its workspace directory.
+- The import creates no provider row, because the old accounts had no Claude settings.
+- Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
+- A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
+- A session has a nullable provider. Aether sets it at the first start, and the session keeps it. A later change of the provider settings applies to new sessions only.
+- A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
 - A session does not know its project. A later project refers to repositories and sessions.
 
 ## Directories and trust
@@ -149,12 +156,12 @@ The main process asks these questions, and stores the answers. The renderer cann
 | Case | Behavior |
 |---|---|
 | Session directory in a trusted repository | The session starts. |
-| Repository under the root, first use | Aether asks for trust. It shows the hooks and MCP servers that it finds. |
-| Directory outside the root | Aether asks: once, always for this workspace, or cancel. |
-| Directory under the root of another workspace | Aether asks, and names both workspaces and the Claude sign-in that would read the files. |
+| Repository under the workspace directory, first use | Aether asks for trust. It shows the hooks and MCP servers that it finds. |
+| Directory outside the workspace directory | Aether asks: once, always for this profile, or cancel. |
+| Directory under the workspace directory of another profile | Aether asks, and names both profiles and the Claude settings that would read the files. |
 | The agent reads or writes outside the session directories | Claude asks. Aether shows the request in the permission queue. |
 
-- Trust applies to one repository, not to the whole root.
+- Trust applies to one repository, not to the whole workspace directory.
 - No agent process starts before the trust answer. This includes an early start.
 - "Approve all" also removes the last question in the table.
 - After an approval, an agent shell command can reach any directory of the user.
@@ -177,8 +184,8 @@ The main process asks these questions, and stores the answers. The renderer cann
 ### Agent environment
 
 - Aether builds the environment of an agent process from an allow list.
-- It sets the Claude variables from the workspace. It never passes on a Claude or Anthropic variable from its own environment.
-- It sets `GH_TOKEN` to the token of the GitHub account of the workspace. The agent can read this token.
+- It sets the Claude variables from the Claude provider settings of the profile. It never passes on a Claude or Anthropic variable from its own environment.
+- It sets `GH_TOKEN` to the token of the GitHub account of the profile. The agent can read this token.
 
 ### Permissions
 
@@ -193,8 +200,8 @@ The main process asks these questions, and stores the answers. The renderer cann
 
 | Layer | Content | Owner |
 |---|---|---|
-| Isolated | Skills, plugins, settings and user MCP servers in the Claude folder of the workspace | The Claude sign-in. Aether does not change it. |
-| Shared | Skills and MCP servers in a library | Aether. Each workspace chooses its items. |
+| Isolated | Skills, plugins, settings and user MCP servers in the Claude folder of the profile | The Claude provider settings. Aether does not change it. |
+| Shared | Skills and MCP servers in a library | Aether. Each profile chooses its items. |
 
 - Aether passes the shared items at session start.
 - The agent port takes one neutral input: shared skills and MCP servers. Each provider translates it.
@@ -245,7 +252,7 @@ dependency-cruiser does not support TypeScript 7.0 with its TypeScript parser. T
 
 1. Milestone 0 builds the gates on the current code. Known violations go in a list that can only shrink.
 2. Add contracts, the registry and the preload. Move the GitHub accounts query as the example slice.
-3. Add SQLite, the import and the workspace slices.
+3. Add SQLite, the import and the profile slices.
 4. Remove projects and work items.
 5. Move the session slices and the renderer stores.
 6. Build the agent port, the process per session and the permission queue. Write the two known risks as failing tests first.

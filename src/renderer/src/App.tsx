@@ -9,32 +9,32 @@ import {
   ProjectsPage,
   PullRequestsPage,
   WorkItemsPage,
-  WorkspacesPage
+  ProfilesPage
 } from './components/Pages'
-import { RootsDialog } from './components/RootsDialog'
+import { DirectoriesDialog } from './components/DirectoriesDialog'
 import { SessionPage } from './components/SessionPage'
 import { Sidebar } from './components/Sidebar'
-import { WorkspaceDialog, type WorkspaceValues } from './components/WorkspaceDialog'
-import { WorkspaceSwitcher } from './components/WorkspaceSwitcher'
+import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
+import { ProfileSwitcher } from './components/ProfileSwitcher'
 import { useNavigation, type View } from './navigation'
-import { useWorkspaces } from './useWorkspaces'
+import { useProfiles } from './useProfiles'
 
 type OpenDialog =
   | { kind: 'search' }
-  | { kind: 'add-workspace' }
-  | { kind: 'workspace-settings'; workspaceId: string }
-  | { kind: 'delete-workspace'; workspaceId: string }
+  | { kind: 'add-profile' }
+  | { kind: 'profile-settings'; profileId: string }
+  | { kind: 'delete-profile'; profileId: string }
 
 /** Between story S2 and story S3 of m1-chat, the sessions are the drafts of the import, and they are read-only. */
 const NEW_SESSION_UNAVAILABLE = 'Starting a new session is coming soon.'
 
 export function App() {
-  const { state, error, chooseRoots, add, edit, switchTo, remove } = useWorkspaces()
+  const { state, error, chooseDirectories, add, edit, switchTo, remove } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
-  // View state: the user closed the dialog of the roots for now. It shows again at the next start.
-  const [rootsPostponed, setRootsPostponed] = useState(false)
+  // View state: the user closed the dialog of the directories for now. It shows again at the next start.
+  const [directoriesPostponed, setDirectoriesPostponed] = useState(false)
   // View state: the messages of the start that the user closed.
   const [closedNotices, setClosedNotices] = useState<string[]>([])
 
@@ -59,24 +59,24 @@ export function App() {
     )
   }
 
-  const { workspaces, currentId, notices, sessions } = state
-  const current = workspaces.find((workspace) => workspace.id === currentId) ?? null
-  const withoutRoot = workspaces.filter((workspace) => workspace.root === null)
+  const { profiles, currentId, notices, sessions } = state
+  const current = profiles.find((profile) => profile.id === currentId) ?? null
+  const withoutDirectory = profiles.filter((profile) => profile.workspaceDirectory === null)
   const closeDialog = () => setDialog(null)
   const goFromDialog = (next: View) => {
     closeDialog()
     go(next)
   }
 
-  const openAdd = () => setDialog({ kind: 'add-workspace' })
+  const openAdd = () => setDialog({ kind: 'add-profile' })
 
-  const switchWorkspace = async (id: string) => {
+  const switchProfile = async (id: string) => {
     if (id === currentId) return
-    // The history belongs to the other workspace.
+    // The history belongs to the other profile.
     if ((await switchTo(id)) === null) reset()
   }
 
-  const saveNew = async (values: WorkspaceValues) => {
+  const saveNew = async (values: ProfileValues) => {
     const message = await add(values)
     if (message === null) {
       closeDialog()
@@ -85,8 +85,8 @@ export function App() {
     return message
   }
 
-  const saveSettings = (workspaceId: string) => async (values: WorkspaceValues) => {
-    const message = await edit({ id: workspaceId, ...values })
+  const saveSettings = (profileId: string) => async (values: ProfileValues) => {
+    const message = await edit({ id: profileId, ...values })
     if (message === null) closeDialog()
     return message
   }
@@ -94,7 +94,7 @@ export function App() {
   const renderPage = () => {
     switch (view.kind) {
       case 'home':
-        if (!current) return <NoWorkspace onAdd={openAdd} />
+        if (!current) return <NoProfile onAdd={openAdd} />
         return (
           <HomePage
             key={current.id}
@@ -114,15 +114,15 @@ export function App() {
         return <BotsPage />
       case 'customize':
         return <CustomizePage />
-      case 'workspaces':
+      case 'profiles':
         return (
-          <WorkspacesPage
-            workspaces={workspaces}
+          <ProfilesPage
+            profiles={profiles}
             currentId={currentId}
             onAdd={openAdd}
-            onSwitch={(workspaceId) => void switchWorkspace(workspaceId)}
-            onEdit={(workspaceId) => setDialog({ kind: 'workspace-settings', workspaceId })}
-            onDelete={(workspaceId) => setDialog({ kind: 'delete-workspace', workspaceId })}
+            onSwitch={(profileId) => void switchProfile(profileId)}
+            onEdit={(profileId) => setDialog({ kind: 'profile-settings', profileId })}
+            onDelete={(profileId) => setDialog({ kind: 'delete-profile', profileId })}
           />
         )
       case 'session': {
@@ -140,28 +140,28 @@ export function App() {
     switch (dialog?.kind) {
       case 'search':
         return <SearchDialog sessions={sessions} onClose={closeDialog} onGo={goFromDialog} />
-      case 'add-workspace':
-        return <WorkspaceDialog onClose={closeDialog} onSave={saveNew} />
-      case 'workspace-settings': {
-        const { workspaceId } = dialog
-        const workspace = workspaces.find((candidate) => candidate.id === workspaceId)
-        if (!workspace) return null
-        return <WorkspaceDialog workspace={workspace} onClose={closeDialog} onSave={saveSettings(workspaceId)} />
+      case 'add-profile':
+        return <ProfileDialog onClose={closeDialog} onSave={saveNew} />
+      case 'profile-settings': {
+        const { profileId } = dialog
+        const profile = profiles.find((candidate) => candidate.id === profileId)
+        if (!profile) return null
+        return <ProfileDialog profile={profile} onClose={closeDialog} onSave={saveSettings(profileId)} />
       }
-      case 'delete-workspace': {
-        const { workspaceId } = dialog
-        const target = workspaces.find((candidate) => candidate.id === workspaceId)
+      case 'delete-profile': {
+        const { profileId } = dialog
+        const target = profiles.find((candidate) => candidate.id === profileId)
         return (
           <ConfirmDialog
-            title={`Remove ${target?.name ?? 'workspace'}?`}
+            title={`Remove ${target?.name ?? 'profile'}?`}
             body="This also deletes its sessions. You cannot undo this. The old files, the GitHub CLI and the Claude folder stay as they are."
-            confirmLabel="Remove workspace"
+            confirmLabel="Remove profile"
             onClose={closeDialog}
             onConfirm={() => {
-              void remove(workspaceId).then((message) => {
+              void remove(profileId).then((message) => {
                 if (message !== null) return
                 closeDialog()
-                if (workspaceId === currentId) reset()
+                if (profileId === currentId) reset()
               })
             }}
           />
@@ -215,13 +215,13 @@ export function App() {
         <aside className="sidebar">
           {toolbar}
           <Sidebar sessions={sessions} view={view} onGo={go} />
-          <WorkspaceSwitcher
-            workspaces={workspaces}
+          <ProfileSwitcher
+            profiles={profiles}
             current={current}
-            onSwitch={(workspaceId) => void switchWorkspace(workspaceId)}
-            onSettings={() => current && setDialog({ kind: 'workspace-settings', workspaceId: current.id })}
+            onSwitch={(profileId) => void switchProfile(profileId)}
+            onSettings={() => current && setDialog({ kind: 'profile-settings', profileId: current.id })}
             onAdd={openAdd}
-            onManage={() => go({ kind: 'workspaces' })}
+            onManage={() => go({ kind: 'profiles' })}
           />
         </aside>
       )}
@@ -239,26 +239,26 @@ export function App() {
         <div className="content">{renderPage()}</div>
       </main>
       {renderDialog()}
-      {withoutRoot.length > 0 && !rootsPostponed && (
-        <RootsDialog
-          workspaces={withoutRoot}
-          onClose={() => setRootsPostponed(true)}
-          onSave={chooseRoots}
+      {withoutDirectory.length > 0 && !directoriesPostponed && (
+        <DirectoriesDialog
+          profiles={withoutDirectory}
+          onClose={() => setDirectoriesPostponed(true)}
+          onSave={chooseDirectories}
         />
       )}
     </div>
   )
 }
 
-function NoWorkspace({ onAdd }: { onAdd(): void }) {
+function NoProfile({ onAdd }: { onAdd(): void }) {
   return (
     <EmptyPage
       icon={<Plus size={36} />}
-      title="No workspace"
-      body="A workspace holds your sessions and has its own root. Add one to start."
+      title="No profile"
+      body="A profile holds your sessions and has its own workspace directory. Add one to start."
       action={
         <button type="button" className="button primary" onClick={onAdd}>
-          Add workspace
+          Add profile
         </button>
       }
     />

@@ -12,16 +12,18 @@ export const attachmentSchema = z.strictObject({
 export type Attachment = z.output<typeof attachmentSchema>
 
 /**
- * One session of a workspace. In this version a session is a draft, created by the import of the
+ * One session of a profile. In this version a session is a draft, created by the import of the
  * old `workspace.json`. The prompt waits in the composer. A later story starts the session.
  */
 export const sessionSchema = z.strictObject({
   id: z.string(),
-  workspaceId: z.string(),
+  profileId: z.string(),
   title: z.string(),
   prompt: z.string(),
   mode: z.enum(MODES),
-  folder: z.string(),
+  providerId: z.string().nullable(),
+  /** The repository or folder that the session started from. The sidebar groups sessions by it. */
+  sourcePath: z.string(),
   model: z.string(),
   attachments: z.array(attachmentSchema),
   createdAt: z.string()

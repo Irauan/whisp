@@ -30,7 +30,7 @@ import {
 } from '../../../shared/model'
 import { findMention, insertTrigger, removeMention, type Edit, type Trigger } from '../mention'
 import { useSuggestions } from '../useSuggestions'
-import type { SessionDraft } from '../useWorkspaces'
+import type { SessionDraft } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 import { Menu, MenuOption, Submenu } from './Menu'
 
@@ -66,7 +66,7 @@ const REPOSITORY_KINDS: Attachment['kind'][] = [
 ]
 
 interface Props {
-  /** The sessions of the workspace, oldest first. They give the recent folders and the model. */
+  /** The sessions of the profile, oldest first. They give the recent folders and the model. */
   sessions: SessionDraft[]
   githubLogin: string | null
   /** Why a new session cannot start, or null. The composer shows it and disables Send. */
@@ -77,7 +77,7 @@ interface Props {
 /** The settings of a new session: the folder and the model of the last session. */
 function startSettings(last: SessionDraft | undefined): SessionSettings {
   const model = MODELS.find((option) => option.id === last?.model)?.id
-  return { ...FIRST_SETTINGS, folder: last?.folder ?? '', model: model ?? FIRST_SETTINGS.model }
+  return { ...FIRST_SETTINGS, folder: last?.sourcePath ?? '', model: model ?? FIRST_SETTINGS.model }
 }
 
 export function SessionComposer({ sessions, githubLogin, unavailable, onSubmit }: Props) {
@@ -118,7 +118,7 @@ export function SessionComposer({ sessions, githubLogin, unavailable, onSubmit }
   const activeIndex = Math.min(active, Math.max(0, (suggestions?.items.length ?? 0) - 1))
 
   const recentFolders = [
-    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.folder)])
+    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.sourcePath)])
   ].slice(0, MAX_RECENT_FOLDERS)
 
   // A folder without Git cannot have a worktree.

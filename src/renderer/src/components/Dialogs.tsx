@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { SessionDraft } from '../useWorkspaces'
+import type { SessionDraft } from '../useProfiles'
 import type { View } from '../navigation'
 
 export function Modal(props: { label: string; className?: string; onClose(): void; children: ReactNode }) {

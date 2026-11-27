@@ -16,7 +16,7 @@ let open: Composition[] = []
 beforeEach(async () => {
   const base = await mkdtemp(join(tmpdir(), 'aether-main-'))
   dataDir = join(base, 'data')
-  rootDir = join(base, 'roots')
+  rootDir = join(base, 'directories')
   await mkdir(dataDir)
   await mkdir(rootDir)
   open = []
@@ -78,9 +78,9 @@ async function writeOldFiles() {
 }
 
 const snapshotOf = async (call: ReturnType<typeof start>['call']) => {
-  const result = (await call('workspaces.list', {})) as {
+  const result = (await call('profiles.list', {})) as {
     ok: true
-    value: { workspaces: { id: string; name: string; root: string | null }[]; currentId: string | null; notices: { code: string }[] }
+    value: { profiles: { id: string; name: string; workspaceDirectory: string | null }[]; currentId: string | null; notices: { code: string }[] }
   }
   return result.value
 }
@@ -91,16 +91,16 @@ describe('composeMain', () => {
     expect(Object.keys(composition.controllers).sort()).toEqual(contracts.map((contract) => contract.name).sort())
   })
 
-  it('starts empty without an old file: no workspace, no message', async () => {
+  it('starts empty without an old file: no profile, no message', async () => {
     const { call } = start()
-    expect(await snapshotOf(call)).toEqual({ workspaces: [], currentId: null, notices: [] })
+    expect(await snapshotOf(call)).toEqual({ profiles: [], currentId: null, notices: [] })
   })
 
   it('imports the old file at the first start, and not again at the second', async () => {
     await writeOldFiles()
     const first = start()
     const snapshot = await snapshotOf(first.call)
-    expect(snapshot.workspaces.map((workspace) => [workspace.name, workspace.root])).toEqual([
+    expect(snapshot.profiles.map((profile) => [profile.name, profile.workspaceDirectory])).toEqual([
       ['Personal', null],
       ['Client Example', null]
     ])
@@ -109,9 +109,9 @@ describe('composeMain', () => {
 
     const second = start()
     const again = await snapshotOf(second.call)
-    expect(again.workspaces.map((workspace) => workspace.id)).toEqual(snapshot.workspaces.map((workspace) => workspace.id))
-    const [client] = again.workspaces.filter((workspace) => workspace.name === 'Client Example')
-    expect(await second.call('sessions.list', { workspaceId: client!.id })).toMatchObject({
+    expect(again.profiles.map((profile) => profile.id)).toEqual(snapshot.profiles.map((profile) => profile.id))
+    const [client] = again.profiles.filter((profile) => profile.name === 'Client Example')
+    expect(await second.call('sessions.list', { profileId: client!.id })).toMatchObject({
       ok: true,
       value: { sessions: [{ title: 'Review the invoice export', mode: 'approve-all' }] }
     })
@@ -123,9 +123,9 @@ describe('composeMain', () => {
     draft!.settings = { ...draft!.settings, attachments: [{ kind: '', ref: 'x', label: 'x' }] as never }
     await writeFile(join(dataDir, 'workspace.json'), JSON.stringify(profile))
     const { call } = start()
-    const { workspaces } = await snapshotOf(call)
-    const [client] = workspaces.filter((workspace) => workspace.name === 'Client Example')
-    expect(await call('sessions.list', { workspaceId: client!.id })).toMatchObject({
+    const { profiles } = await snapshotOf(call)
+    const [client] = profiles.filter((profile) => profile.name === 'Client Example')
+    expect(await call('sessions.list', { profileId: client!.id })).toMatchObject({
       ok: true,
       value: { sessions: [{ title: 'Review the invoice export', attachments: [] }] }
     })
@@ -135,18 +135,18 @@ describe('composeMain', () => {
     const old = await writeOldFiles()
     const conversation = await readFile(join(dataDir, 'runs', 'work-item-1.json'))
     const { call } = start()
-    const { workspaces } = await snapshotOf(call)
-    const [personal, client] = workspaces
-    const added = (await call('workspaces.add', { name: 'Third', root: rootDir, github: null, claudeFolder: null, claudeProfile: null })) as {
+    const { profiles } = await snapshotOf(call)
+    const [personal, client] = profiles
+    const added = (await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })) as {
       value: { id: string }
     }
 
     for (const [name, input] of [
-      ['workspaces.choose-roots', { roots: [{ workspaceId: personal!.id, root: rootDir }, { workspaceId: client!.id, root: rootDir }] }],
-      ['workspaces.edit', { id: client!.id, name: 'Renamed', root: rootDir, github: null, claudeFolder: null, claudeProfile: 'work' }],
-      ['workspaces.switch', { id: personal!.id }],
-      ['workspaces.remove', { id: added.value.id }],
-      ['workspaces.remove', { id: client!.id }]
+      ['profiles.choose-directories', { directories: [{ profileId: personal!.id, workspaceDirectory: rootDir }, { profileId: client!.id, workspaceDirectory: rootDir }] }],
+      ['profiles.edit', { id: client!.id, name: 'Renamed', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: 'work' }],
+      ['profiles.switch', { id: personal!.id }],
+      ['profiles.remove', { id: added.value.id }],
+      ['profiles.remove', { id: client!.id }]
     ] as const) {
       expect(await call(name, input), name).toMatchObject({ ok: true })
     }
@@ -162,8 +162,8 @@ describe('composeMain', () => {
     await writeFile(join(dataDir, 'workspace.json'), unreadable)
     const { call } = start()
     const snapshot = await snapshotOf(call)
-    expect(snapshot.workspaces).toEqual([])
-    expect(snapshot.notices).toMatchObject([{ code: 'workspace-file-unreadable', message: expect.stringMatching(/could not read workspace\.json/i) }])
+    expect(snapshot.profiles).toEqual([])
+    expect(snapshot.notices).toMatchObject([{ code: 'workspace-file-unreadable', message: expect.stringMatching(/could not read workspace.json/i) }])
     expect((await readFile(join(dataDir, 'workspace.json'))).equals(unreadable)).toBe(true)
     expect((await readdir(dataDir)).sort()).toEqual(['aether.db', 'workspace.json'])
   })
@@ -179,7 +179,7 @@ describe('composeMain', () => {
     expect(aside).toHaveLength(1)
     expect((await readFile(join(dataDir, aside[0]!))).equals(text)).toBe(true)
     // The new database imports the old file again: the accounts come back.
-    expect(snapshot.workspaces.map((workspace) => workspace.name)).toEqual(['Personal', 'Client Example'])
+    expect(snapshot.profiles.map((profile) => profile.name)).toEqual(['Personal', 'Client Example'])
     expect((await readFile(join(dataDir, 'workspace.json'))).equals(old)).toBe(true)
   })
 

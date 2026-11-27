@@ -3,5 +3,5 @@ import { SessionStore } from '../session.store'
 import { listSessionsHandler } from './list.handler'
 
 /** The input is already parsed against the contract. */
-export const listSessionsController = (database: Database) => async (input: { workspaceId: string }) =>
+export const listSessionsController = (database: Database) => async (input: { profileId: string }) =>
   listSessionsHandler(new SessionStore(database), input)

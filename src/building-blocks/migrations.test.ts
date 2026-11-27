@@ -8,7 +8,7 @@ import { MIGRATIONS, orderMigrations } from './migrations'
  * so a change of one of these files fails this test. A later change is a new file: add its hash.
  */
 const HASHES: Record<number, string> = {
-  1: '12a45b061bd02fb9912d0fdb892e1edf349f923da997183a30b06ef05faa773a'
+  1: '17b6852cc0b0a7324226becacdd998961564daceaf9082df1f319b67cb0bdd49'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -47,22 +47,33 @@ describe('the migrations of the product', () => {
     const opened = openDatabase(':memory:', MIGRATIONS)
     if (!opened.ok) throw new Error(opened.error.message)
     const { database } = opened.value
-    const insertWorkspace = database.prepare("INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, '2026-01-01')")
-    insertWorkspace.run('w1', 'Personal')
-    const insertSession = database.prepare(
-      "INSERT INTO sessions (id, workspace_id, title, prompt, mode, folder, model, created_at) VALUES (?, ?, 't', 'p', ?, 'f', 'default', '2026-01-01')"
+    const insertProfile = database.prepare("INSERT INTO profiles (id, name, created_at) VALUES (?, ?, '2026-01-01')")
+    insertProfile.run('p1', 'Personal')
+    insertProfile.run('p2', 'Client')
+    const insertProvider = database.prepare(
+      "INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES (?, ?, ?, ?, '2026-01-01')"
     )
-    insertSession.run('s1', 'w1', 'plan')
-    expect(() => insertSession.run('s2', 'w1', 'interactive')).toThrow()
-    expect(() => insertSession.run('s3', 'missing', 'ask')).toThrow()
-    expect(() => insertWorkspace.run('w2', '  ')).toThrow()
-    expect(() =>
-      database.prepare("INSERT INTO workspaces (id, name, github_name, created_at) VALUES ('w3', 'X', 'Name', '2026-01-01')").run()
-    ).toThrow()
+    insertProvider.run('v1', 'p1', 'claude-code', '{"configFolder":"claude"}')
+    const insertSession = database.prepare(
+      "INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, created_at) VALUES (?, ?, ?, 't', 'p', ?, 'f', 'default', '2026-01-01')"
+    )
+    insertSession.run('s1', 'p1', 'v1', 'plan')
+    insertSession.run('s2', 'p1', null, 'ask')
 
-    // Removing a workspace removes its sessions.
-    database.prepare('DELETE FROM workspaces WHERE id = ?').run('w1')
+    // The mode, the foreign keys, the kind, the JSON and the unique kind of a profile.
+    expect(() => insertSession.run('s3', 'p1', null, 'interactive')).toThrow()
+    expect(() => insertSession.run('s4', 'missing', null, 'ask')).toThrow()
+    expect(() => insertSession.run('s5', 'p1', 'missing', 'ask')).toThrow()
+    expect(() => insertProvider.run('v2', 'p2', 'copilot', '{}')).toThrow()
+    expect(() => insertProvider.run('v3', 'p2', 'claude-code', 'not json')).toThrow()
+    expect(() => insertProvider.run('v4', 'p2', 'claude-code', '[]')).toThrow()
+    expect(() => insertProvider.run('v5', 'p1', 'claude-code', '{}')).toThrow()
+    expect(() => database.prepare("INSERT INTO profiles (id, created_at) VALUES ('p3', '2026-01-01')").run()).toThrow()
+
+    // Removing a profile removes its providers and its sessions, also a session that refers to a provider.
+    database.prepare('DELETE FROM profiles WHERE id = ?').run('p1')
     expect(database.prepare('SELECT count(*) AS total FROM sessions').get()).toMatchObject({ total: 0 })
+    expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
     database.close()
   })
 })

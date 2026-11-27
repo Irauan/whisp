@@ -9,8 +9,9 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { baseName } from '../../../shared/model'
 import type { View } from '../navigation'
-import type { SessionDraft } from '../useWorkspaces'
+import type { SessionDraft } from '../useProfiles'
 
 interface Props {
   sessions: SessionDraft[]
@@ -48,6 +49,15 @@ const PAGES: { view: View; label: string; icon: LucideIcon; soon?: boolean }[] =
   { view: { kind: 'customize' }, label: 'Customize', icon: Blocks, soon: true }
 ]
 
+/** Groups the sessions by the repository or folder that they started from. The newest session comes first, in each group and among the groups. */
+function groupBySource(sessions: SessionDraft[]): [string, SessionDraft[]][] {
+  const groups = new Map<string, SessionDraft[]>()
+  for (const session of sessions.toReversed()) {
+    groups.set(session.sourcePath, [...(groups.get(session.sourcePath) ?? []), session])
+  }
+  return [...groups]
+}
+
 export function Sidebar({ sessions, view, onGo }: Props) {
   return (
     <nav className="sidebar-body" aria-label="Main">
@@ -77,14 +87,21 @@ export function Sidebar({ sessions, view, onGo }: Props) {
       </div>
       <div className="group">
         {sessions.length === 0 && <p className="empty-row">No sessions yet</p>}
-        {sessions.toReversed().map((session) => (
-          <NavRow
-            key={session.id}
-            icon={<MessageSquare size={18} />}
-            label={session.title}
-            active={view.kind === 'session' && view.sessionId === session.id}
-            onClick={() => onGo({ kind: 'session', sessionId: session.id })}
-          />
+        {groupBySource(sessions).map(([sourcePath, group]) => (
+          <div key={sourcePath}>
+            <h3 className="group-title" title={sourcePath}>
+              {baseName(sourcePath)}
+            </h3>
+            {group.map((session) => (
+              <NavRow
+                key={session.id}
+                icon={<MessageSquare size={18} />}
+                label={session.title}
+                active={view.kind === 'session' && view.sessionId === session.id}
+                onClick={() => onGo({ kind: 'session', sessionId: session.id })}
+              />
+            ))}
+          </div>
         ))}
       </div>
     </nav>

@@ -231,7 +231,17 @@ button:disabled {
   color: var(--muted);
 }
 
-/* Accounts */
+.group-title {
+  padding: 6px 8px 2px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Profiles */
 
 .account-bar {
   flex: none;

@@ -1,22 +1,22 @@
 import type { Contract } from '../building-blocks/contract'
 import { listSessions } from '../features/sessions/list/list.contract'
-import { addWorkspace } from '../features/workspaces/add/add.contract'
-import { chooseRoots } from '../features/workspaces/choose-roots/choose-roots.contract'
-import { editWorkspace } from '../features/workspaces/edit/edit.contract'
-import { listGithubAccounts } from '../features/workspaces/list-github-accounts/list-github-accounts.contract'
-import { listWorkspaces } from '../features/workspaces/list/list.contract'
-import { removeWorkspace } from '../features/workspaces/remove/remove.contract'
-import { switchWorkspace } from '../features/workspaces/switch/switch.contract'
+import { addProfile } from '../features/profiles/add/add.contract'
+import { chooseDirectories } from '../features/profiles/choose-directories/choose-directories.contract'
+import { editProfile } from '../features/profiles/edit/edit.contract'
+import { listGithubAccounts } from '../features/profiles/list-github-accounts/list-github-accounts.contract'
+import { listProfiles } from '../features/profiles/list/list.contract'
+import { removeProfile } from '../features/profiles/remove/remove.contract'
+import { switchProfile } from '../features/profiles/switch/switch.contract'
 
 /** The registry. `invoke` accepts only the names of these contracts. */
 export const contracts: readonly Contract[] = [
   listGithubAccounts,
-  listWorkspaces,
-  chooseRoots,
-  addWorkspace,
-  editWorkspace,
-  switchWorkspace,
-  removeWorkspace,
+  listProfiles,
+  chooseDirectories,
+  addProfile,
+  editProfile,
+  switchProfile,
+  removeProfile,
   listSessions
 ]
 

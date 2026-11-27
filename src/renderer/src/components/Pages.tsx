@@ -1,7 +1,7 @@
 import { Blocks, Bot, CircleDot, Compass, GitPullRequest, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SessionSettings } from '../../../shared/model'
-import type { SessionDraft, WorkspaceView } from '../useWorkspaces'
+import type { SessionDraft, ProfileView } from '../useProfiles'
 import { Avatar, githubNote } from './Avatar'
 import { Mark } from './Mark'
 import { SessionComposer } from './SessionComposer'
@@ -87,57 +87,57 @@ export function WorkItemsPage() {
   )
 }
 
-export function WorkspacesPage(props: {
-  workspaces: WorkspaceView[]
+export function ProfilesPage(props: {
+  profiles: ProfileView[]
   currentId: string | null
   onAdd(): void
-  onSwitch(workspaceId: string): void
-  onEdit(workspaceId: string): void
-  onDelete(workspaceId: string): void
+  onSwitch(profileId: string): void
+  onEdit(profileId: string): void
+  onDelete(profileId: string): void
 }) {
-  const { workspaces, currentId } = props
+  const { profiles, currentId } = props
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Workspaces</h1>
+        <h1>Profiles</h1>
         <button type="button" className="button with-icon" onClick={props.onAdd}>
           <Plus size={16} />
-          Add workspace
+          Add profile
         </button>
       </header>
       <p className="muted description">
-        Each workspace has its own root and its own sessions. The GitHub sign-in stays in the GitHub CLI.
+        Each profile has its own workspace directory and its own sessions. The GitHub sign-in stays in the GitHub CLI.
       </p>
-      {workspaces.length === 0 && <p className="empty-row">No workspaces yet</p>}
-      {workspaces.map((workspace) => (
-        <section key={workspace.id} className="panel account-panel" aria-label={workspace.name}>
-          <Avatar workspace={workspace} size={40} />
+      {profiles.length === 0 && <p className="empty-row">No profiles yet</p>}
+      {profiles.map((profile) => (
+        <section key={profile.id} className="panel account-panel" aria-label={profile.name}>
+          <Avatar profile={profile} size={40} />
           <div className="account-text">
-            <h2>{workspace.name}</h2>
+            <h2>{profile.name}</h2>
             <p className="muted">
-              {githubNote(workspace)} · {workspace.root ?? 'No root yet'}
+              {githubNote(profile)} · {profile.workspaceDirectory ?? 'No workspace directory yet'}
             </p>
           </div>
-          {workspace.id === currentId ? (
+          {profile.id === currentId ? (
             <span className="muted">In use</span>
           ) : (
-            <button type="button" className="button" onClick={() => props.onSwitch(workspace.id)}>
+            <button type="button" className="button" onClick={() => props.onSwitch(profile.id)}>
               Switch
             </button>
           )}
           <button
             type="button"
             className="icon-button"
-            aria-label={`Edit ${workspace.name}`}
-            onClick={() => props.onEdit(workspace.id)}
+            aria-label={`Edit ${profile.name}`}
+            onClick={() => props.onEdit(profile.id)}
           >
             <Pencil size={18} />
           </button>
           <button
             type="button"
             className="icon-button"
-            aria-label={`Remove ${workspace.name}`}
-            onClick={() => props.onDelete(workspace.id)}
+            aria-label={`Remove ${profile.name}`}
+            onClick={() => props.onDelete(profile.id)}
           >
             <Trash2 size={18} />
           </button>

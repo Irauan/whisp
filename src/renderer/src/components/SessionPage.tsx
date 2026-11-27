@@ -1,6 +1,6 @@
 import { Trash2 } from 'lucide-react'
 import { labelOf, MODELS } from '../../../shared/model'
-import type { SessionDraft } from '../useWorkspaces'
+import type { SessionDraft } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 
 /** The five modes of a session. Story S3 of m1-chat replaces this with the Mode control. */
@@ -15,7 +15,7 @@ const MODE_LABELS = [
 /** A draft session of the import. It is read-only until the session slices of story S3 exist. */
 export function SessionPage({ session }: { session: SessionDraft }) {
   const rows: [string, string][] = [
-    ['Folder', session.folder],
+    ['Source', session.sourcePath],
     ['Mode', labelOf(MODE_LABELS, session.mode)],
     ['Model', labelOf(MODELS, session.model)]
   ]

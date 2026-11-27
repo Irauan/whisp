@@ -7,11 +7,12 @@ const attachmentsSchema = z.array(attachmentSchema)
 function toSession(row: Record<string, unknown>): Session {
   return sessionSchema.parse({
     id: row.id,
-    workspaceId: row.workspace_id,
+    profileId: row.profile_id,
     title: row.title,
     prompt: row.prompt,
     mode: row.mode,
-    folder: row.folder,
+    providerId: row.provider_id,
+    sourcePath: row.source_path,
     model: row.model,
     attachments: attachmentsSchema.parse(JSON.parse(String(row.attachments))),
     createdAt: row.created_at
@@ -22,11 +23,11 @@ function toSession(row: Record<string, unknown>): Session {
 export class SessionStore {
   constructor(private readonly database: Database) {}
 
-  /** The sessions of one workspace, oldest first. */
-  listByWorkspace(workspaceId: string): Session[] {
+  /** The sessions of one profile, oldest first. */
+  listByProfile(profileId: string): Session[] {
     return this.database
-      .prepare('SELECT * FROM sessions WHERE workspace_id = ? ORDER BY created_at, rowid')
-      .all(workspaceId)
+      .prepare('SELECT * FROM sessions WHERE profile_id = ? ORDER BY created_at, rowid')
+      .all(profileId)
       .map(toSession)
   }
 }

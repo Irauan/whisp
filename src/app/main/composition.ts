@@ -5,24 +5,24 @@ import { randomIds, type Ids } from '../../building-blocks/ids'
 import type { GithubPort } from '../../building-blocks/github.port'
 import { MIGRATIONS } from '../../building-blocks/migrations'
 import { ok, type Result } from '../../building-blocks/result'
-import { addWorkspace } from '../../features/workspaces/add/add.contract'
-import { addWorkspaceController } from '../../features/workspaces/add/add.controller'
-import { chooseRoots } from '../../features/workspaces/choose-roots/choose-roots.contract'
-import { chooseRootsController } from '../../features/workspaces/choose-roots/choose-roots.controller'
-import { editWorkspace } from '../../features/workspaces/edit/edit.contract'
-import { editWorkspaceController } from '../../features/workspaces/edit/edit.controller'
-import { importOldFilesHandler } from '../../features/workspaces/import-old-files/import-old-files.handler'
-import { ImportStore } from '../../features/workspaces/import-old-files/import-old-files.store'
-import { listGithubAccounts } from '../../features/workspaces/list-github-accounts/list-github-accounts.contract'
-import { listGithubAccountsController } from '../../features/workspaces/list-github-accounts/list-github-accounts.controller'
-import { listWorkspaces } from '../../features/workspaces/list/list.contract'
-import { listWorkspacesController } from '../../features/workspaces/list/list.controller'
-import { removeWorkspace } from '../../features/workspaces/remove/remove.contract'
-import { removeWorkspaceController } from '../../features/workspaces/remove/remove.controller'
-import { switchWorkspace } from '../../features/workspaces/switch/switch.contract'
-import { switchWorkspaceController } from '../../features/workspaces/switch/switch.controller'
-import type { Notice } from '../../features/workspaces/workspace'
-import { WorkspaceStore } from '../../features/workspaces/workspace.store'
+import { addProfile } from '../../features/profiles/add/add.contract'
+import { addProfileController } from '../../features/profiles/add/add.controller'
+import { chooseDirectories } from '../../features/profiles/choose-directories/choose-directories.contract'
+import { chooseDirectoriesController } from '../../features/profiles/choose-directories/choose-directories.controller'
+import { editProfile } from '../../features/profiles/edit/edit.contract'
+import { editProfileController } from '../../features/profiles/edit/edit.controller'
+import { importOldFilesHandler } from '../../features/profiles/import-old-files/import-old-files.handler'
+import { ImportStore } from '../../features/profiles/import-old-files/import-old-files.store'
+import { listGithubAccounts } from '../../features/profiles/list-github-accounts/list-github-accounts.contract'
+import { listGithubAccountsController } from '../../features/profiles/list-github-accounts/list-github-accounts.controller'
+import { listProfiles } from '../../features/profiles/list/list.contract'
+import { listProfilesController } from '../../features/profiles/list/list.controller'
+import { removeProfile } from '../../features/profiles/remove/remove.contract'
+import { removeProfileController } from '../../features/profiles/remove/remove.controller'
+import { switchProfile } from '../../features/profiles/switch/switch.contract'
+import { switchProfileController } from '../../features/profiles/switch/switch.controller'
+import type { Notice } from '../../features/profiles/profile'
+import { ProfileStore } from '../../features/profiles/profile.store'
 import { listSessions } from '../../features/sessions/list/list.contract'
 import { listSessionsController } from '../../features/sessions/list/list.controller'
 import type { Controller } from './ipc'
@@ -36,7 +36,7 @@ export const OLD_WORKSPACE_FILE = 'workspace.json'
 export interface Composition {
   /** The controller of each contract in the registry, by contract name. */
   controllers: Record<string, Controller>
-  /** The messages about the start. The snapshot of the workspaces carries them to the window. */
+  /** The messages about the start. The snapshot of the profiles carries them to the window. */
   notices: Notice[]
   /** Closes the database. */
   close(): void
@@ -70,7 +70,7 @@ export function composeMain({ dataDir, github, clock = systemClock, ids = random
   }
 
   const imported = importOldFilesHandler({
-    workspaces: new WorkspaceStore(database),
+    profiles: new ProfileStore(database),
     imports: new ImportStore(database),
     clock,
     ids,
@@ -81,12 +81,12 @@ export function composeMain({ dataDir, github, clock = systemClock, ids = random
   return ok({
     controllers: {
       [listGithubAccounts.name]: listGithubAccountsController(github),
-      [listWorkspaces.name]: listWorkspacesController(database, () => notices),
-      [chooseRoots.name]: chooseRootsController(database),
-      [addWorkspace.name]: addWorkspaceController(database, clock, ids),
-      [editWorkspace.name]: editWorkspaceController(database),
-      [switchWorkspace.name]: switchWorkspaceController(database),
-      [removeWorkspace.name]: removeWorkspaceController(database),
+      [listProfiles.name]: listProfilesController(database, () => notices),
+      [chooseDirectories.name]: chooseDirectoriesController(database),
+      [addProfile.name]: addProfileController(database, clock, ids),
+      [editProfile.name]: editProfileController(database, clock, ids),
+      [switchProfile.name]: switchProfileController(database),
+      [removeProfile.name]: removeProfileController(database),
       [listSessions.name]: listSessionsController(database)
     },
     notices,
