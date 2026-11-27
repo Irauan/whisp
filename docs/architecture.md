@@ -152,9 +152,10 @@ Decision 0013 records this model.
 - Decision 0014 gives the provider model: many accounts for each profile, one current account for each kind, and the table `agent_sessions`.
 - Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
 - A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
-- A session has a nullable provider: the account that the next agent of the session uses. Aether sets it at create from the current account of the profile. A session without one (an imported draft) takes the current account at its first start.
+- A session has a nullable provider. It is null until the first start. The first start reads the current account of the profile at that moment, and saves it in the session and in the agent run. A session never keeps an account from its creation.
 - The table `agent_sessions` has one row for each agent run. Aether saves it, in one transaction, when the agent session exists. The row names the provider that the process started with and the agent session ID. A resume uses that provider. Milestone m1-chat has one row for each session.
-- The first start creates an empty current account when the profile has none. A failed first start keeps this account and saves no agent run, so the user can fix the profile and try again.
+- The first start creates an empty current account when the profile has none. A failed first start keeps this account and saves no agent run. The retry reads the current account again, so it uses the account that the user fixed.
+- An account that a first start uses counts as used until the start ends, because no agent run names it before the process is ready. An edit in that time makes a new current account. The set of these accounts lives in memory. The account that an agent run names always holds the settings that its process started with.
 - A trigger locks the Claude folder of an account that an agent run used. The label stays editable.
 - "Profile settings" edits the current Claude account. An account that no agent run used changes in place. For a used account, a change of the settings makes a new current account, or makes the account with the same settings current. The old account stays for its agent runs. A change applies to new sessions only.
 - A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
