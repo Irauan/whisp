@@ -157,6 +157,35 @@ describe('composeMain', () => {
     expect((await readdir(dataDir)).sort()).toEqual(['aether.db', 'runs', 'workspace.json'])
   })
 
+  it('creates, lists, opens and deletes sessions through invoke, and leaves the old files byte-equal', async () => {
+    const old = await writeOldFiles()
+    const { call } = start()
+    const { profiles } = await snapshotOf(call)
+    const [client] = profiles.filter((profile) => profile.name === 'Client Example')
+    const input = { profileId: client!.id, prompt: 'Say hello', mode: 'approve-all', model: 'default', sourcePath: rootDir, attachments: [] }
+
+    const created = (await call('sessions.create', input)) as { ok: true; value: { id: string } }
+    expect(created).toMatchObject({ ok: true })
+    // The imported draft is Approve all, and so is the new session. The next new session shows Ask.
+    expect(await call('sessions.list', { profileId: client!.id })).toMatchObject({
+      ok: true,
+      value: { sessions: [{ title: 'Review the invoice export' }, { title: 'Say hello', mode: 'approve-all' }], newSessionMode: 'ask' }
+    })
+    expect(await call('sessions.open', { id: created.value.id })).toMatchObject({ ok: true, value: { session: { prompt: 'Say hello' } } })
+    expect(await call('sessions.create', { ...input, sourcePath: join(rootDir, 'missing') })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-source-path' }
+    })
+    expect(await call('sessions.create', { ...input, mode: 'interactive' })).toMatchObject({ ok: false, error: { code: 'invalid-input' } })
+
+    expect(await call('sessions.delete', { id: created.value.id })).toEqual({ ok: true, value: {} })
+    expect(await call('sessions.open', { id: created.value.id })).toMatchObject({ ok: false, error: { code: 'unknown-session' } })
+    expect(await call('sessions.list', { profileId: client!.id })).toMatchObject({ ok: true, value: { sessions: [{ title: 'Review the invoice export' }] } })
+
+    expect((await readFile(join(dataDir, 'workspace.json'))).equals(old)).toBe(true)
+    expect((await readdir(dataDir)).sort()).toEqual(['aether.db', 'runs', 'workspace.json'])
+  })
+
   it('keeps an unreadable workspace.json in place, shows a notice and imports nothing', async () => {
     const unreadable = Buffer.from('{"version":4,"accounts":[{"id":"personal","label":"Personal"\r\n')
     await writeFile(join(dataDir, 'workspace.json'), unreadable)

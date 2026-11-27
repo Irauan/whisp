@@ -1,4 +1,4 @@
-import { Check, ChevronRight } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export function Menu(props: {
@@ -52,6 +52,8 @@ export function MenuOption(props: {
       type="button"
       className="option"
       aria-pressed={props.checked}
+      // The text and the tag join without a space, so a screen reader needs the full name.
+      aria-label={props.tag ? `${props.title}, ${props.tag.toLowerCase()}` : undefined}
       disabled={props.disabled}
       onClick={props.onSelect}
       popoverTarget={props.menu}
@@ -65,27 +67,5 @@ export function MenuOption(props: {
       {props.hint && <span className="muted">{props.hint}</span>}
       {props.tag && <span className="tag">{props.tag}</span>}
     </button>
-  )
-}
-
-export function Submenu(props: { id: string; label: string; value: string; children: ReactNode }) {
-  return (
-    <>
-      <button type="button" className="option" popoverTarget={props.id}>
-        <span className="option-check" />
-        <span className="option-text">{props.label}</span>
-        <span className="muted">{props.value}</span>
-        <ChevronRight size={16} />
-      </button>
-      <div
-        id={props.id}
-        className="popover submenu"
-        popover="auto"
-        role="group"
-        aria-label={props.label}
-      >
-        {props.children}
-      </div>
-    </>
   )
 }

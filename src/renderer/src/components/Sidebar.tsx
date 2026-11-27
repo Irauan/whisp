@@ -11,10 +11,10 @@ import {
 import type { ReactNode } from 'react'
 import { baseName } from '../../../shared/model'
 import type { View } from '../navigation'
-import type { SessionDraft } from '../useProfiles'
+import type { SessionView } from '../useProfiles'
 
 interface Props {
-  sessions: SessionDraft[]
+  sessions: SessionView[]
   view: View
   onGo(view: View): void
 }
@@ -50,8 +50,8 @@ const PAGES: { view: View; label: string; icon: LucideIcon; soon?: boolean }[] =
 ]
 
 /** Groups the sessions by the repository or folder that they started from. The newest session comes first, in each group and among the groups. */
-function groupBySource(sessions: SessionDraft[]): [string, SessionDraft[]][] {
-  const groups = new Map<string, SessionDraft[]>()
+function groupBySource(sessions: SessionView[]): [string, SessionView[]][] {
+  const groups = new Map<string, SessionView[]>()
   for (const session of sessions.toReversed()) {
     groups.set(session.sourcePath, [...(groups.get(session.sourcePath) ?? []), session])
   }

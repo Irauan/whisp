@@ -1,3 +1,5 @@
+import type { Mode } from '../building-blocks/mode'
+
 export interface GithubProfile {
   login: string
   name: string | null
@@ -5,18 +7,17 @@ export interface GithubProfile {
   avatar: string | null
 }
 
-// The options of the composer. m1-chat S3 replaces Mode and Tool permissions with one Mode control.
-export const MODES = [
-  { id: 'interactive', label: 'Interactive', note: 'Work together step by step' },
-  { id: 'plan', label: 'Plan', note: 'Make a plan first, then do the work' },
-  { id: 'autopilot', label: 'Autopilot', note: 'Do all the work without a stop' }
-] as const
-
-export const PERMISSIONS = [
-  { id: 'ask', label: 'Always ask', note: 'Ask before each tool' },
-  { id: 'assisted', label: 'Assisted', note: 'Let AI approve the safe tools' },
-  { id: 'all', label: 'Approve all', note: 'Run each tool without a question' }
-] as const
+/**
+ * The options of the one Mode control (decision 0012), in the order of the menu. The ids are the
+ * modes of the agent port. `src/shared/model.test.ts` checks that they match.
+ */
+export const MODE_OPTIONS = [
+  { id: 'ask', label: 'Ask', note: 'Ask before each tool' },
+  { id: 'accept-edits', label: 'Accept edits', note: 'Edit files without a question' },
+  { id: 'plan', label: 'Plan', note: 'Make a plan first, change nothing' },
+  { id: 'auto', label: 'Auto', note: 'Let a check approve the safe tools' },
+  { id: 'approve-all', label: 'Approve all', note: 'Run each tool without a question' }
+] as const satisfies readonly { id: Mode; label: string; note: string }[]
 
 export const MODELS = [
   { id: 'default', label: 'Default' },
@@ -44,10 +45,8 @@ export interface Attachment {
 export interface SessionSettings {
   /** The session runs in this folder, and the folder is its context. */
   folder: string
-  mode: (typeof MODES)[number]['id']
-  permissions: (typeof PERMISSIONS)[number]['id']
+  mode: Mode
   model: (typeof MODELS)[number]['id']
-  checkout: 'worktree' | 'folder'
   attachments: Attachment[]
 }
 
