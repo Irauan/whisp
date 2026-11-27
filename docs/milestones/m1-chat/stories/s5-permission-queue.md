@@ -37,7 +37,7 @@ Status: draft for the design review. Not approved.
 - The end of a turn does not close a card. The agent cancels a request that it no longer waits for.
 - The queue lives in memory only. It does not survive a restart of Aether (`docs/architecture.md`, Agents).
 - The main process accepts an answer only for an open request of that session, and only with an option that the request offered.
-- A request that comes after Stop, while the cancel of that turn runs, gets `cancelled` at once. It shows no card.
+- A request that comes after Stop, while the cancel of that turn runs, or while the process closes (a release, a delete or a quit), gets `cancelled` at once. It shows no card.
 
 ### Requests outside a turn
 
@@ -57,7 +57,7 @@ Status: draft for the design review. Not approved.
 | Waiting for permission | One card for each open request, at the end of the transcript. The status line says "Waiting for your answer". Stop is available. This holds with any status, also outside a turn. |
 | Answer sent | The card switches at once to its answered layout, with a small spinner after the chosen label. No disabled buttons show. |
 | Answer refused by the main process | The card stays. It shows the reason under its buttons. The buttons work again. |
-| After Stop | No open card. Each card that was open shows its answered layout with "Cancelled". The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
+| After Stop | No open card. Each card that was open stays as a not-answered card: the question in the secondary color, and "Not answered: you pressed Stop." in the primary color. The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
 
 The session status does not get a new value. "Waiting for permission" is any status with a queue that is not empty. See open choice 3.
 
@@ -89,17 +89,19 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-17 | Two open cards show inside the log "Transcript", after the last entry, in the order of arrival. A later entry comes before them. The dock holds no card. | Acceptance |
 | S5-18 | The user scrolled up. A new card comes. The log does not move. The status line shows "Waiting for your answer" and "Show request". A click brings the oldest open card into view and focuses it. | Acceptance |
 | S5-19 | A new card does not take the focus: a key typed in "Prompt" goes to the composer. | Acceptance |
-| S5-20 | After the user picks "Allow", the decision card stays in the transcript with no buttons. It shows the question in the secondary color and "Allow" in the primary color. After a restart it shows the same. Stop on an open decision card shows "Cancelled". | Acceptance |
+| S5-20 | After the user picks "Allow", the decision card stays in the transcript with no buttons. It shows the question in the secondary color and "Allow" in the primary color. After a restart it shows the same. Stop on an open decision card shows "Not answered: you pressed Stop.". | Acceptance |
+| S5-28 | Each path that closes an open card saves its reason: Stop (`stopped`), `$/cancel_request` (`withdrawn`), the exit or crash of the process (`exited`), the quit of Aether (`quit`), Skip (`skipped`). The card shows the text of its reason after a restart. Delete session saves no entry, and the agent gets `cancelled`. | Slice |
+| S5-29 | Stop on a card makes the adapter also send `$/cancel_request`. The card keeps the reason `stopped`: the first close wins. | Slice |
 | S5-27 | While an answer is being sent, the card shows no disabled button: it shows the answered layout with a spinner. When the main process refuses the answer, the card goes back to its buttons, with the error line. | Acceptance |
 | S5-21 | The user answers a single select and a multi select with "Other". The card turns into the answered card "Claude asked", with one row for each question and the answer below it. After a restart it shows the same. | Acceptance |
-| S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Cancelled" in each row. | Acceptance |
+| S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Not answered: you pressed Stop." in each row. | Acceptance |
 | S5-23 | A click on an option row selects it and sends nothing. "Submit" is disabled until a pick or a text. No row is preselected. | Acceptance |
 | S5-24 | A decision card with "Yes", "Yes, and don't ask again for …" and "No" shows the primary split button "Yes", its dropdown "More allow options" with the menuitem of the "always" option, and the button "No". The menuitem sends its option. A safety ask puts the refuse group first and primary. The card shows the context in the secondary color and the question in the primary color. | Acceptance |
 | S5-26 | At a wide width, the buttons of a decision card sit on one line, each sized to its content. At a narrow width (375 px), each button takes the full width of the card, at equal size, stacked. | Acceptance |
 | S5-25 | An MCP form with a text field saves "Answered", not the typed text. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-27 are not in the brief. They cover the rules above.
+S5-1 to S5-29 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -197,18 +199,14 @@ The user said: "On Claude desktop the card changes and shows a list with the que
 - It lists one row for each question: the question text in the primary color, and the answer below it in the secondary color. Separators split the rows.
 - The answer text:
   - submitted: the picked labels, joined with ", ", then the typed text of "Other"
-  - a question with no pick and no text: "Skipped"
-  - Skip of the whole form: each row says "Skipped"
-  - a cancel: each row says "Cancelled"
+  - a question with no pick and no text: "Not answered: you skipped it."
+  - Skip of the whole form: each row says "Not answered: you skipped it."
+  - a close without an answer: each row says why. See "Cards that closed without an answer".
 - The refusal fallback card also turns into an answered card, with the one row "Retry with <fallback>?" and the chosen option.
 - The answered card is a saved entry, so it stays after a reload and a restart. See "Data".
 - Main adds the entry with `addEntry` in the same step that removes the open card. The open card was last in the log, so the answered card keeps its place.
-- Which cancels save an entry:
-  - Stop: yes, "Cancelled"
-  - the withdraw by the agent (`$/cancel_request`): yes, "Cancelled"
-  - the exit or a crash of the process: yes, "Cancelled"
-  - the quit of Aether: yes, "Cancelled", while `releaseAll` closes the processes
-  - a form that got -32602: no, because no card showed
+- Which closes save an entry: see "Cards that closed without an answer".
+- A form that got -32602 saves nothing, because no card showed.
 - Decision cards (permission cards) also stay after the answer. See "The answered decision card".
 
 #### The answered decision card (user decision, 2026-11-27)
@@ -217,7 +215,35 @@ The user said: "when we have already answered we shouldn't show the button disab
 
 - After an answer, the decision card stays in the transcript, at its place. It drops its buttons. No disabled button shows.
 - It shows only the question in the secondary color, and the chosen answer (the label of Claude's option) in the primary color.
-- A cancel (Stop, the cancel of the agent, the exit of the process, the quit of Aether) shows "Cancelled" as the answer.
+- A close without an answer shows why. See "Cards that closed without an answer".
+- The button "Cancel request" of a request with no options is an answer of the user. It saves `submitted` with the label "Cancel request".
+
+#### Cards that closed without an answer (user decision, 2026-11-27)
+
+The user said: "we should show a card with the question in secondary and something telling that the session was canceled/exited or the question was dismissed. What I'm trying to convey is that if the session had a question that was not answered we should make clear that it was not answered and why it was not answered."
+
+- A decision card or a question card that closed without an answer stays in the transcript.
+- It shows the question in the secondary color, and in the primary color a line that says it was not answered and why. For a question card with several questions, each row shows the line.
+- The reasons and their texts (the advisor answered; in the skim list):
+
+| Reason (`outcome`) | Cause | Text |
+|---|---|---|
+| `stopped` | The user pressed Stop. | "Not answered: you pressed Stop." |
+| `withdrawn` | Claude withdrew the request (`$/cancel_request`). | "Not answered: Claude withdrew it." |
+| `exited` | Claude Code exited or crashed. | "Not answered: Claude Code exited." |
+| `quit` | Aether quit, and closed the process. | "Not answered: Aether closed." |
+| `skipped` | The user skipped a question, or left it empty in a submitted form. | "Not answered: you skipped it." |
+
+- No reason `released`: a release (S9) never closes a shown card. S9 releases only an idle session, with no open card, and the idle check and the start of the close are one synchronous step. A request that comes while the process closes gets `cancelled` at once, with no card. See the S9 spec.
+- Delete session saves no entry, because the entries go with the session. The agent still gets `cancelled`.
+
+Who names the reason:
+
+- The slice that starts the close names its reason. Stop gives `stopped`. The quit path gives `quit`.
+- The provider reports only its own two causes, in `permissionClosed(id, reason)` and `elicitationClosed(id, reason)`: `withdrawn` (the signal of the request) and `exited` (the process ended by itself).
+- The first close wins. Stop also makes the adapter send `$/cancel_request`, and a quit makes the process exit. The slice saves its reason before it calls `cancel()` or `close()`. A later close of the same card changes nothing.
+- Quit order: the quit path saves the entries of the open cards first, then calls `processes.releaseAll()`, and only then the database closes (`composition.ts` 191-193 on `milestone/m1-chat`).
+- A crash or a kill of Aether itself saves no entry. No card then shows why. No spec covers it.
 - It is an `article` with the fixed name "Permission answered". It does not reuse "Permission request", so a locator for an open card never matches it.
 - It is a saved entry of the approved kind `answers`, with one row. A reload or a restart keeps it. See "Data".
 - While the answer is being sent, the card shows the answered layout at once, with a small spinner after the chosen label. When the main process accepts the answer, the spinner goes and the entry is saved. When it refuses the answer, the card goes back to its buttons and shows the error line.
@@ -406,7 +432,7 @@ z.strictObject({
   kind: z.literal('answers'),
   card: z.enum(['decision', 'question']),  // added on 2026-11-27 for the answered decision card
   toolId: z.string().nullable(),          // the toolCallId of the elicitation, if any
-  outcome: z.enum(['submitted', 'skipped', 'cancelled']),
+  outcome: z.enum(['submitted', 'skipped', 'stopped', 'withdrawn', 'exited', 'quit']),  // changed on 2026-11-27: the reasons replace 'cancelled'
   rows: z.array(z.strictObject({
     question: z.string(),                 // the message for one question, else the field description
     answer: z.string().nullable(),        // the picked labels, then the typed text; null when none
@@ -414,7 +440,8 @@ z.strictObject({
 })
 ```
 
-  - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to "Skipped" or "Cancelled" by the outcome. A later change of a text then needs no data change.
+  - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to the text of its reason (see "Cards that closed without an answer"). A later change of a text then needs no data change.
+  - Changes of the approved shape, for the user: the field `card` (2026-11-27), and the outcome values `stopped`, `withdrawn`, `exited` and `quit`, which replace `cancelled` (2026-11-27). Hard to revert: yes, because the schema is strict on each read. A later new value is an addition.
   - Main builds the rows at answer time, and adds the entry with `addEntry` where the open card was: at the end of the entries.
   - A decision card saves one row: `question` is the question text of the card, for example "Run this command?", and `answer` is the label of the chosen option, or null for a cancel. The outcome is `submitted` or `cancelled`. `toolId` names the tool call, which shows the command or the path just above.
   - The only change of the approved shape is the field `card`. No other field changes.
@@ -452,7 +479,7 @@ export interface PermissionRequest {
 ```
 
 - `AgentListener.permission(request: PermissionRequest): void`. A new request is open.
-- `AgentListener.permissionClosed(requestId: string): void`. The request closed without an answer of the user: the agent cancelled it, Stop cancelled it, or the process ended.
+- `AgentListener.permissionClosed(requestId: string, reason: 'withdrawn' | 'exited'): void`. The request closed by a cause of the agent: the agent withdrew it, or the process ended by itself. A close that the slice starts (Stop, quit, delete) carries its reason in the slice.
 - `AgentProcess.answer(requestId: string, optionId: string): Result<true, 'unknown-request' | 'unknown-option'>`. It answers one open request.
 - `cancel()` and `close()` also answer each open request with `cancelled` and call `permissionClosed` for each.
 
@@ -502,7 +529,7 @@ export type ElicitationAnswer =
   | { action: 'skip' }
 ```
 
-- `AgentListener.elicitation(request: Elicitation): void` and `AgentListener.elicitationClosed(id: string): void`.
+- `AgentListener.elicitation(request: Elicitation): void` and `AgentListener.elicitationClosed(id: string, reason: 'withdrawn' | 'exited'): void`.
 - `AgentProcess.answerElicitation(id, answer): Result<true, 'unknown-request' | 'invalid-answer'>`.
 - `cancel()` and `close()` answer each open elicitation with `{ action: "cancel" }`.
 - `providers/acp` declares `elicitation: { form: {} }` in `initialize`. It maps `oneOf` to `choice`, `items.anyOf` to `choices`, and a plain string to `text`. It answers -32602 for any other field, and shows no card. It maps `submit` to `accept`, and `skip` to `decline`.
@@ -566,7 +593,7 @@ export type ElicitationAnswer =
 | A request with no options | The card shows one button, "Cancel request". It answers `cancelled`. The adapter treats `cancelled` as "Tool use aborted", so the tool does not run. |
 | A request with no allow option or no refuse option | The card shows the options that the agent offered. |
 | A request with no title and an unknown tool ID | The card shows "Tool call". |
-| A request after Stop, while the cancel runs | The provider answers `cancelled`. No card shows. |
+| A request after Stop, while the cancel runs, or while the process closes | The provider answers `cancelled`. No card shows. |
 | A request when no turn runs | The card shows. Stop shows and cancels it. See "Requests outside a turn". |
 | A request with an unknown session ID | See open choice 6. |
 | The process exits with open requests | The cards close. The turn writes the error notice of S4. |
@@ -777,7 +804,7 @@ Small texts and details that the advisor accepted. The user can veto each one.
 - The status text "Waiting for your answer".
 - The button "Cancel request" for a request with no options.
 - The card heading "Permission request".
-- The texts "Skipped" and "Cancelled" in the answered card.
+- The texts of a card that closed without an answer: "Not answered: you pressed Stop.", "Not answered: Claude withdrew it.", "Not answered: Claude Code exited.", "Not answered: Aether closed.", "Not answered: you skipped it."
 - The fixed card names "Claude asks" (open) and "Claude asked" (answered).
 - The question texts of the decision cards: "Run this command?", "Make this change?", "Read this?", "Fetch this?", "Approve the plan?", "Allow this tool?".
 - The dropdown names "More allow options" and "More refuse options".

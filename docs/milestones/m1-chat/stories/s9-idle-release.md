@@ -24,7 +24,9 @@ Status: draft for the design review. Not approved.
 3. A session that is not idle never closes for rule 1 or rule 2. This includes a session in the state Starting and a session with an open permission request or an open question of Claude.
 4. The next message after a release resumes the agent session, as after a restart (S4).
 5. A pure function with a clock decides the release. It gets each session with an open process and its busy state (turn, open permission requests, open questions of Claude), the time now and the limits. It returns the sessions to close.
-6. The release checks again that the session is idle right before the close. A message that came in the meantime keeps the process.
+6. The release checks again that the session is idle right before the close. A message that came in the meantime keeps the process. The idle check and the start of the close are one synchronous step, with no `await` between them.
+   - So a release never closes a shown card (S5, "Cards that closed without an answer"). S5 has no reason `released`.
+   - A permission request or a question of Claude that comes while the process closes gets `cancelled` at once, with no card (S5 rule).
 7. A message that comes while its process closes waits for the close to end. Then a new process starts and resumes. Two processes never run for one session.
 8. `ensureProcess` keeps this order:
    1. wait for a closing process of the session

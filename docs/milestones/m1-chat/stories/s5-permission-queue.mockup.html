@@ -152,7 +152,7 @@ button:disabled { cursor: default; opacity: .5; }
 /* Changed (user decision, 2026-11-27): the answered decision card. Question in secondary, answer in primary, no buttons. */
 .question.answered-decision { border-color: var(--line); gap: 2px; }
 .question.answered-decision .muted { font-size: 12.5px; }
-.question.answered-decision .chosen { color: var(--text); font-size: 13.5px; display: flex; gap: 6px; align-items: center; }
+.question .chosen { color: var(--text); font-size: 13.5px; display: flex; gap: 6px; align-items: center; }
 .question .ask { color: var(--text); font-size: 14px; font-weight: 500; }
 .decision-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .decision-actions .button { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
@@ -418,7 +418,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>6. After Stop (A5)</h2>
-  <p class="muted">Changed (user decision, 2026-11-27): two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards stay as answered cards with "Cancelled", and no buttons. The open tool calls show "Failed". The composer is ready.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards stay as not-answered cards: the question in the secondary color, and "Not answered: you pressed Stop." in the primary color, with no buttons. The open tool calls show "Failed". The composer is ready.</p>
   <div class="window frame" style="height:460px">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -426,14 +426,14 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">npm test</span><span>Failed</span></div>
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
-      <div class="mark"><span class="mark-label">Changed: answered cards with "Cancelled" after Stop</span>
+      <div class="mark"><span class="mark-label">Changed: not-answered cards with their reason after Stop</span>
         <div class="question answered-decision" role="article" aria-label="Permission answered">
           <p class="muted">Run this command?</p>
-          <p class="chosen">Cancelled</p>
+          <p class="chosen">Not answered: you pressed Stop.</p>
         </div>
         <div class="question answered-decision" role="article" aria-label="Permission answered" style="margin-top:8px">
           <p class="muted">Read this?</p>
-          <p class="chosen">Cancelled</p>
+          <p class="chosen">Not answered: you pressed Stop.</p>
         </div>
       </div>
       <p class="notice">Stopped.</p>
@@ -543,7 +543,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>8b. Answered question cards</h2>
-  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". One row for each question: the question in the primary color, the answer below it in the secondary color, with separators. "Skipped" and "Cancelled" stand for a question with no answer. The card is a saved entry, so it stays after a restart.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". One row for each question: the question in the primary color, the answer below it in the secondary color, with separators. A question with no answer says why, for example "Not answered: you skipped it.". A card that closed without an answer shows the question in the secondary color and the reason in the primary color. The card is a saved entry, so it stays after a restart.</p>
   <div class="window frame" style="height:620px">
     <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -559,13 +559,13 @@ button:disabled { cursor: default; opacity: .5; }
           <h3>Claude asked</h3>
           <div class="answer-row"><p>Which reports do you want?</p><p class="muted">Coverage, JUnit XML, A summary in the console</p></div>
           <div class="answer-row"><p>Run the tests on each save?</p><p class="muted">Yes (Recommended)</p></div>
-          <div class="answer-row"><p>Which folder holds the tests?</p><p class="muted">Skipped</p></div>
+          <div class="answer-row"><p>Which folder holds the tests?</p><p class="muted">Not answered: you skipped it.</p></div>
         </div>
       </div>
-      <div class="question answered" role="article" aria-label="Claude asked">
+      <div class="mark"><span class="mark-label">Changed: a question card that closed without an answer</span><div class="question answered" role="article" aria-label="Claude asked">
         <h3>Claude asked</h3>
-        <div class="answer-row"><p>Do you want a watch script?</p><p class="muted">Cancelled</p></div>
-      </div>
+        <p class="muted">Do you want a watch script?</p><p class="chosen">Not answered: Claude Code exited.</p>
+      </div></div>
       <div class="msg"><p>I set up Vitest with coverage and JUnit XML.</p></div>
     </div>
     <div class="dock">
