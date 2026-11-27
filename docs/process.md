@@ -24,13 +24,15 @@ Principle: automated evidence replaces the user's attention. The user owns the s
 | 4 | Build | Builder | Code and unit tests through TDD, story PR | Locked tests and CI pass |
 | 5 | Review and story validation | Reviewer | Findings, and evidence for what the story changed | No open serious finding |
 | 6 | Story merge | Coordinator session | Story in the milestone branch | CI passes on the milestone branch |
-| 7 | Milestone validation | Validator | Full regression, live test with Claude, evidence report | Each brief check has evidence, no open serious finding |
+| 7 | Milestone validation | Validator | Full regression with the full acceptance suite, live test with Claude, evidence report | Each brief check has evidence, no open serious finding |
 | 8 | Acceptance | User | Accept or reject | User accepts and merges to `main` |
 | 9 | Retrospective | Coordinator session | Metrics, lessons, cleanup | User approves new text rules |
 
 - Before step 3, the coordinator reads only the files and lists what it cannot answer. The user answers, and the files are updated.
 - Steps 3 to 6 repeat for each story. Independent stories run them in parallel. See "Parallel work".
 - Step 7 runs once, after all stories are merged. It runs again only after a fix.
+- A story runs only the acceptance scenarios that it touches. The full acceptance suite runs only in step 7, on a PR to `main` and on `main`. User decision, 2026-11-27.
+- Step 7 turns each regression into a finding. The coordinator fixes it with a fix PR to the milestone branch. Step 7 then runs again.
 - The first stories form a walking skeleton. The coordinator then sends a demo and continues without waiting.
 - A story that changes no behavior can skip step 3.
 - A rejection becomes a failing check and a new story. A second rejection for the same reason returns to the brief.
@@ -205,6 +207,13 @@ Milestone 0 builds the gates before unattended work:
 - a trial of the story merge, the advisor, the roles and the 1Password prompts in Claude Code
 
 CI is fast and deterministic. Evals test judgment at night, only when something changed.
+
+The acceptance scope:
+
+- On a story PR, CI runs the spec folders that the PR touches and the folder of its story branch. `scripts/acceptance-scope.mjs` picks them.
+- On a push to a milestone branch, CI runs the spec folders that the push touches.
+- On a PR to `main`, a push to `main` and a manual run, CI runs the full suite.
+- Typecheck, lint, architecture, unit tests and the lock check run in full on each PR.
 
 Before a milestone, the coordinator proves each tool assumption of the brief with one cheap probe.
 

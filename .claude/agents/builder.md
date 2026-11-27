@@ -38,6 +38,8 @@ You are the builder. Your input is files: the brief, the plan, the spec and the 
 - You may remove an entry from that list when your change fixes that violation.
 - After S3, never add an entry. The lock check fails a PR that grows the list.
 - Run `npm run lock -- --base origin/milestone/<id>` before you push. It runs the check of the CI job `lock`.
+- Run `npm run acceptance:story -- --base origin/milestone/<id>` for the acceptance tests of your story. It runs the scope of the CI job `acceptance`.
+- Do not run the full acceptance suite. It runs in the milestone validation.
 
 ### Builder limits
 

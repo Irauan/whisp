@@ -14,6 +14,8 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 - Report each deviation from an approved hot item of the spec as a serious finding.
 - Validate only what the story changed, against the checks that the plan assigns to the story.
 - Check by hand, in every story, that the diff changes no locked file. The deny rules and the hook do not cover writes through Bash.
+- Run `npm run acceptance:story -- --base origin/milestone/<id>` to validate the story. Do not run the full acceptance suite.
+- Report a change to `scripts/acceptance-scope.mjs` or to the `acceptance` job. It changes which scenarios a story runs.
 - Check by hand each change under `.github/workflows/`. A PR can still change the `lock` job in `ci.yml`. This is an accepted gap of m0-gates (brief, accepted gaps). The builder guard blocks `Edit` and `Write` there, but a PR can come from another source.
 - Check the diff for changes to `scripts/check-lock.mjs`, `scripts/hooks/**`, `.claude/agents/**` and `.claude/settings.json`. The CI job `lock` runs the copy of the script from the base branch, so a change takes effect after the merge.
 - A file is locked when `tests/locks.json` on the base branch has an entry for it, or when the test author added it in the current story. Before S6, no file is locked.
