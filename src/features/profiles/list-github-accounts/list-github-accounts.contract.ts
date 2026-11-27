@@ -11,13 +11,9 @@ const profile = z.object({
 
 /**
  * Lists the GitHub accounts that the GitHub CLI is signed in to.
- *
- * The name still says `workspaces`, because the locked tests of m0-gates S8 and the contract test pin it.
- * The user decision of 2026-11-26 renames it to `profiles.list-github-accounts`. Change this one string
- * when the test author has renamed the locked tests.
  */
 export const listGithubAccounts = defineContract(
-  'workspaces.list-github-accounts',
+  'profiles.list-github-accounts',
   z.strictObject({}),
   z.strictObject({ accounts: z.array(profile) }),
   ['github-cli-missing', 'github-signed-out'],
