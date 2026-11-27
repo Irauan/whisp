@@ -29,19 +29,23 @@ export function createSessionHandler(
   if (!store.profileExists(input.profileId)) return err('unknown-profile', MESSAGES.unknownProfile)
   if (!isExistingFolder(input.sourcePath)) return err('invalid-source-path', MESSAGES.invalidSourcePath)
   const id = ids.next()
-  store.insert({
-    id,
-    profileId: input.profileId,
-    title: titleOf(input.prompt),
-    prompt: input.prompt,
-    // The mode is saved as the user chose it. Only a new session never copies Approve all.
-    mode: input.mode,
-    // The first start sets the account: the current account of the profile at that moment (decision 0014).
-    providerId: null,
-    sourcePath: input.sourcePath,
-    model: input.model,
-    attachments: input.attachments,
-    createdAt: clock.now().toISOString()
-  })
+  store.insert(
+    {
+      id,
+      profileId: input.profileId,
+      title: titleOf(input.prompt),
+      prompt: input.prompt,
+      // The mode is saved as the user chose it. Only a new session never copies Approve all.
+      mode: input.mode,
+      // The first start sets the account: the current account of the profile at that moment (decision 0014).
+      providerId: null,
+      sourcePath: input.sourcePath,
+      model: input.model,
+      attachments: input.attachments,
+      createdAt: clock.now().toISOString()
+    },
+    // The renderer cannot set who started a session. No code writes `automation` in m1.
+    'person'
+  )
   return ok({ id })
 }

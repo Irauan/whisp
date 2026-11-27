@@ -41,6 +41,12 @@ const input = (sourcePath: string) => ({
 })
 
 describe('sessions.create', () => {
+  it('saves the session as started by a person', async () => {
+    const { create, store } = setup()
+    await create(input(folder))
+    expect(store.startedByOf('s1')).toBe('person')
+  })
+
   it('saves the session row with the title, the mode, the folder and the attachments, and starts no agent', async () => {
     const { create, database, store } = setup()
     const result = await create(input(folder))

@@ -207,13 +207,17 @@ The main process asks these questions, and stores the answers. The renderer cann
 - If the agent cannot resume a session, `providers/acp` starts a new agent session. Aether then shows a notice.
 - `providers/claude-code` also holds the sign-in steps and the reader of the settings. The sign-in is the Claude subscription, and Aether never passes `--hide-claude-auth` (decision 0011). An entry `claude-code` in `agents.json` replaces only the program and the arguments of its launch recipe. If that program does not exist, the start fails with a notice that names the entry. Aether never falls back to the built-in program without a word. No call of the renderer writes `agents.json`.
 - A session is idle when it has no active turn, no open permission question and no background task.
-- An idle process closes after a release time. The release time is a setting, 30 minutes for a session that a person starts and 2 minutes for an automated session.
+- An idle process closes after a release time. The release time is 30 minutes for a session that a person starts and 2 minutes for an automated session. User decision 2026-11-27 (S9 choice 2A): the release times are constants in m1 (`RELEASE_LIMITS`), not settings.
 - Each session records who started it: a person or an automation.
 - At most 6 idle processes stay open. Above that limit, the oldest idle process closes first. An active session never closes for this limit.
 - Aether can start the process when the user opens a session and starts to type.
 - The next message after a release resumes the session.
 - A pure function with a clock decides the release.
 - Shutdown sends cancel, closes the session, closes stdin, then kills the whole process tree after a limit.
+- A background shell command of the agent does not count as busy. It ends with its process after the release time. The user accepted this gap against decision 0006 on 2026-11-27. A background subagent holds the turn open, so it counts.
+- A close sends the cancel and lists the process tree in one step, before it closes the session and stdin. It checks that the root of the list started when the agent started. After the agent ends, it kills each listed process that still runs, and checks the start time of each one first.
+- On Windows the list uses PowerShell and takes about 0.9 s for one close, measured on a developer machine. The closes of many processes run together, so 6 or 7 closes take about 1.3 s together. Each PowerShell call and `taskkill` has a limit of 5 s.
+- Three cases still escape the kill of the tree: a crash of the agent, a child that starts after the list, and a list that fails or times out. A failed list is logged, and the close goes on with no forced kill. The alternative is to kill the whole tree with `taskkill /T` when the list fails. It would end every agent like a crash on a machine where PowerShell is blocked.
 - Processes and open questions live in memory only. A turn does not survive a restart of Aether.
 
 ### Agent environment

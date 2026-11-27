@@ -1128,3 +1128,163 @@ describe('sessions.send-message', () => {
     })
   })
 })
+
+describe('sessions.send-message, the idle release (S9)', () => {
+  /** A clock that the test moves. */
+  function movable(setupResult: ReturnType<typeof setup>) {
+    let time = new Date('2026-03-01T09:00:00.000Z').getTime()
+    setupResult.deps.clock = { now: () => new Date(time) }
+    return { advance: (ms: number) => void (time += ms), now: () => new Date(time) }
+  }
+
+  it('marks the idle time at the end of the turn with the clock of its deps, and calls the turn end callback after the session is idle', async () => {
+    const result = setup()
+    const clock = movable(result)
+    const { deps, processes, transcript, send, processOf } = result
+    const statuses: string[] = []
+    deps.turnEnded = () => statuses.push(transcript.statusOf('s1'))
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    await agent.ready
+    expect(processes.idleSince('s1')).toBeNull()
+    clock.advance(5000)
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    expect(processes.idleSince('s1')).toEqual(clock.now())
+    expect(statuses).toEqual(['idle'])
+  })
+
+  it('marks no idle time for a turn that failed to start a process, and still calls the turn end callback', async () => {
+    const result = setup()
+    movable(result)
+    const { deps, processes, send, processOf } = result
+    let calls = 0
+    deps.turnEnded = () => void (calls += 1)
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.start.resolve(err('failed', 'did not start'))
+    await first.finished
+    expect(processes.idleSince('s1')).toBeNull()
+    expect(calls).toBe(1)
+  })
+
+  it('logs a turn end callback that throws, and ends the turn', async () => {
+    const result = setup()
+    const { deps, logged, send, processOf } = result
+    deps.turnEnded = () => {
+      throw new Error('the release failed')
+    }
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    expect(logged.join(' ')).toContain('the release failed')
+    expect(result.transcript.statusOf('s1')).toBe('idle')
+  })
+
+  it('restarts the idle time at an update of the agent outside a turn, and not during a turn (spec S9, open choice 3, D)', async () => {
+    const result = setup()
+    const clock = movable(result)
+    const { processes, send, processOf } = result
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    await agent.ready
+    clock.advance(1000)
+    // During the turn the update marks nothing: the turn end does.
+    agent.say({ type: 'text', text: 'Working' })
+    expect(processes.idleSince('s1')).toBeNull()
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    const ended = clock.now()
+    expect(processes.idleSince('s1')).toEqual(ended)
+
+    // Outside a turn: Claude works on after a background task.
+    clock.advance(10 * 60_000)
+    agent.say({ type: 'text', text: 'The task ended.' })
+    expect(processes.idleSince('s1')).toEqual(clock.now())
+  })
+
+  it('waits for the close of a process that the release closes before the gate and the start, then starts one new process that resumes (S9-3, rules 7 and 8)', async () => {
+    const result = setup()
+    const clock = movable(result)
+    const { processes, agents, requests, send, processOf } = result
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    clock.advance(30 * 60_000)
+
+    // The release closes the process. Its close does not end yet.
+    const close = deferred<void>()
+    one.close = () => {
+      one.closed += 1
+      return close.promise
+    }
+    void processes.retire('s1')
+    expect(one.closed).toBe(1)
+    expect(processes.get('s1')).toBeUndefined()
+
+    const second = send('s1', 'Two')
+    expect(second.result).toEqual({ ok: true, value: {} })
+    expect(result.transcript.statusOf('s1')).toBe('starting')
+    for (let wait = 0; wait < 50; wait += 1) await Promise.resolve()
+    // The start waits: no gate call, no new process.
+    expect(requests).toHaveLength(1)
+    expect(agents.processes).toHaveLength(1)
+
+    close.resolve()
+    const two = await processOf(1)
+    expect(requests).toHaveLength(2)
+    expect(agents.processes).toHaveLength(2)
+    expect(two.input.resume).toBe('a1')
+    two.becomeReady('a1', { resumed: true })
+    two.turn.resolve(ok('end_turn'))
+    await second.finished
+    expect(two.prompts).toEqual(['Two'])
+    expect(processes.get('s1')).toBe(two)
+  })
+
+  it('shows "Stopped." and starts no process when the user stops the turn while the start waits for the close', async () => {
+    const result = setup()
+    const { processes, agents, store, send, processOf } = result
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    const close = deferred<void>()
+    one.close = () => close.promise
+    void processes.retire('s1')
+
+    const second = send('s1', 'Two')
+    const turn = processes.turnOf('s1')
+    if (turn) turn.stopped = true
+    close.resolve()
+    await second.finished
+    expect(agents.processes).toHaveLength(1)
+    expect(entriesOf(store).at(-1)).toEqual({ kind: 'notice', tone: 'info', text: 'Stopped.', code: 'stopped' })
+    expect(result.transcript.statusOf('s1')).toBe('idle')
+  })
+
+  it('starts the new process when the close of the released process failed', async () => {
+    const result = setup()
+    const { processes, agents, send, processOf, logged } = result
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    one.close = () => Promise.reject(new Error('close failed'))
+    void processes.retire('s1')?.catch((cause: unknown) => logged.push(String(cause)))
+    const second = send('s1', 'Two')
+    const two = await processOf(1)
+    two.becomeReady('a1', { resumed: true })
+    two.turn.resolve(ok('end_turn'))
+    await second.finished
+    expect(agents.processes).toHaveLength(2)
+  })
+})

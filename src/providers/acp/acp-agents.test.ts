@@ -8,7 +8,8 @@ import { err, ok } from '../../building-blocks/result'
 import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate } from '../../building-blocks/agent.port'
 import { splitLog } from '../../shared/log-marker'
 import { claudeCodeRecipe } from '../claude-code/claude-code'
-import { AcpAgents, translateUpdate } from './acp-agents'
+import { AcpAgents, translateUpdate, type AcpOptions } from './acp-agents'
+import { isRunning, type Powershell } from './process-tree'
 
 let control: ControlServer
 let folder: string
@@ -28,7 +29,8 @@ afterEach(async () => {
   await rm(folder, { recursive: true, force: true })
 })
 
-const agents = () => new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => aether, closeLimitMs: 2000 })
+const agents = (extra: Partial<AcpOptions> = {}) =>
+  new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => aether, closeLimitMs: 2000, ...extra })
 
 const input = (part: Partial<AgentStartInput> = {}): AgentStartInput => ({
   mainDirectory: folder,
@@ -54,8 +56,8 @@ function listen(): Listened {
   return { updates, exits, listener: { update: (update) => updates.push(update), exited: (info) => exits.push(info) } }
 }
 
-function start(part: Partial<AgentStartInput> = {}, listened: Listened = listen()): AgentProcess {
-  const process = agents().start(input(part), listened.listener)
+function start(part: Partial<AgentStartInput> = {}, listened: Listened = listen(), extra: Partial<AcpOptions> = {}): AgentProcess {
+  const process = agents(extra).start(input(part), listened.listener)
   opened.push(process)
   return process
 }
@@ -238,7 +240,8 @@ describe('AcpAgents', () => {
     expect(control.received('session/new')).toHaveLength(1)
     // The mode applies to a resumed session too.
     expect(control.received('session/set_mode')).toHaveLength(2)
-  })
+    // Each close lists the process tree first (S9-4): two closes need a longer limit than the default.
+  }, 30_000)
 
   it('starts a new agent session when the resume fails, and says why', async () => {
     const process = start({ resume: 'unknown-session' })
@@ -360,6 +363,69 @@ describe('AcpAgents', () => {
     expect(listened.exits).toHaveLength(1)
     expect(await control.waitForClose()).toBeTypeOf('number')
   })
+
+  it('ends the child process of the agent on close, also when the agent ends by itself after its stdin closed (S9-4)', async () => {
+    await control.scenario('child-process', { chunks: ['Hello'] })
+    const process = start()
+    await process.ready
+    await process.prompt('go')
+    const child = await control.waitForChild()
+    try {
+      expect(isRunning(child.pid), 'the child runs before the close').toBe(true)
+      await process.close()
+      // The close waits for the end of the tree, so no poll is needed.
+      expect(isRunning(child.pid), 'the child of the agent outlived the close').toBe(false)
+    } finally {
+      // The test never leaves the child alive, also when the close failed.
+      if (isRunning(child.pid)) globalThis.process.kill(child.pid)
+    }
+  }, 30_000)
+
+  it('logs a failed list of the process tree, and the close still ends the agent (S1)', async () => {
+    await control.scenario('child-process', { chunks: ['Hello'] })
+    const logged: string[] = []
+    const powershell: Powershell = async () => ({ ok: false, detail: 'code 1, signal null, killed true' })
+    const process = start({}, listen(), { powershell, log: (message) => logged.push(message) })
+    await process.ready
+    await process.prompt('go')
+    const child = await control.waitForChild()
+    try {
+      await process.close()
+      expect(logged).toHaveLength(1)
+      expect(logged[0]).toMatch(/could not list the processes.*killed true/)
+      // The agent ended. The child stays: no fallback kills it (accepted gap, logged).
+      expect(isRunning(control.pids[0]!)).toBe(false)
+      expect(isRunning(child.pid)).toBe(true)
+    } finally {
+      if (isRunning(child.pid)) globalThis.process.kill(child.pid)
+    }
+  }, 30_000)
+
+  it('sends the cancel while the list of the process tree runs, and closes stdin after the list (S2, rule 9)', async () => {
+    await control.scenario('text', { gate: 'hold', chunks: ['Hello'] })
+    let called: () => void = () => undefined
+    const listCalled = new Promise<void>((resolve) => (called = resolve))
+    let finishList: () => void = () => undefined
+    const listHeld = new Promise<void>((resolve) => (finishList = resolve))
+    const powershell: Powershell = async () => {
+      called()
+      await listHeld
+      return { ok: true, stdout: '' }
+    }
+    const process = start({}, listen(), { powershell, log: () => undefined })
+    await process.ready
+    const turn = process.prompt('go')
+    await control.waitForGate('hold')
+    const closing = process.close()
+    await listCalled
+    // The list is held open: the agent got the cancel, and its stdin is still open, so it still runs.
+    await expect.poll(() => control.received('session/cancel').length, { message: 'the agent got no cancel while the list ran' }).toBe(1)
+    expect(isRunning(control.pids[0]!), 'stdin closed before the list ended').toBe(true)
+    finishList()
+    await closing
+    await turn
+    expect(isRunning(control.pids[0]!)).toBe(false)
+  }, 30_000)
 
   it('answers a permission request with "cancelled" until the permission queue exists', async () => {
     await control.scenario('tool', { title: 'Edit README.md' })

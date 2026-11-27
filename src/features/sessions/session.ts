@@ -61,6 +61,14 @@ export const sessionSchema = z.strictObject({
 
 export type Session = z.output<typeof sessionSchema>
 
+/**
+ * Who started a session (decision 0006, `sessions.started_by`). The release time depends on it.
+ * It is not part of `Session`: the renderer neither reads nor sets it. No code writes `automation` in m1.
+ */
+export const starterSchema = z.enum(['person', 'automation'])
+
+export type Starter = z.output<typeof starterSchema>
+
 /** The text of an error that more than one slice returns. */
 export const MESSAGES = {
   unknownProfile: 'This profile does not exist.',

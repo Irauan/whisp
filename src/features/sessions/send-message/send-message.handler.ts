@@ -32,6 +32,11 @@ export interface SendMessageDeps {
    * message make the notice. It takes values only: the main process reads them from the saved session.
    */
   guard: StartGuard
+  /**
+   * Called after each turn ended and the session is idle, for the rule of the idle limit (spec S9,
+   * rule 2). The composition root connects it to the release. It never waits for it. A throw is logged.
+   */
+  turnEnded?(): void
   clock: Clock
   ids: Ids
   log(message: string, cause?: unknown): void
@@ -119,7 +124,19 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
     transcript.flush(id)
     transcript.failOpenTools(id)
     processes.endTurn(id, turn)
+    // The idle time of the session starts here (spec S9). A session with no process has none.
+    processes.markIdle(id, deps.clock.now())
     transcript.setStatus(id, 'idle')
+    announceTurnEnd(deps)
+  }
+}
+
+/** Tells the composition root that a turn ended. A defect in the release never breaks the turn. */
+function announceTurnEnd(deps: SendMessageDeps): void {
+  try {
+    deps.turnEnded?.()
+  } catch (cause) {
+    deps.log('The release of idle processes failed.', cause)
   }
 }
 
@@ -129,6 +146,10 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   const id = session.id
   const existing = processes.get(id)
   if (existing) return existing
+
+  // Rule 8, step 1 (spec S9): a process that the release closes must end first, so two processes never
+  // run for one session. The turn check of the first call of the gate below then sees a Stop that came meanwhile.
+  await processes.closed(id)
 
   // No process, no account and no token exist before the answers. This holds for a resume too.
   // The folders are the main folder, then each additional directory by its real path (check A15). The
@@ -176,7 +197,11 @@ async function startProcess(deps: SendMessageDeps, session: Session, turn: Turn,
     return null
   }
   const agent: AgentProcess = deps.agents.start(prepared.input, {
-    update: (update) => deps.record(id, update),
+    update: (update) => {
+      // An update outside a turn means that the agent works, so the idle time starts again (spec S9, open choice 3, D).
+      if (processes.turnOf(id) === undefined) processes.markIdle(id, deps.clock.now())
+      deps.record(id, update)
+    },
     exited: () => processes.drop(id, agent)
   })
   processes.set(id, agent)
