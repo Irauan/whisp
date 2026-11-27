@@ -20,7 +20,9 @@
 // - `resizeSession` lowers the minimum size of the window, and sizes it so that the session window
 //   (the region `main`) is a given width (S5-26).
 //
-// `killApp` ends the main process of Aether as a crash does (S5-31): `electronApp.process().kill()`.
+// `killApp` ends the main process of Aether as a crash does (S5-31). It kills the process ID that the
+// main process reports (`process.pid`), because on Windows `electronApp.process()` is the cmd.exe
+// wrapper that Playwright starts, and then that wrapper.
 // The simulated agent and the Chromium helpers of the killed app stay alive on Windows, so it then
 // ends the agent by the process ID that it reported, and each process whose command line names the
 // temporary folder of the test. It then clears the fixture with `chat.stop()`, so `chat.start()`
@@ -345,12 +347,17 @@ function processesOfTest(chat: ChatApp): number[] {
  * stays as the kill left it.
  */
 export async function killApp(chat: ChatApp): Promise<void> {
-  const app = chat.app.process()
+  // On Windows, Playwright starts Electron through a shell, so `process()` is the cmd.exe wrapper and
+  // not the main process of Aether. The main process tells its own process ID.
+  const mainPid = await chat.app.evaluate(() => process.pid)
+  const wrapper = chat.app.process()
   const exited = new Promise<void>((resolve) => {
-    if (app.exitCode !== null || app.signalCode !== null) resolve()
-    else app.once('exit', () => resolve())
+    if (wrapper.exitCode !== null || wrapper.signalCode !== null) resolve()
+    else wrapper.once('exit', () => resolve())
   })
-  app.kill()
+  process.kill(mainPid)
+  await expect.poll(() => isRunning(mainPid), { message: 'The main process of Aether still runs after the kill.' }).toBe(false)
+  if (wrapper.exitCode === null && wrapper.signalCode === null) wrapper.kill()
   await exited
   for (const pid of chat.control.pids) if (isRunning(pid)) process.kill(pid)
   for (const pid of processesOfTest(chat)) if (isRunning(pid)) process.kill(pid)

@@ -92,7 +92,7 @@
     "story": "m1-chat/s5"
   },
   "tests/acceptance/m1-chat/s5/fixture.ts": {
-    "sha256": "cc6bedef4870fddb7e66013a2d37868303fdfc3ac35482727427cb7c6fc796b6",
+    "sha256": "4cf549a7d157885263f6669b75f97479e2d6e996888f6caf0cb42051446d9ede",
     "story": "m1-chat/s5"
   },
   "tests/acceptance/m1-chat/s5/live-mode.spec.ts": {
