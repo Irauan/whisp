@@ -93,11 +93,12 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-21 | The user answers a single select and a multi select with "Other". The card turns into the answered card "Claude asked", with one row for each question and the answer below it. After a restart it shows the same. | Acceptance |
 | S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Cancelled" in each row. | Acceptance |
 | S5-23 | A click on an option row selects it and sends nothing. "Submit" is disabled until a pick or a text. No row is preselected. | Acceptance |
-| S5-24 | A permission card with three options shows radio rows, the first allow-once row preselected, "Confirm" and the refuse button. A safety ask with three options preselects nothing, and the refuse button is primary. | Acceptance |
+| S5-24 | A decision card with "Yes", "Yes, and don't ask again for …" and "No" shows the primary split button "Yes", its dropdown "More allow options" with the menuitem of the "always" option, and the button "No". The menuitem sends its option. A safety ask puts the refuse group first and primary. The card shows the context in the secondary color and the question in the primary color. | Acceptance |
+| S5-26 | At a wide width, the buttons of a decision card sit on one line, each sized to its content. At a narrow width (375 px), each button takes the full width of the card, at equal size, stacked. | Acceptance |
 | S5-25 | An MCP form with a text field saves "Answered", not the typed text. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-25 are not in the brief. They cover the rules above.
+S5-1 to S5-26 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -209,19 +210,61 @@ The user said: "On Claude desktop the card changes and shows a list with the que
   - a form that got -32602: no, because no card showed
 - Permission cards still disappear after the answer. The tool call shows the result.
 
-#### Permission cards with three or more options (hot item, user column)
+#### Decision cards (user decision, 2026-11-27)
 
-The coordinator's reading, which the user did not state: buttons are for binary cases only. The advisor answered: use radio rows. User column (permissions). Not hard to revert.
+The UI spec now calls a permission card a "decision card". The user rejected the radio rows and "Confirm" for permission cards. The user said: "My rule was too aggressive. I didn't want to mean that we shouldn't have a card with 3 buttons, what I tried to convey was that the ask question tool for Claude is a different tool for when he shows the button. The ask question tool has the questions and options for that question. The options have their text and an explanation text. The card with button (I don't know the name Claude gives to it, so I will call a decision card) often has 1 or 2 buttons. You can confirm this, but as long as I remember it has a context in secondary and a question in primary. So for decisions we don't need explanation by options while for questions we have an explanation by each option. For the decision card I would allow the buttons to have different sizes only when they're on a screen size that allows them to be shown in a single line, in cases where they break the line I would make them have the same size and occupy the whole line. Eg. Mobile screens. I would also group options with the same meaning under a dropdown button, like yes, yes + something else 1, yes + something else 2 are all yes options, so I would have the recommended selected and the other options under the dropdown."
 
-- Facts: real Claude often offers three options. The fallback tools and WebFetch use `withGeneratedUpdate`: "Yes", "Yes, and don't ask again for …", "No". The plan exit has four or five options.
-- A card with one or two options keeps its buttons. A4, A5 and S5-6 do not change.
-- A card with three or more options:
-  - The allow options are radio rows, with the labels and the order of the agent.
-  - The first `allow-once` row is preselected, never an "always" row. So the common answer stays one click.
-  - Two buttons follow: "Confirm" (primary), which sends the selected row, and the refuse option with the label of the agent, for example "No".
-  - On a safety ask, the refuse button is primary, no row is preselected, and "Confirm" waits for a pick.
-- "Confirm" is a new Aether text in a permission prompt. The user decides it with this item.
-- The count of options depends on open choice 2. With option 2B, nearly every card of Claude has two options.
+Layout:
+
+- The context in the secondary color: the tool kind and the tool title, for example "execute · npm test", and the locations (paths), when the request has them.
+- The question in the primary color, for example "Run this command?".
+- Then the buttons. Buttons have no explanation text.
+
+Fact and reading:
+
+- Fact: over ACP version 1, the request of the Claude adapter carries `toolCallId`, `title` and `rawInput`, and no question text. The heading and the explanation of the prompt go only to AIR in `_meta`, and to an ACP version 2 client as `title` and `description` (`permissions/presentation.js`).
+- Fact: the Claude adapter often offers three options: the fallback tools and WebFetch use `withGeneratedUpdate` ("Yes", "Yes, and don't ask again for …", "No"), and the plan exit has four or five. With the groups, such a card shows one split button and one plain button: two buttons, as the user remembers.
+- Fact: this read did not check the Claude desktop app. The layout "context in secondary, question in primary" is the memory of the user. This spec follows it.
+- Reading: Aether writes the question text from the tool kind. These are new Aether texts, in the skim list:
+  - `execute`: "Run this command?"
+  - `edit`, `delete`, `move`: "Make this change?"
+  - `read`, `search`: "Read this?"
+  - `fetch`: "Fetch this?"
+  - `switch_mode` (the plan exit): "Approve the plan?"
+  - any other kind: "Allow this tool?"
+
+Groups by meaning:
+
+- All allow options (`allow-once` and `allow-always`, the plan exit variants included) form one group. All refuse options form another group.
+- A group with two or more options is a split button:
+  - The main part is the recommended option of the group, with its label from Claude.
+  - A dropdown part holds the other options of the group, with their labels from Claude, in the order of the agent.
+- A group with one option is a plain button.
+- The recommended option of the allow group is its first `allow-once` option. Without one, it is the first allow option of the agent.
+- The recommended option of the refuse group is its first option.
+- Primary and order:
+  - The allow group comes first and is primary. Example: the split button "Yes" with the dropdown "Yes, and don't ask again for npm test commands", then the button "No".
+  - On a safety ask, where the first option of the agent is a refuse option, the refuse group comes first and is primary (open choice 7).
+- Example, plan exit: the split button "Yes, manually approve edits" with the dropdown "Yes, and use auto mode" and "Yes, and bypass permissions", then the button "No, keep planning".
+
+Sizing:
+
+- While all buttons fit on one line, each button sizes to its content.
+- When they would wrap, for example on a narrow or a mobile width, each button takes the full width of the card, at equal size, stacked. A split button keeps its dropdown part at its right end.
+- The builder uses a container query or a measure of the line, not a fixed screen width.
+
+Accessibility:
+
+- The card stays an `article` with the fixed name "Permission request". So the tests keep one locator.
+- The main part of a split button is a `button` with the label of its option as its name.
+- The dropdown part is a `button` named "More allow options" or "More refuse options", with `aria-haspopup="menu"`. It opens a `menu` of `menuitem` elements, each named with the label of its option.
+- A plain button keeps the label of its option as its name.
+
+Locked tests and checks that click an option by name:
+
+- No locked acceptance test answers a permission request: the `tool` scenario of the simulated agent is used only in `tests/simulated-agent/agent.test.ts` (218, 235, 248), with its own client. This was a grep, not a run.
+- The simulated agent offers "Allow" and "Refuse", one option for each group. They stay plain buttons, so A4, A5, S5-1 and S5-6 click them by name as before.
+- An "always" option of a check (S5 choice 2 scenario) sits in the dropdown "More allow options". The S5 test author clicks the dropdown first.
 
 ### The S6 trust question (user decision, 2026-11-27)
 
@@ -311,15 +354,13 @@ The status line keeps the S6 condition: it shows no "Starting Claude Code" while
 
 ### Card content
 
-- The heading: "Permission request".
-- The tool title. It comes from the request. Without it, the card uses the title of the known tool entry. Without both, it shows "Tool call".
-- The tool kind, for example `execute` or `edit`.
-- The locations of the request (file paths), when the request has them.
-- One button for each option.
+- The layout of a decision card: the context (tool kind, tool title, locations) in the secondary color, then the question in the primary color, then the buttons. See "Decision cards".
+- The tool title comes from the request. Without it, the card uses the title of the known tool entry. Without both, it shows "Tool call".
+- The options form an allow group and a refuse group. See "Decision cards".
 - Rule (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.
   - Safety ask (user decision, open choice 7): when the first option of the agent is a refuse option, that option is the recommended one. It stays first and is primary. This is the `defaultToNo` order of Claude Code, where "No" is the default choice.
   - In every other case, the recommended option is the first `allow-once` option of the request. It comes first and is primary. Example: "Yes, manually approve edits" at the plan exit.
-  - The other options follow in the order of the agent.
+  - Within a group, the other options sit in the dropdown of its split button, in the order of the agent. See "Decision cards".
   - A request with no refuse option first and no `allow-once` option has no primary button. Its options keep the order of the agent.
   - Compact means like the buttons of the Claude desktop app: less height and padding, and smaller text than `.button`.
 - The request of the Claude adapter carries `toolCallId`, `title` and `rawInput` (`permissions/presentation.js`, version 0.112.0).
@@ -332,7 +373,8 @@ The status line keeps the S6 condition: it shows no "Starting Claude Code" while
 - A permission card is an element with the role `article` and the fixed name "Permission request". The tool title stays as text inside it.
 - A question card has the role `article` and the fixed name "Claude asks". The message stays as text inside it.
 - Reason: `toolCall` in `s4/fixture.ts` 344 finds a `group` in the log by a substring of its name. A card that is a `group` named by the tool title would give two matches. No locked test reads the role `article`.
-- Each option is a button with its label as its name.
+- On a decision card, the main part of a split button and each plain button are named with the label of the option. The dropdown part is a `button` named "More allow options" or "More refuse options", with a `menu` of `menuitem` elements.
+- On a question card, the buttons are "Submit" and "Skip".
 - A single select is a `radiogroup` with `radio` rows. A multi select is a `group` with `checkbox` rows. The name of a row is its option label; its explanation is its description. The free text field has the name "Other".
 - An answered question card is an `article` with the fixed name "Claude asked".
 - The cards inside the log keep the S4 checks of the log text: A2 and A6 use `toHaveText` with a pattern that allows text between the turns (`s4/chat.spec.ts` 119, `s4/restart.spec.ts` 78 and 85). A3 and A5 check the log after Stop, when no card is open.
@@ -360,7 +402,8 @@ z.strictObject({
   - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to "Skipped" or "Cancelled" by the outcome. A later change of a text then needs no data change.
   - Main builds the rows at answer time, and adds the entry with `addEntry` where the open card was: at the end of the entries.
   - No migration. Migration 002 has no CHECK that lists the kinds of entry; its only CHECK keeps the column `kind` equal to the key `kind` of the JSON. zod validates the kinds.
-  - Hard to revert: yes. `entrySchema` is strict on each read, so a database that holds this kind fails on a build without it. This is a hot item: a new saved format needs the approval of the user.
+  - Hard to revert: yes. `entrySchema` is strict on each read, so a database that holds this kind fails on a build without it.
+  - **Approved by the user on 2026-11-27.** It is an approved hot item. A change of it goes to the user.
   - The typed text of "Other" is saved only for `AskUserQuestion` forms. See open choice 10.
 - Changed use of a saved column: `sessions.mode` now also changes after the first message, when the agent reports a live mode. Aether never saves `approve-all` this way. The values of the column do not change. Today only `sessions.set-mode` of a draft writes it.
 - The live mode lives in memory only, for the session view, in two cases: Approve all, and a mode that comes with the notice for the fallback of Auto (decision B).
@@ -486,7 +529,9 @@ export type ElicitationAnswer =
 | The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
 | A question of Claude | "Claude asks" (card heading) | `Elicitation`, `ElicitationView` | none |
 | An answered question | "Claude asked" (card name) | entry kind `answers` | `entries.kind` = `answers` |
-| The confirm of a permission card with 3 or more options | "Confirm" (hot item) | none | none |
+| A permission card | "decision card" in this spec; `article` named "Permission request" | `PermissionCard` | none |
+| The menu of the other allow options | "More allow options" | split button | none |
+| The menu of the other refuse options | "More refuse options" | split button | none |
 | The free text of a question | "Other" | `question_<n>_custom` (ACP key) | none |
 | The mode that the agent reports | the Mode control | live mode, `liveMode` | `sessions.mode`, except Approve all |
 
@@ -559,6 +604,9 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 1. Labels of the option buttons
 
+- **Decided by the user on 2026-11-27: option A, the labels of the agent.** The "always" options show with Claude's own labels. It is an approved hot item.
+- The text below is the record of the options as they were offered.
+
 - User column: yes (permissions, and the user owns the UI terms).
 - Hard to revert: no.
 - Options:
@@ -568,6 +616,9 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Advisor: A. "Only the agent's label states the scope of a grant." The user may disagree, because the brief says "refuses" and the user owns the terms.
 
 ### 2. The "always" options
+
+- **Decided by the user on 2026-11-27: option A, show them.** They show with Claude's own labels, in the dropdown of the allow group (see "Decision cards"). It is an approved hot item.
+- The text below is the record of the options as they were offered.
 
 - User column: yes (permissions, security).
 - Hard to revert: no.
@@ -688,6 +739,9 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 10. The typed text of a form that is not `AskUserQuestion`
 
+- **Decided by the user on 2026-11-27: option A.** A form that is not `AskUserQuestion` saves "Answered" for a text field. Typed text is saved only for Claude's own questions. It is an approved hot item.
+- The text below is the record of the options as they were offered.
+
 - User column: yes (credentials). The brief says "Aether stores no key and no token".
 - Hard to revert: no.
 - Facts: an MCP form renders on the same path as `AskUserQuestion`. Its text field can hold a secret, and the answered card would save it in SQLite.
@@ -707,5 +761,7 @@ Small texts and details that the advisor accepted. The user can veto each one.
 - The card heading "Permission request".
 - The texts "Skipped" and "Cancelled" in the answered card.
 - The fixed card names "Claude asks" (open) and "Claude asked" (answered).
+- The question texts of the decision cards: "Run this command?", "Make this change?", "Read this?", "Fetch this?", "Approve the plan?", "Allow this tool?".
+- The dropdown names "More allow options" and "More refuse options".
 - The jump button "Show request".
 - The refusal fallback keeps its two buttons.
