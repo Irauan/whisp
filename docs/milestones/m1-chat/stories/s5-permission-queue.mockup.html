@@ -492,6 +492,32 @@ button:disabled { cursor: default; opacity: .5; }
   </div>
 </section>
 
+<section class="state">
+  <h2>10. The S6 trust question: repository root and warning</h2>
+  <p class="muted">User decision, 2026-11-27. The trust question shows the repository root path. When the root holds the workspace directory, for example a dotfiles repository in the home folder, a warning shows above the buttons. A repository inside the workspace directory shows no warning. The dialog stays an app-level dialog, not a card in the dock.</p>
+  <div class="window" style="display:grid;place-items:center;padding:32px;background:rgba(0,0,0,.5)">
+    <div role="dialog" aria-label="Trust this repository?" style="width:min(440px,100%);padding:18px 20px;background:var(--sidebar);border:1px solid var(--line);border-radius:12px;display:grid;gap:12px">
+      <h2 style="font-size:16px;font-weight:600">Trust this repository?</h2>
+      <p class="muted" style="font-size:13px">Claude Code reads the settings, the hooks and the MCP servers of a repository when a session starts, before it asks anything. Trust only a repository that you know.</p>
+      <div class="mark"><span class="mark-label">Changed: the repository root</span>
+        <dl class="facts" style="margin:0">
+          <div><dt class="muted">Repository root</dt><dd class="mono">C:\Users\sam</dd></div>
+          <div><dt class="muted">Folder</dt><dd class="mono">C:\Users\sam\work\repo-a</dd></div>
+          <div><dt class="muted">Profile</dt><dd>Personal</dd></div>
+        </dl>
+      </div>
+      <p class="muted" style="font-size:13px">Aether found no .claude/settings*.json file and no .mcp.json file here.</p>
+      <div class="mark"><span class="mark-label">New: warning when the root holds the workspace directory</span>
+        <p role="note" style="display:flex;gap:8px;font-size:13px;color:var(--danger)"><span aria-hidden="true">⚠</span><span>This repository holds the workspace directory C:\Users\sam\work. Trust covers every plain folder under C:\Users\sam\work for the profile Personal.</span></p>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="button" type="button">Cancel</button>
+        <button class="button primary" type="button">Trust</button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <script>
   // Mockup only: show each transcript scrolled to the bottom, as the app keeps it.
   for (const log of document.querySelectorAll('.frame > .transcript')) log.scrollTop = log.scrollHeight

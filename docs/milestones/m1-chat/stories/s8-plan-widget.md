@@ -55,7 +55,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   - Today the page shows the facts profile, folder and model. The mode shows only in the Mode control.
   - The brief (Session window) lists title, profile, folder, model and mode in the header. S8 adds the mode as a fact.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
-- When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again.
+- When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again. This is decided by the user (2026-11-27).
 - The dock itself never scrolls. The composer is always fully in view.
   - Only the parts above the composer can scroll inside, each in its own area: the list of the plan widget and the permission queue.
   - The dock has no scroll offset when the locked place check of `s8/fixture.ts` (128-134) runs.
@@ -91,7 +91,7 @@ The user decided on 2026-11-27: the composer of the session window follows the c
   - At the left, in this order:
     1. A small "+" button. Its accessible name is "Add context". It is disabled and shows "Coming soon", because a running session takes no new attachment in m1.
     2. The Mode control, as a small text-only button with no border. It keeps the accessible name "Mode". After the first message it is disabled, as in S3.
-    3. The model of the session, as a small text-only button with no border. It is disabled, because the model is fixed once the session starts.
+    3. The model of the session, as a small text-only button with no border. It is disabled after the first message, like Mode, because the model is fixed once the session starts. This is decided by the user (2026-11-27).
   - At the right: the small round button "Send". It shows as "Stop" during a turn.
 - No mic button. Voice input is outside m1 (brief, Non-goals).
 - The session window has no row below the box. The folder and the account are fixed once the session starts.

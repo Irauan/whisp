@@ -83,7 +83,10 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-11 | "Skip" sends `decline`. Stop sends `cancel` for an open question card. | Slice |
 | S5-12 | A form with a number field gets the error -32602, and no card shows. | Slice |
 
-S5-1 to S5-12 are not in the brief. They cover the rules above.
+| S5-13 | A session folder under R, in a Git repository whose root holds R. The trust question shows the root path as "Repository root", and the warning that names R and the profile. | Acceptance |
+| S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
+
+S5-1 to S5-14 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -151,6 +154,18 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
 - The card follows the rules of a permission card: oldest first, one answer only, the buttons disabled after a click, and the error line under the buttons.
 - An option `description` shows as muted text under the option, or as its `title` attribute when the card is narrow.
 
+### The S6 trust question (user decision, 2026-11-27)
+
+S5 also changes the trust question of S6 (`QuestionDialog`, kind `trust`).
+
+- Facts: S6 walks up from the session folder to the repository root, also past the workspace directory (`check-directory.handler.ts` 98-99). So a repository above the workspace directory R, for example a dotfiles repository in the home folder, asks for trust.
+- The dialog shows the repository root path as the fact "Repository root". The facts "Folder" and "Profile" stay.
+- When the repository root holds the workspace directory, the dialog shows a warning above the buttons:
+  - "This repository holds the workspace directory <R>. Trust covers every plain folder under <R> for the profile <name>."
+- The warning does not show for a repository inside the workspace directory.
+- The buttons do not change: "Cancel" and the primary "Trust".
+- The question gets one field, `holdsWorkspace: boolean`. `check-directory` sets it. The question lives in memory, so no saved format changes.
+
 ### Not in this story
 
 - Elicitations of the mode url.
@@ -169,6 +184,7 @@ See the mockup. It shows these states:
 - a request with no title and no options
 - a question card of Claude: a single select, and a multi select with "Other"
 - the live mode in the Mode control after a plan exit
+- the S6 trust question with the repository root and the warning
 
 Each state shows the fixed frame of S8.
 
@@ -389,6 +405,10 @@ export type ElicitationAnswer =
 - `src/features/sessions/session.store.ts`: save the mode of a started session. Shared with S8 and S9.
 - `src/renderer/src/components/ModeMenu.tsx`: show `liveMode ?? session.mode`. Shared with S8.
 - New `src/renderer/src/components/ElicitationCard.tsx`.
+- `src/renderer/src/components/QuestionDialog.tsx` (S6): the fact "Repository root" and the warning of the trust question.
+- `src/features/repositories/question.ts` and `check-directory/check-directory.handler.ts` (S6): the field `holdsWorkspace`.
+- `docs/architecture.md`, "Directories and trust": correct "Trust applies to one Git repository, not to the whole workspace directory." It is false when the repository root is above R. New text: "Trust applies to one Git repository. When the root of that repository holds the workspace directory, trust covers every plain folder under the workspace directory for that profile, and the question warns."
+- `docs/decisions/0007-permissions-and-trust.md`: add a note, with the date, that squares the walk-up with the rejected alternative "Trust for the whole root". The note says: Aether still never trusts the root without a question. It trusts one repository. A repository above the root covers the root by containment, and the question names it before the user answers. This note records the user decision of 2026-11-27; it does not change the decision.
 - `src/features/sessions/entry.ts`: the new changes. Shared with S7 and S8.
 - `src/features/sessions/transcript.store.ts`: the queue in memory and its events. Shared with S8.
 - `src/features/sessions/open/open.contract.ts` and `open.handler.ts`: the snapshot.
