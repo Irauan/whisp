@@ -56,11 +56,11 @@
     "story": "m0-gates/s8"
   },
   "tests/simulated-agent/agent.mjs": {
-    "sha256": "2a56a52920ecaee2a2c5e5ad5b681b973c193f5e079ee9aa7006227bb3755996",
+    "sha256": "c6542f8d7ec4c45ca817bacf2ff148e6ca4cf9c974cbe1e83b372863b7964402",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/agent.test.ts": {
-    "sha256": "36310c6ef5795ef8d1a12ec82ef3c910697df3182813d126791bb4c5c0a01b6a",
+    "sha256": "21bbad148cedf89321ffc6e4eaac2e8f170ff0780c3cd9457f458ab12e345d82",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.test.ts": {
@@ -68,11 +68,11 @@
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.ts": {
-    "sha256": "1a469c4c6ccfcd9f8d4164a565defe2295e27fde61f20f232d2b634a12bbaa87",
+    "sha256": "27a01bf70b6e810013a88a846bd1baabfad4f4722fdd3377e058fedd83d6e09c",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/scenarios.mjs": {
-    "sha256": "aaaedd34158983d4bba9c035a500d016dc6762accdd7f5cc4097fcbd5e059754",
+    "sha256": "e68bfbf5b7711994c3cf4d863e47521ce99c53bb08bd4656d9dd66d765e928c0",
     "story": "m0-gates/s4"
   }
 }
