@@ -12,7 +12,7 @@ Status: draft for the design review. Not approved.
 
 ### Flow
 
-1. The agent sends `session/request_permission` during a turn.
+1. The agent sends `session/request_permission`, during a turn or outside one (see "Requests outside a turn").
 2. `providers/acp` gives the request an Aether ID and keeps it open.
 3. `providers/acp` tells the session slice through the agent listener.
 4. The main process adds the request to the queue of the session and sends a `sessions.changed` event.
@@ -33,10 +33,21 @@ Status: draft for the design review. Not approved.
   3. Each card closes.
 - The agent can cancel one request itself (`$/cancel_request`). Then only that card closes.
 - A request closes one time only. When Stop and a cancel of the agent arrive together, the agent gets one answer and the window gets one `permission-removed`.
-- The end of a turn closes each card that is left. A process exit, a crash and the deletion of the session also close the cards.
+- A process exit, a crash and the deletion of the session close the cards.
+- The end of a turn does not close a card. The agent cancels a request that it no longer waits for.
 - The queue lives in memory only. It does not survive a restart of Aether (`docs/architecture.md`, Agents).
 - The main process accepts an answer only for an open request of that session, and only with an option that the request offered.
-- A request that comes when no turn runs, or after Stop, gets `cancelled` at once. It shows no card.
+- A request that comes after Stop, while the cancel of that turn runs, gets `cancelled` at once. It shows no card.
+
+### Requests outside a turn
+
+- Claude can start a model cycle after the prompt resolved (`v1/acp-agent.js` 3299, 6692-6712). An example is the wake-up after a background task.
+- So updates, and possibly permission requests, can come when Aether has no turn for the session.
+- S5 shows such a request as a card, like a request during a turn.
+- While a card is open, the status line says "Waiting for your answer", and Stop shows.
+- Stop with no turn cancels each open request of the session. `stop.handler.ts` changes for this: today it does nothing when the status is idle.
+- An open card keeps the session busy for S9. See the S9 spec.
+- The alternative is to answer `cancelled` at once. Then a background task of the agent fails without a word, so S5 does not do it.
 - The renderer cannot grant a permission without a request. A compromised renderer can still answer an open request. `docs/architecture.md` accepts this risk.
 
 ### States
@@ -66,7 +77,7 @@ S5-1 to S5-4 are not in the brief. They cover the rules above.
 
 ### Not in this story
 
-- `AskUserQuestion` of Claude goes through ACP elicitation, not through a permission request. Aether does not declare elicitation. No story in m1 covers it.
+- `AskUserQuestion` of Claude goes through ACP elicitation, not through a permission request. Aether does not declare the form elicitation capability. Without it, the adapter disables `AskUserQuestion` completely (`v1/acp-agent.js` 7893). Claude then cannot ask the user a question with that tool. See open choice 8.
 - The mode that an option can set. See open choice 5.
 
 ## Screens
@@ -90,7 +101,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - S8 builds the fixed frame: the header at the top, the transcript as the only scroll area, and a bottom dock that stays in view. See the S8 spec, "The session window frame".
 - S5 adds the permission queue to the dock. S5 does not build the frame.
 - The transcript scrolls under the dock. It stays at the bottom while new entries arrive.
-- With many cards, the dock scrolls inside. The composer and the Stop button stay in view.
+- With many cards, the queue scrolls inside its own area. The dock itself never scrolls, so the composer and the Stop button stay in view. See the S8 spec, "The session window frame".
 - The composer is the composer of S8, like the GitHub app: a text area of 2 to 8 lines, and a control row inside the box with "+", Mode, the model and the round Send or Stop button. S5 does not change the composer. See the S8 spec, "The composer".
 
 Changes against the current screen:
@@ -110,7 +121,7 @@ Order in the session window, from the top. The S8 mockup uses the same order.
    3. Permission queue (S5)
    4. Composer
 
-The trust and directory questions of S6 use the same dock when they show as cards in the session window.
+The trust and directory questions of S6 are an app-level dialog (`QuestionDialog` in `App.tsx`), not cards in the dock. The status line keeps the S6 condition: it shows no "Starting Claude Code" while `asking` is true.
 
 ### Card content
 
@@ -123,10 +134,11 @@ The trust and directory questions of S6 use the same dock when they show as card
   - The recommended option is the first `allow-once` option of the request. Example: "Yes, manually approve edits" at the plan exit.
   - The other options follow in the order of the agent.
   - A request with no `allow-once` option has no primary button. Its options keep the order of the agent.
+  - A request whose first option is a refuse option is a safety ask of the agent. See open choice 7.
   - Compact means like the buttons of the Claude desktop app: less height and padding, and smaller text than `.button`.
 - The request of the Claude adapter carries `toolCallId`, `title` and `rawInput` (`permissions/presentation.js`, version 0.112.0).
 - For a shell tool, the title is the command itself (`tool-calls/reporters/bash.js`). So the card shows the command without extra fields.
-- For the plan exit, the title is "Ready to code?".
+- For the plan exit over ACP version 1, the title is "Approve Plan" (`tool-calls/reporters/interaction.js` 21).
 - The validator confirms the title of a shell request in the live run of A4 (step 7).
 
 ### Accessibility
@@ -229,10 +241,11 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 | No open request | The queue region does not show. |
 | The answer fails with `unknown-request` | The card closed already, so the event removes it. The window shows nothing more. |
 | The answer fails with `unknown-option` or another error | The card stays. It shows the message under its buttons. The buttons work again. |
-| A request with no options | The card shows one button, "Cancel request". It answers `cancelled`. |
+| A request with no options | The card shows one button, "Cancel request". It answers `cancelled`. The adapter treats `cancelled` as "Tool use aborted", so the tool does not run. |
 | A request with no allow option or no refuse option | The card shows the options that the agent offered. |
 | A request with no title and an unknown tool ID | The card shows "Tool call". |
-| A request after Stop, or when no turn runs | The provider answers `cancelled`. No card shows. |
+| A request after Stop, while the cancel runs | The provider answers `cancelled`. No card shows. |
+| A request when no turn runs | The card shows. Stop shows and cancels it. See "Requests outside a turn". |
 | A request with an unknown session ID | See open choice 6. |
 | The process exits with open requests | The cards close. The turn writes the error notice of S4. |
 | A double click on a button | The first click disables the buttons of the card. Only one answer goes out. |
@@ -241,15 +254,15 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 
 ### Files
 
-- `src/building-blocks/agent.port.ts`: the new types and methods. Shared with S7 and S9.
-- `src/providers/acp/acp-agents.ts`: the request handler, `answer`, and the cancel of open requests. Shared with S6, S7 and S9.
+- `src/building-blocks/agent.port.ts`: the new types and methods. Shared with S7.
+- `src/providers/acp/acp-agents.ts`: the request handler, `answer`, and the cancel of open requests. Shared with S7 and S9. S6 does not touch it.
 - `src/providers/acp/acp-agents.test.ts`
 - `src/features/sessions/answer-permission/`: new slice with contract, controller, handler and test.
 - `src/features/sessions/entry.ts`: the new changes. Shared with S7 and S8.
 - `src/features/sessions/transcript.store.ts`: the queue in memory and its events. Shared with S8.
 - `src/features/sessions/open/open.contract.ts` and `open.handler.ts`: the snapshot.
 - `src/features/sessions/send-message/send-message.handler.ts`: the listener, and the close of the cards at the end of a turn. Shared with S6, S7 and S9.
-- `src/features/sessions/stop/stop.handler.ts`: no change expected. The provider cancels the requests in `cancel`.
+- `src/features/sessions/stop/stop.handler.ts`: Stop with no turn but open requests cancels them. The provider cancels the requests in `cancel`.
 - `src/features/sessions/processes.store.ts`: only if the queue needs the process of a session. Shared with S9.
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the new contract. Shared with S6, S7 and S9.
 - `src/renderer/src/session-view.ts`: the new changes.
@@ -263,8 +276,8 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 
 - Needs: S4 (merged).
 - Needs: S8 merged first. S8 builds the fixed frame and the bottom dock, and S5 adds its queue to the dock. This changes the plan: S5 depended on S4 only. The S5 test author can still run before S8 merges, if its tests check the place of the queue only (below the transcript, above the text field "Prompt").
-- S5, S6 and S9 touch the agent process code. The coordinator merges them one at a time. The later story updates its branch.
-- S9 reads the queue in its idle rule. The queue only exists during a turn, so S9 does not need S5 code to start.
+- S5, S7 and S9 touch `acp-agents.ts`. S5, S6, S7 and S9 touch `send-message.handler.ts`. The coordinator merges them one at a time. The later story updates its branch.
+- S9 reads the queue in its idle rule. A request can come outside a turn, so S9 counts an open request as busy. See the S9 spec.
 
 ## Open choices
 
@@ -285,13 +298,14 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - User column: yes (permissions, security).
 - Hard to revert: no.
 - Facts from the Claude adapter (`@agentclientprotocol/claude-agent-acp` 0.112.0):
-  - The "always" options of WebFetch, Skill, MCP tools and the fallback tools add an allow rule with the destination `localSettings` (`permissions/effects.js`). Claude keeps such a rule in the settings of the repository folder (`.claude/settings.local.json`). It stays after the session.
-  - The "always" option of a shell command uses the suggestions of Claude Code. This read did not confirm their destination.
-  - A file edit "always" option is for "this session" only.
+  - The "always" options of WebFetch and Skill add an allow rule with the destination `localSettings` (`permissions/effects.js`). Claude keeps such a rule in the settings of the repository folder (`.claude/settings.local.json`). It stays after the session.
+  - The "always" options of MCP tools, the fallback tools and shell commands apply the change set of Claude itself (`permissions/effects.js` 161-163). Claude chooses the destination. This read did not prove it.
+  - A file edit "always" option ("Yes, allow all edits during this session") can be `setMode acceptEdits` for the session (`permissions/options/filesystem.js` 104-117, 138-142, 194-196). So it changes the mode.
+  - Every plan exit option except "Yes, manually approve edits" is an `allow_always` option (`permissions/options/tools.js` 194-230).
   - Aether stores no rule of its own in each case.
 - Options:
-  - A. Show each "always" option that the agent offers. Impact: the same choices as the native Claude apps; one click can add a permanent rule in the repository.
-  - B. Hide the `allow-always` and `refuse-always` options in m1. Impact: no permanent rule from Aether; the user answers each tool again.
+  - A. Show each "always" option that the agent offers. Impact: the same choices as the native Claude apps; one click can add a permanent rule in the repository, or change the mode.
+  - B. Hide the `allow-always` and `refuse-always` options in m1. Impact: no permanent rule and no mode change from Aether; the user answers each tool again; the plan exit keeps only "Yes, manually approve edits" and "No, keep planning", so its mode options also disappear.
 - More impact of A: a rule in the repository folder applies in each profile that opens the repository. Trust is per profile (S6), so this rule crosses the profile line.
 - Recommendation: A, with the label of the agent, so the user sees the scope.
 - Advisor: A. The preference patterns 3 (close a security gap) and 4 (keep the scope small) conflict here, so the advisor predicts that the user may disagree.
@@ -322,13 +336,14 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Hard to revert: no.
 - Facts:
   - In the mode Plan, the Claude adapter asks to exit the plan with options such as "Yes, and use auto mode" and "Yes, and bypass permissions". The adapter offers bypass by default.
-  - Such an option changes the mode of the agent session. The adapter then sends `current_mode_update` (`exit-plan.js`). Aether ignores it today.
-  - The Mode control of Aether then shows the saved mode, not the live mode.
+  - Every approval of the plan exit changes the mode, not only auto and bypass. `exit-plan-default` maps to the mode `default` (`permissions/effects.js` 82-83). Each approval returns `setMode` (`permissions/effects.js` 107-110).
+  - The adapter then sends `current_mode_update` (`session-mode.js` 204-209).
+  - S7 (#27) translates `current_mode_update` into the port update `mode`. This spec does not assume that the Mode control shows it.
   - `applySettings` sets the saved mode at each start. After a release (S9) or a restart, the session is in Plan again.
 - Options:
   - A. Show these options as the agent offers them. Impact: the click is a user choice, as decision 0007 asks; the Mode control can show an old mode; a new process goes back to the saved mode.
   - B. Filter the bypass option in `providers/claude-code`. Impact: Aether never moves a session to bypass after the start; Aether needs Claude-specific option IDs.
-  - C. A, and the Mode control shows the live mode of the agent, in memory only. Impact: the user sees the real mode; more scope in S5; a new process still goes back to the saved mode.
+  - C. A, and the Mode control shows the live mode from the port update `mode` of S7, in memory only. Impact: the user sees the real mode; small scope, because S7 already delivers the update; S5 then needs S7 merged; a new process still goes back to the saved mode.
 - Recommendation: A for m1. Record the old mode in the Mode control, and the return to the saved mode, as known gaps.
 - Advisor: A for m1. "The click on a labelled option is the user choice that decision 0007 asks for." The preference patterns 3 and 4 conflict, so the advisor predicts that the user may disagree. It is a hot item.
 
@@ -337,14 +352,36 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - User column: no (interface between modules).
 - Hard to revert: no.
 - Facts:
-  - The code of the Claude adapter can send the request of a subagent with the session ID of the child session of that subagent. The owner session waits for it.
-  - This read found the code path. It does not prove that the path runs for a client with the capabilities of Aether.
-  - The S4 filter drops the updates of other session IDs. So such a card can have no tool entry for its title. The card then uses the title of the request.
+  - The code of the Claude adapter can send the request of a subagent with the session ID of the child session of that subagent. It does so only for a client that declares the subagents capability.
+  - Aether declares no subagents capability (`acp-agents.ts` 221). So each request carries the session ID of the owner session (`v1/acp-agent.js` 6970-6985).
+  - Option A therefore changes nothing today. It keeps the subagent tools working if a later version declares the capability.
 - Options:
   - A. Accept each request on the connection of the process. Impact: subagent tools work; one process serves one Aether session (decision 0006), so no request reaches another session.
   - B. Answer `cancelled` for a session ID that is not the session of the process. Impact: each tool of a subagent that needs a permission fails.
 - Recommendation: A.
 - Advisor: A, after a second consultation with the adapter facts. Not hard to revert. The user likely agrees.
+
+### 7. A safety ask with a refuse option first
+
+- User column: no. It follows the approved button rule.
+- Hard to revert: no.
+- Facts: for a safety ask, Claude sets `defaultToNo`. The adapter then puts the refuse options first (`permissions/options.js` 6-10, 52-60). ACP has no other field for a default option.
+- Options:
+  - A. When the first option of the agent is a refuse option, keep the order of the agent and make no button primary. Impact: the safety hint of Claude stays; the user rule "recommended first" applies to every other request.
+  - B. Always put the first `allow-once` option first, as the primary button. Impact: one rule for each card; a safety ask then invites an allow.
+- Recommendation: A.
+- Advisor: see the report of this design-review fix.
+
+### 8. `AskUserQuestion` without elicitation
+
+- User column: yes (scope).
+- Hard to revert: no.
+- Facts: without the form elicitation capability, the adapter disables `AskUserQuestion` completely (`v1/acp-agent.js` 7893). Claude then asks its questions in plain text, or not at all.
+- Options:
+  - A. Accept the gap in m1. Record it in `docs/architecture.md`. Impact: no new scope; Claude cannot show a choice list to the user.
+  - B. A new story declares form elicitation and shows the question as a card in the dock. Impact: more scope in m1; a new card type and a mockup.
+- Recommendation: A.
+- Advisor: see the report of this design-review fix.
 
 ## Skim list
 

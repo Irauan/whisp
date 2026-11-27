@@ -49,12 +49,30 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   2. the plan widget (S8)
   3. the permission queue (S5 adds it)
   4. the composer
-- The trust and directory questions of S6 use the same dock when they show as cards in the session window.
-- The element with the role `log` and the name "Transcript" is the scroll area itself. A wrapper around it must not scroll. Reason: the locked test compares the box of the log with the box of the widget.
+- The trust and directory questions of S6 stay an app-level dialog (`QuestionDialog` in `App.tsx`). They are not cards in the dock.
+- The status line keeps the S6 condition: no "Starting Claude Code" while `asking` is true.
+- The header keeps the title, the facts (profile, folder, model, mode) and the button "Delete session" (brief, Session window; `s3/sessions.spec.ts` 117).
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again.
-- The dock has a maximum height. A tall dock scrolls inside, and the composer stays in view.
+- The dock itself never scrolls. The composer is always fully in view.
+  - Only the parts above the composer can scroll inside, each in its own area: the list of the plan widget and the permission queue.
+  - The dock has no scroll offset when the locked place check of `s8/fixture.ts` (128-134) runs.
 - A draft session uses the same frame. Its dock holds only the composer.
+
+#### Conditions for the locked tests
+
+- The element with the role `log` and the name "Transcript" is the scroll element itself. A wrapper around it must not scroll. Reason: the locked test compares the box of the log with the box of the widget.
+- `.content` (`styles.css` 127-131) stops scrolling for the session page. Otherwise the page scrolls, and the frame fails.
+- The log always has a height above zero, also with no entries.
+- "Prompt" stays a `<textarea>`. The tests use `toHaveValue`.
+- The visible text of the Mode button is exactly the mode label, for example "Ask". The arrow is an icon with `aria-hidden`. The S3 check `expectMode` uses `toHaveText`.
+
+#### CSS Modules
+
+- `docs/architecture.md` (282) says that new slices use CSS Modules.
+- The new components of S8 (`PlanWidget.tsx` and the dock) use a CSS Module.
+- The frame changes existing global rules (`.page`, `.content`, `.composer`, `.transcript`, `.error-notice`) in `styles.css`. These rules stay global, because other pages share them.
+- `docs/architecture.md` 282 also says that the composer stays as it is. The user changed the composer of the session window on 2026-11-27. S8 updates that sentence.
 
 ### The composer
 
@@ -224,7 +242,9 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - `src/renderer/src/components/Transcript.tsx` and `styles.css`: the muted line with an info icon for an error notice. The role `alert` stays.
 - `COMPOSER_MAX_LINES` in the renderer, for example in `SessionPage.tsx` or a small composer module.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
-- `src/renderer/src/styles.css`: the frame, the dock and the widget styles. The old `.plan` rules can go. The `.page` rules of the session window change. Shared with S5.
+- `src/renderer/src/styles.css`: the global rules of the frame (`.page`, `.content`, `.composer`, `.transcript`, `.error-notice`). The old `.plan` rules can go. Shared with S5.
+- New CSS Modules for `PlanWidget.tsx` and the dock. See "CSS Modules".
+- `docs/architecture.md`: the sentence of line 282 that the composer stays as it is.
 - The layout around the page (the main area of `App.tsx`) may need a fixed height for the frame. Shared with S6.
 
 ### Dependencies
@@ -233,7 +253,7 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - No dependency on S5, S6, S7 or S9. S8 does not touch the agent process code.
 - S8 builds the frame and the bottom dock. S5 needs S8 merged, and then adds its queue to the dock. This changes the plan: S5 depended on S4 only.
 - S5 and S8 both change `SessionPage.tsx`, `transcript.store.ts` and `styles.css`. They merge one at a time, S8 first.
-- If S6 merges first and shows its questions as cards in the session window, S8 moves them into the dock.
+- S6 is merged (`50bd85a`). Its questions stay an app-level dialog. S8 keeps its `asking` condition on the status line.
 
 ## Conflicts between the locked tests and the brief
 

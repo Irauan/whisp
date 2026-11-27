@@ -92,8 +92,17 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .frame-head { flex: none; padding: 8px 32px 0; border-bottom: 1px solid var(--line); }
 .frame-head .page-head { margin-bottom: 8px; }
 .frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
-.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); max-height: 70%; overflow: auto; }
+.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); }
 .dock > * { max-width: 760px; width: 100%; }
+.dock .permission-queue { max-height: 240px; overflow: auto; }
+/* The header keeps the title, the facts and the button "Delete session". */
+.head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.delete { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
+.facts-row { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; font-size: 12.5px; }
+.facts-row div { display: flex; gap: 6px; }
+.facts-row dt { color: var(--muted); }
+.facts-row dd { margin: 0; }
+.text-button svg { width: 12px; height: 12px; margin-left: 4px; }
 .dock .agent-status, .dock .composer, .dock .plan-widget { margin-top: 0; }
 .dock-mark { outline: 2px dashed var(--mark); outline-offset: 2px; }
 /* Changed (S8 builds it, user decision 2026-11-27): the composer like the GitHub app.
@@ -154,7 +163,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">The session has no plan entry, or the latest plan has no steps. No widget shows. The frame still applies: the dock holds only the composer.</p>
   <div class="window frame" style="height:380px">
     <div class="frame-head mark"><span class="mark-label">Changed: fixed header</span>
-      <div class="page-head"><h1>Say hello</h1></div>
+      <div class="page-head head-row"><h1>Say hello</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
     </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Say hello.</p></div>
@@ -164,7 +174,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       <span class="mark-label" style="justify-self:start;width:auto">New: bottom dock, always in view</span>
       <span class="mark-label" style="justify-self:start;width:auto">Changed: composer like the GitHub app</span>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>
@@ -174,7 +184,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">The agent sent a plan with three steps, then marked step 1 completed and step 2 in progress. The count counts the completed steps. The step in progress has the only spinner. The first plan of the session adds no "Updated the plan" (open choice 2). The progress update adds none either. A long transcript scrolls under the dock.</p>
   <div class="window frame">
     <div class="frame-head">
-      <div class="page-head"><h1>Plan the change</h1></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
     </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Look at the module and tell me what it does.</p></div>
@@ -203,7 +214,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         </section>
       </div>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
   </div>
 </section>
@@ -212,7 +223,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>3. After the turn: unfolded and folded</h2>
   <p class="muted">The widget stays after the turn ends, and after a restart. The header is the one button with aria-expanded. Folded, the count stays, the list hides, and the transcript gets the space.</p>
   <div class="window frame" style="height:420px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="msg"><p>I made a plan.</p></div>
@@ -231,12 +244,14 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         </ol>
       </section>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
   <p class="muted" style="margin:14px 0 6px;font-size:13px">Folded:</p>
   <div class="window frame" style="height:340px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="msg"><p>I made a plan.</p></div>
@@ -250,7 +265,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         </button>
       </section>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>
@@ -259,7 +274,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>4. A new plan replaces the old one</h2>
   <p class="muted">In a later turn the agent sends other steps. The widget shows only the new plan. The transcript shows "Updated the plan" at that point, and stays at the bottom.</p>
   <div class="window frame" style="height:460px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Use another approach.</p></div>
       <div class="msg"><p>I change the approach.</p></div>
@@ -280,7 +297,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         </ol>
       </section>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>
@@ -289,7 +306,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>5. All steps completed, with a long plan</h2>
   <p class="muted">The widget stays with "Plan 5 of 5". A long plan scrolls inside the widget, so the composer stays in view. A long step text wraps.</p>
   <div class="window frame" style="height:480px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg"><p>All steps are done.</p></div>
     </div>
@@ -308,7 +327,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         </ol>
       </section>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>
@@ -317,7 +336,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>6. An empty plan clears the widget</h2>
   <p class="muted">The agent sent a plan with no steps. The widget does not show, also after a restart. The transcript shows the marker at that point, because a plan existed before.</p>
   <div class="window frame" style="height:380px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <p class="notice">Updated the plan</p>
       <div class="msg"><p>I cleared the plan.</p></div>
@@ -327,7 +348,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
         <p class="muted" style="font-size:13px">No region "Plan" in the dock.</p>
       </div>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>
@@ -336,7 +357,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>7. A failed turn</h2>
   <p class="muted">A turn fails. The transcript shows one muted line with an info icon, at the point of the failure. The style follows the reference "Execution failed: Model … is not available". The line keeps the role "alert" and the texts of S4 and S7, so their error tests still find it. The composer is ready for the next message.</p>
   <div class="window frame" style="height:380px">
-    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: failed turn as one muted line</span>
@@ -346,7 +369,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
     </div>
     <div class="dock">
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
-        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask ▾</button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>

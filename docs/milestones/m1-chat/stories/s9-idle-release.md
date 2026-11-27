@@ -23,17 +23,30 @@ Status: draft for the design review. Not approved.
 2. When more than 6 processes are idle, the oldest idle process closes first, until 6 stay. The oldest is the one with the earliest idle time. A tie goes to the lower session ID.
 3. A session that is not idle never closes for rule 1 or rule 2. This includes a session in the state Starting and a session with an open permission request.
 4. The next message after a release resumes the agent session, as after a restart (S4).
-5. A pure function with a clock decides the release. It gets the idle sessions, the time now and the limits. It returns the sessions to close.
+5. A pure function with a clock decides the release. It gets each session with an open process and its busy state (turn, open permission request), the time now and the limits. It returns the sessions to close.
 6. The release checks again that the session is idle right before the close. A message that came in the meantime keeps the process.
 7. A message that comes while its process closes waits for the close to end. Then a new process starts and resumes. Two processes never run for one session.
-8. The close follows the shutdown of `docs/architecture.md`: cancel, close the session, close stdin, then kill the whole process tree after a limit.
-9. A child process of the agent never outlives the release. See open choice 6.
+8. `ensureProcess` keeps this order:
+   1. wait for a closing process of the session
+   2. the S6 guard (trust and directory questions)
+   3. the start of the new process
+9. The close follows the shutdown of `docs/architecture.md`: cancel, close the session, close stdin, then kill the whole process tree after a limit.
+10. A child process of the agent never outlives the release. See open choice 6.
+11. A release silently puts the session back in its saved mode. `applySettings` sets the saved mode at each start. A mode that a plan exit option set during the session is lost (see S5, open choice 5).
+12. After a release, the S7 notice for the fallback of the mode Auto shows again at the next start. S9 accepts it, with the same reason as open choice 7: a release is rare, and a note per start is honest.
+
+### Busy state outside a turn
+
+- Claude can start a model cycle after the prompt resolved, for example after a background task. Updates and permission requests can then come outside an Aether turn (S5, "Requests outside a turn").
+- So an open permission request counts as busy, also with no turn.
+- A background subagent holds the turn open until it ends (`v1/acp-agent.js` 437-447, 2544-2600). A background shell does not. See open choice 3.
 
 ### When the rule runs
 
 - At each turn end, for rule 2. A seventh idle process then closes the oldest one at once.
 - On a timer in the composition root, for rule 1. The timer calls the release handler every 30 seconds. The handler reads the time from the `Clock` port.
 - A test calls the handler directly with a fake clock. See open choice 4.
+- Shutdown stops the timer before the database closes (`composition.ts` 157-158). A tick after the close of the database must not run.
 
 ### States
 
@@ -50,7 +63,7 @@ The user sees no new state. After a release:
 | A21 | A person's session is idle for 30 minutes, measured with a test clock. Its process closes. The next message resumes the session. | Slice, with a fake clock and the simulated agent over real ACP. See open choice 4. |
 | A22 | 7 idle sessions with open processes. The oldest idle process closes. An active session never closes for this limit. | Acceptance. It needs no clock: the seventh turn end triggers the rule. |
 | S9-1 | An automated session closes after 2 minutes, a person's session does not. | Unit, pure function |
-| S9-2 | A session with an open permission request, or with a turn, never closes. | Unit, pure function |
+| S9-2 | A session with an open permission request, or with a turn, never closes. | Unit, pure function. The function gets the busy state, so the unit test can cover it. |
 | S9-3 | A message during the close waits, then resumes in one new process. | Slice |
 | S9-4 | After a release, no process of the agent tree runs. The simulated agent starts a child that outlives its parent. | Slice or acceptance. See open choice 6. |
 
@@ -92,12 +105,19 @@ ALTER TABLE sessions ADD COLUMN started_by TEXT NOT NULL DEFAULT 'person';
 - New pure function in the sessions domain, for example `src/features/sessions/idle-release.ts`:
 
 ```ts
-interface IdleSession { id: string; idleSince: Date; startedBy: 'person' | 'automation' }
+interface OpenSession {
+  id: string
+  startedBy: 'person' | 'automation'
+  idleSince: Date | null      // null while the session is busy
+  turn: boolean
+  openRequests: number
+}
 interface ReleaseLimits { releaseMs: { person: number; automation: number }; idleLimit: number }
-function sessionsToRelease(idle: readonly IdleSession[], now: Date, limits: ReleaseLimits): string[]
+function sessionsToRelease(open: readonly OpenSession[], now: Date, limits: ReleaseLimits): string[]
 ```
 
-- New handler without a contract, like `record-agent-update`: `src/features/sessions/release-idle/release-idle.handler.ts`. It reads the idle sessions from `Processes`, calls the pure function, and closes the processes.
+- New handler without a contract, like `record-agent-update`: `src/features/sessions/release-idle/release-idle.handler.ts`. It reads the open sessions and their busy state, calls the pure function, and closes the processes.
+- Name the idle close `retire` (or another name) inside the module. `Processes.release` and the composition `release` already mean "close for delete or quit". The term "release" stays for the rule in the docs.
 - `Processes` (`processes.store.ts`) gets:
   - the idle time of each process
   - a closing promise for each session, so that a new start waits for the close
@@ -110,7 +130,7 @@ function sessionsToRelease(idle: readonly IdleSession[], now: Date, limits: Rele
 | Thing | UI | Code | Database |
 |---|---|---|---|
 | Who started a session | none in m1 | `startedBy`: `person`, `automation` | `sessions.started_by` |
-| The close of an idle process | none | release | none |
+| The close of an idle process | none | release in the docs; `retire` in the code, because `Processes.release` means the close for delete or quit | none |
 | The wait before a release | none | release time | none |
 | The most idle processes | none | idle limit | none |
 | Since when a session is idle | none | idle time, `idleSince` | none |
@@ -136,23 +156,24 @@ The terms "person" and "automation" come from decision 0006 and `docs/architectu
 
 - `src/database/migrations/004-session-started-by.sql`: new.
 - `src/building-blocks/migrations.test.ts`: the list of migrations. Shared with S6.
-- `src/features/sessions/session.ts`, `session.store.ts`: `startedBy`.
+- `src/features/sessions/session.ts`, `session.store.ts`: `startedBy`. S7 also changes `session.ts`.
 - `src/features/sessions/create/create.handler.ts`: writes `person`.
 - New `src/features/sessions/idle-release.ts` and its test.
 - New `src/features/sessions/release-idle/release-idle.handler.ts` and its test.
 - `src/features/sessions/processes.store.ts`: the idle time and the closing promise. Shared with S5.
 - `src/features/sessions/send-message/send-message.handler.ts`: the idle time at the turn end, and the wait for a close. Shared with S5, S6 and S7.
-- `src/providers/acp/acp-agents.ts`: the kill of the children that outlive the agent. Shared with S5, S6 and S7.
-- `src/app/main/composition.ts`: the timer and the limits. Shared with S5, S6 and S7.
+- `src/providers/acp/acp-agents.ts`: the kill of the children that outlive the agent. Shared with S5 and S7. S6 does not touch it.
+- `src/app/main/composition.ts`: the timer, the limits, and the stop of the timer at shutdown. Shared with S5, S6 and S7.
+- S9 does not change `src/building-blocks/agent.port.ts`. S5 and S7 change it.
 - `tests/simulated-agent/agent.mjs`, `scenarios.mjs`, `control.ts`: the child process step. Shared with S5 and S7.
 - `docs/architecture.md`: the accepted gaps of open choices 3 and 6, if the user accepts them.
 
 ### Dependencies
 
 - Needs: S4 (merged).
-- Needs: S6 merged first, because migration 004 follows S6's migration 003. The plan says S9 needs S4 only. The coordinator must update the plan, or S9 takes the next free number when it merges.
-- S5, S6 and S9 touch the agent process code. The coordinator merges them one at a time.
-- S9 does not need S5 code. Today a permission request only exists during a turn, so "no turn" also means "no open request".
+- Needs: S6 (merged, `50bd85a`). Migration 004 follows S6's migration 003. A 004 without 003 breaks the start, because `orderMigrations` refuses a gap.
+- S5, S7 and S9 touch `acp-agents.ts`. S5, S6, S7 and S9 touch `send-message.handler.ts`. The coordinator merges them one at a time.
+- A permission request can come outside a turn (S5). So "no turn" does not mean "no open request". The pure function gets both. If S5 is not merged yet, the open request count is zero.
 
 ## Open choices
 
@@ -185,12 +206,14 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Hard to revert: no.
 - Facts:
   - Decision 0006 says: idle means no turn, no open permission request and no background task.
-  - The Claude adapter tracks background shells and background subagents inside its process. This read of the adapter found no signal of them over ACP version 1.
-  - So after a release, a background command of the agent, for example a dev server, ends with the process.
+  - A background subagent holds the turn open until it ends (`v1/acp-agent.js` 437-447, 2544-2600). So the rule "no turn" already covers it.
+  - A background shell never holds the turn open. This read of the adapter found no signal of it over ACP version 1.
+  - So after a release, a background shell command of the agent, for example a dev server, ends with the process.
 - Options:
-  - A. Count no background task in m1. Record an accepted gap against decision 0006. Impact: a background command ends after the release time; no new protocol work.
+  - A. Count no background shell in m1. Record an accepted gap against decision 0006. Impact: a background shell ends after the release time; no new protocol work.
   - B. Never release a session that ran a background command in its last turn. Impact: Aether must read the tool calls for a Claude-specific marker; such a process stays open until Aether quits.
   - C. Wait for ACP version 2, which has an idle state update. Impact: S9 cannot close its checks in m1.
+  - D. Restart the idle time at each agent update outside a turn. Impact: a shell whose output wakes the agent keeps the process; a quiet shell still ends after the release time; small scope.
 - Recommendation: A.
 - Advisor: record an accepted gap if the adapter gives no signal. The adapter gives none over ACP version 1. It is a hot item.
 
@@ -225,10 +248,10 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - Each child has the environment of the agent, with `GH_TOKEN`.
   - No story builds the scenario of `docs/architecture.md`: "a child process that outlives its parent".
 - Options:
-  - A. S9 adds the scenario, the check S9-4 and the fix. The fix lists the process tree before stdin closes. After the agent ends or the limit passes, it kills each listed process that still runs. It checks the start time of each process, so a reused PID is safe. Impact: no orphan holds `GH_TOKEN`; about one extra system call for each close.
+  - A. S9 adds the scenario, the check S9-4 and the fix. The fix lists the process tree before stdin closes. After the agent ends or the limit passes, it kills each listed process that still runs. It checks the start time of each process, so a reused PID is safe. Impact: fewer orphans hold `GH_TOKEN`; on Windows the list needs PowerShell or CIM and takes hundreds of milliseconds for each close; a child that starts after the list still escapes.
   - B. A separate story for the scenario and the fix. Impact: S9 stays small; the gap stays open until that story.
   - C. Accept the gap. Impact: orphans can run with `GH_TOKEN` after a release or a quit.
-- Recommendation: A. A crash of the agent still leaves its children. Record this as a gap.
+- Recommendation: A. A crash of the agent, and a child that starts after the list, still escape. Record both as gaps.
 - Advisor: A. User preference 3 (close a security gap). It is a hot item, because it adds scope.
 
 ### 7. A notice at a release

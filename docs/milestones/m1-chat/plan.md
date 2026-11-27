@@ -32,13 +32,13 @@ The order follows the dependencies. S1 to S4 form the walking skeleton. After S4
 | S2 Profiles in SQLite | 3 | First start imports accounts as profiles and asks for each workspace directory. Profile settings edit name, workspace directory, GitHub account, Claude folder and Claude profile name. Decision 0013 records the model. | Unreadable conversation file loads as empty | A17, A18 | S1 |
 | S3 Session slices | 5 | Create, list, open and delete sessions from the database. Draft sessions open with their prompt and their imported mode. One Mode control with five values replaces Mode and Tool permissions. Worktree and the session attachment show "coming soon". | New session copies "Approve all" | A13, A14 | S2 |
 | S4 Chat in a session | 6 | The session window streams replies. Send, stop, restart and resume work. Missing sign-in and crash show clear notices. S4 tests replace G11 and G12 of m0-gates S5: temporary data folder, real data folder untouched, wait at a gate (user decision, 2026-11-26). Migration 002 rebuilds `providers` for many accounts, and adds `agent_sessions` and `entries`; a resume uses the provider of its agent run (decisions 0013 and 0014). S4 creates an empty current account at the first start when the profile has none. | Shared process before ready; no permission mode; whole environment | A1, A2, A3, A6, A7, A8, A16, A20 | S3 |
-| S5 Permission queue | 6 | Parallel requests show as a queue. Each answer reaches its own request. Stop cancels all. | Second request cancels the first | A4, A5 | S4 |
+| S5 Permission queue | 6 | Parallel requests show as a queue. Each answer reaches its own request. Stop cancels all. | Second request cancels the first | A4, A5 | S4, S8 (the fixed frame and the bottom dock) |
 | S6 Repository and directory trust | 6 | The trust question and the directory questions show before any process starts. | Hooks and MCP servers run without a question | A9, A10 | S4 |
 | S7 Session settings reach the agent | — | Model, mode and attachments reach the agent. A model that cannot use Auto shows the notice. | — | A12, A15 | S4 |
 | S8 Plan widget | — | The plan shows as a todo list above the composer, with three states. | — | A11 | S4 |
-| S9 Idle release and process limit | 6 | Idle processes close after the release time. At most 6 idle processes stay open. | — | A21, A22 | S4 |
+| S9 Idle release and process limit | 6 | Idle processes close after the release time. At most 6 idle processes stay open. | — | A21, A22 | S4, S6 (migration 003 before 004) |
 
-S5 to S9 are independent after S4. They can run in parallel worktrees. S5, S6 and S9 touch the agent process code, so the coordinator merges them one at a time.
+S6 to S8 are independent after S4. S5 needs S8, because S8 builds the fixed frame and the bottom dock. S9 needs S6, because its migration 004 follows migration 003 of S6. S5, S7 and S9 touch `acp-agents.ts`, and S5, S6, S7 and S9 touch `send-message.handler.ts`, so the coordinator merges them one at a time. Story specs: `stories/` in this folder.
 
 ## Check coverage
 
