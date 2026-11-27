@@ -40,7 +40,8 @@
 //   `session` attachment, or with a model that Aether does not know, never gets an agent process.
 //   Aether refuses it in one of these places: `sessions.create` returns an error, the first
 //   `sessions.send-message` returns an error, or the session gets an error notice before any agent
-//   process starts.
+//   process starts. For an unknown model only, the agent can refuse it instead (coordinator
+//   decision, 2026-11-27): the session then shows an error notice, and the agent gets no prompt.
 // - Claude account (user decision, 2026-11-27): a Claude account is only its config folder. The
 //   dialogs "Profile settings" and "Add profile" have the text field "Claude folder" and no field
 //   "Claude profile name". The agent environment has no `ANTHROPIC_PROFILE`.
