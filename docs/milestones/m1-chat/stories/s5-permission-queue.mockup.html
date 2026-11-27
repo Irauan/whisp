@@ -175,7 +175,7 @@ button:disabled { cursor: default; opacity: .5; }
   <h1>S5 Permission queue</h1>
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
-  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Decision cards (permission requests) and question cards of Claude show inside the transcript, at its end, after the last entry, in the order of arrival. They scroll with the chat. An answered decision card stays as "Permission answered" (question in secondary, answer in primary). An answered question card turns into the saved card "Claude asked". No card shows disabled buttons.</p>
+  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Decision cards (permission requests) and question cards of Claude show inside the transcript, where Claude asked: at the place of their entry, in the order of arrival (tool A, card A, tool B, card B). They scroll with the chat. An answered decision card stays as "Permission answered" (question in secondary, answer in primary). An answered question card turns into the saved card "Claude asked". No card shows disabled buttons.</p>
   <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact. On a safety ask, the refuse option that the agent puts first is the recommended one.</p>
   <p class="muted">Frame (S8): the header holds only the title and "Delete session". The transcript is the only scroll area. Bottom dock, from the top: status line, plan widget (S8), composer. The trust and directory questions of S6 stay an app-level dialog.</p>
 </header>
@@ -228,16 +228,15 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>2. Two cards at once, oldest first (A4)</h2>
-  <p class="muted">The agent asks two permissions at the same time. The cards show inside the log, after the last entry, in the order of arrival. The user can answer them in any order. The simulated agent offers "Allow" and "Refuse". Each card is an article named "Permission request"; the tool title is text inside it.</p>
+  <p class="muted">The agent asks two permissions at the same time. Each card shows inside the log where Claude asked, right after its tool call: tool A, card A, tool B, card B. The user can answer them in any order. The simulated agent offers "Allow" and "Refuse". Each card is an article named "Permission request"; the tool title is text inside it.</p>
   <div class="window frame">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
-      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
-      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
       <div class="mark"><span class="mark-label">New: cards inline. Changed: decision card layout (context, question, buttons)</span>
         <div class="permission-queue">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">execute · <span class="mono">npm test</span></p>
             <p class="ask">Run this command?</p>
@@ -246,6 +245,7 @@ button:disabled { cursor: default; opacity: .5; }
               <button class="button" type="button">Refuse</button>
             </div>
           </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">read · <span class="mono">Read C:\work\logs\last-run.txt</span></p>
             <p class="ask">Read this?</p>
@@ -276,11 +276,9 @@ button:disabled { cursor: default; opacity: .5; }
     <div class="frame-head"><div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg"><p>The plan is ready. I wait for your answer before I code.</p></div>
-      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
-      <div class="tool"><span>◌</span><span class="tool-title">Approve Plan</span><span>Pending</span></div>
-      <div class="tool"><span>◌</span><span class="tool-title">rm -rf build</span><span>Pending</span></div>
       <div class="mark"><span class="mark-label">Changed: decision cards with split buttons</span>
         <div class="permission-queue">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">execute · <span class="mono">npm test</span></p>
             <p class="ask">Run this command?</p>
@@ -291,6 +289,7 @@ button:disabled { cursor: default; opacity: .5; }
               <button class="button" type="button">No</button>
             </div>
           </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Approve Plan</span><span>Pending</span></div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">switch_mode · <span class="mono">Approve Plan</span></p>
             <p class="ask">Approve the plan?</p>
@@ -300,6 +299,7 @@ button:disabled { cursor: default; opacity: .5; }
             </div>
             <p class="muted" style="font-size:12px">The dropdown holds "Yes, and use auto mode" and "Yes, and bypass permissions".</p>
           </div>
+      <div class="tool"><span>◌</span><span class="tool-title">rm -rf build</span><span>Pending</span></div>
           <div class="question" role="article" aria-label="Permission request">
             <p class="ctx">execute · <span class="mono">rm -rf build</span></p>
             <p class="ask">Run this command?</p>
@@ -349,7 +349,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>4. Answer sent, and answer refused</h2>
-  <p class="muted">Changed (user decision, 2026-11-27): no disabled buttons. First card: the user clicked Allow. The card switches at once to its answered layout, with a small spinner after the chosen label, while the answer is sent. Second card: the main process refused the answer. The card goes back to its buttons and shows the reason.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): no disabled buttons. First card: the user clicked Allow. The card switches at once to its answered layout, with a small spinner after the chosen label, while the answer is sent. It keeps the name "Permission request" until main accepts the answer; then it becomes "Permission answered". Second card: the main process refused the answer. The card goes back to its buttons and shows the reason.</p>
   <div class="window frame" style="height:520px">
     <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -390,13 +390,13 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool"><span class="spin">◌</span><span class="tool-title">npm test</span><span>Running</span></div>
-      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
-      <div class="mark"><span class="mark-label">Changed: the answered decision card stays</span>
+      <div class="mark"><span class="mark-label">Changed: the answered decision card stays, where Claude asked</span>
         <div class="question answered-decision" role="article" aria-label="Permission answered">
           <p class="muted">Run this command?</p>
           <p class="chosen">Allow</p>
         </div>
       </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
       <div class="permission-queue">
         <div class="question" role="article" aria-label="Permission request">
           <p class="ctx">read · <span class="mono">Read C:\work\logs\last-run.txt</span></p>
@@ -425,12 +425,12 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">npm test</span><span>Failed</span></div>
-      <div class="tool tool-failed"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
-      <div class="mark"><span class="mark-label">Changed: not-answered cards with their reason after Stop</span>
+      <div class="mark"><span class="mark-label">Changed: not-answered cards with their reason after Stop, each where Claude asked</span>
         <div class="question answered-decision" role="article" aria-label="Permission answered">
           <p class="muted">Run this command?</p>
           <p class="chosen">Not answered: you pressed Stop.</p>
         </div>
+        <div class="tool tool-failed" style="margin-top:8px"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
         <div class="question answered-decision" role="article" aria-label="Permission answered" style="margin-top:8px">
           <p class="muted">Read this?</p>
           <p class="chosen">Not answered: you pressed Stop.</p>

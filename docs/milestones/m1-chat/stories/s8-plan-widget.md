@@ -48,7 +48,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   1. the status line ("Starting Claude Code", "Working", and "Waiting for your answer" from S5)
   2. the plan widget (S8)
   3. the composer
-- The dock holds no card. The permission cards and the question cards of S5 show inside the log, at its end (user decision, 2026-11-27).
+- The dock holds no card. The permission cards and the question cards of S5 show inside the log, where Claude asked: at the place of their entry (user decision, 2026-11-27).
 - The trust and directory questions of S6 stay an app-level dialog (`QuestionDialog` in `App.tsx`). They are not cards in the dock.
 - The status line keeps the S6 condition: no "Starting Claude Code" while `asking` is true.
 - The header shows only the title and the button "Delete session" (`s3/sessions.spec.ts` 117).
@@ -179,7 +179,7 @@ Changes against the current screen:
 Order in the session window, from the top. The S5 mockup uses the same order.
 
 1. Header: the title and "Delete session" (fixed)
-2. Transcript (the only scroll area): the entries, then the open cards of S5
+2. Transcript (the only scroll area): the entries, with each card of S5 at the place where Claude asked
 3. Bottom dock:
    1. Status line
    2. Plan widget (S8)
