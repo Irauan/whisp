@@ -84,7 +84,7 @@
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s8/fixture.ts": {
-    "sha256": "5ccbdcb6d8963083f5e2519f6ada30c1f1c71c04c5783700edcef8db286dd9ed",
+    "sha256": "419a8fd5cca106ed7378f98f5d1621ee8c854ba1c66646b52d345d1607bc01a5",
     "story": "m1-chat/s8"
   },
   "tests/acceptance/m1-chat/s8/plan-updates.spec.ts": {

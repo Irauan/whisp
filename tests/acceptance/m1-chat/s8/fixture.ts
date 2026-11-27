@@ -21,6 +21,7 @@
 //   "Pending", "In progress" or "Completed". The state text can be visually hidden.
 // - Icons: pending shows an empty circle, in progress a spinner, completed a check. The tests
 //   check only the spinner: the item in progress has a running animation, the others have none.
+//   The tests ask for full motion, because the app stops its spinners for reduced motion.
 // - Fold: the widget has one button with `aria-expanded`. "true" shows the list. A click folds
 //   the widget: `aria-expanded` is then "false" and the list is hidden. A second click unfolds it.
 // - The widget stays after the turn ends, and after a restart it shows the same plan.
@@ -90,6 +91,8 @@ async function animates(item: Locator): Promise<boolean> {
 
 /** Checks that the widget shows this count and these steps, each with its state, in order. */
 export async function expectPlan(page: Page, count: string, steps: readonly Step[], check: string): Promise<void> {
+  // The app stops its spinners when the machine asks for reduced motion. The spinner check needs motion.
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   const widget = planWidget(page)
   await expect(widget, `${check}: the session window has no region "Plan", so no plan widget shows.`).toBeVisible()
   await expect(widget, `${check}: the plan widget does not show the count "${count}".`).toContainText(count)
