@@ -20,15 +20,16 @@ Decision 0013 gave a profile one provider row for each kind, and saved a snapsho
    - When an agent run used it, the edit creates a new row and makes it current for new sessions. The old row stays for its agent runs.
 7. `sessions.provider_id` (from `001`) is null until the first start. A session without an agent run takes the current account of its profile at its first start, as decision 0013 item 4 said. The first start saves that account in `sessions.provider_id` and in `agent_sessions.provider_id`. User decision, 2026-11-27: an earlier text said "at create". That was an error of the brief.
 8. The transcript stays in the SQLite table `entries`, as decision 0003 says.
+9. `sessions.create` leaves `provider_id` null. The first start reads the current account of the profile at that moment. A retry after a failed first start therefore uses the account that the user fixed in the meantime. User decision, 2026-11-27.
+10. A Claude account is only its configuration folder. The user removed the field "Claude profile name" (`ANTHROPIC_PROFILE`) on 2026-11-27, in story S7. The account settings hold no `profileName`. Aether ignores the old key on read. Decision 0013 has the note.
 
 ## Readings in story S4
 
 The user did not decide these points. The builder recorded them, with their source.
 
 - "Current" is the column `providers.is_current`, with a unique index on `(profile_id, kind)` where `is_current = 1`. A switch clears the old row first, then sets the new one, in one transaction. Source: the advisor. Reason: the index is per kind, it needs no circular key, and a later milestone can let the user pick any account.
-- The trigger locks only the configuration folder, as the user decided. The edit rule is stricter: a change of the Claude profile name or cleared settings on a used account also makes a new current account, because a resume reads the account row. Source: the advisor. The user can decide if the lock must also cover the Claude profile name.
+- The trigger locks only the configuration folder, as the user decided. The edit rule is stricter: cleared settings on a used account also make a new current account, because a resume reads the account row. Source: the advisor. The question about the lock and the Claude profile name ended on 2026-11-27, when the user removed that field (item 10).
 - When an account of the profile already has the new settings, the edit makes it current. It makes no duplicate. Source: the advisor.
-- `sessions.create` leaves `provider_id` null. The first start reads the current account of the profile at that moment. A retry after a failed first start therefore uses the account that the user fixed in the meantime. Source: the user (2026-11-27).
 - An account that a first start uses counts as used, from the moment that Aether chooses it until the start ends, because no `agent_sessions` row names it before its process is ready. An edit of the account in that time makes a new current account, so the account that an agent run names always holds the settings that its process started with. The set of these accounts lives in memory, and the slice that starts the agent and the slice that edits accounts share it through the composition root. Source: the coordinator (review of round 2). No format change.
 - The first start creates an empty account when the profile has none, as decision 0013 said. A failed first start keeps this account and saves no agent run. Source: the coordinator.
 - Aether saves the `agent_sessions` row, and the account of a session that had none, in one transaction, when the agent session exists. The account is the one that the process started with.
