@@ -108,7 +108,7 @@
     "story": "m1-chat/s7"
   },
   "tests/acceptance/m1-chat/s7/directories.spec.ts": {
-    "sha256": "283257237e0011b5957de755badedf275219f744913ca67801d1a29e19aaf411",
+    "sha256": "8b40f295e249a9dd44d7ffdfc65710ea54e16fbba0a4705c6db0b8c0a5c9366d",
     "story": "m1-chat/s7"
   },
   "tests/acceptance/m1-chat/s7/fixture.ts": {

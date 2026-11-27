@@ -19,7 +19,7 @@
 import { writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { addAttachment, paramsOf, samePath, send, stubPickers } from './fixture'
+import { addAttachment, paramsOf, samePath, send, stubPickers, transcript } from './fixture'
 import {
   button,
   createFolder,
@@ -37,6 +37,7 @@ import {
   otherProfileQuestion,
   outside,
   outsideQuestion,
+  REPLY,
   replyWithHello,
   sessionEntry,
   startSession,
@@ -163,9 +164,15 @@ test.describe('A15 with A10: the S6 questions guard the extra directories of a s
     expect(agentProcessIds(chat), `${check}: an agent process runs while the trust question for the extra directory shows.`).toEqual([])
 
     await button(question, 'Trust').click()
-    await expectReply(restarted, `${check}: the resume after Trust`)
+    // The transcript already shows the reply of the first turn. Wait for the reply of the new turn.
+    await expect(
+      transcript(restarted).getByText(REPLY, { exact: true }),
+      `${check}: the resume after Trust: the session window does not show the reply of the new turn "Say it again".`
+    ).toHaveCount(2)
+    await expect
+      .poll(() => chat.control.received('session/resume').length, { message: `${check}: the agent must get one session/resume after Trust.` })
+      .toBe(1)
     const resumed = chat.control.received('session/resume')
-    expect(resumed, `${check}: the agent must get one session/resume after Trust.`).toHaveLength(1)
     expect(
       extraDirectoriesOf(paramsOf(resumed[0])).some((path) => samePath(path, tools)),
       `${check}: session/resume has no additionalDirectories entry for R/tools.`
