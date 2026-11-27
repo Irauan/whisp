@@ -1,23 +1,36 @@
 import { Trash2 } from 'lucide-react'
-import { labelOf, MODELS, MODES, PERMISSIONS, type Session } from '../../../shared/model'
+import { labelOf, MODELS } from '../../../shared/model'
+import type { SessionDraft } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 
-export function SessionPage({ session, onDelete }: { session: Session; onDelete(): void }) {
-  const { settings } = session
+/** The five modes of a session. Story S3 of m1-chat replaces this with the Mode control. */
+const MODE_LABELS = [
+  { id: 'ask', label: 'Ask' },
+  { id: 'accept-edits', label: 'Accept edits' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'auto', label: 'Auto' },
+  { id: 'approve-all', label: 'Approve all' }
+] as const
+
+/** A draft session of the import. It is read-only until the session slices of story S3 exist. */
+export function SessionPage({ session }: { session: SessionDraft }) {
   const rows: [string, string][] = [
-    ['Folder', settings.folder],
-    ['Worktree', settings.checkout === 'worktree' ? 'New worktree' : 'Folder as it is'],
-    ['Runs on', 'This computer'],
-    ['Mode', labelOf(MODES, settings.mode)],
-    ['Tool permissions', labelOf(PERMISSIONS, settings.permissions)],
-    ['Model', labelOf(MODELS, settings.model)]
+    ['Source', session.sourcePath],
+    ['Mode', labelOf(MODE_LABELS, session.mode)],
+    ['Model', labelOf(MODELS, session.model)]
   ]
 
   return (
     <div className="page">
       <header className="page-head">
         <h1>{session.title}</h1>
-        <button type="button" className="icon-button" aria-label="Delete session" onClick={onDelete}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Delete session"
+          title="Coming soon"
+          disabled
+        >
           <Trash2 size={18} />
         </button>
       </header>
@@ -39,11 +52,11 @@ export function SessionPage({ session, onDelete }: { session: Session; onDelete(
           ))}
         </dl>
       </section>
-      {settings.attachments.length > 0 && (
+      {session.attachments.length > 0 && (
         <section className="panel">
           <h2>Attachments</h2>
           <ul>
-            {settings.attachments.map((item) => (
+            {session.attachments.map((item) => (
               <li key={item.kind + item.ref} className="attachment" title={item.ref}>
                 <AttachmentIcon kind={item.kind} size={16} />
                 <span>{item.label}</span>

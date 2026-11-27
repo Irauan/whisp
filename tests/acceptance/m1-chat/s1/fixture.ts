@@ -8,6 +8,12 @@
 // folder. The fixture passes the standard Chromium switch `--user-data-dir`, as the fixture of
 // m0-gates S5 did. The app process also gets a changed `APPDATA`. This is only a partial guard.
 // The check of the real folder at the end is the proof.
+//
+// From m1-chat S2, the first start with old files imports each account as a profile, and a
+// dialog asks for the workspace directory of each profile (flow 1). The fixture answers that
+// dialog before each test, with the UI of the S2 tests: the dialog "Choose workspace
+// directories", the field "Workspace directory of Personal" and the button "Save directories".
+// The dialog must show. A wait "if it shows" would race with the start of the app.
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
@@ -94,6 +100,18 @@ function oldProfile(projectDir: string): unknown {
   }
 }
 
+/** Answers the import dialog of m1-chat S2: the workspace directory of the one profile, then "Save directories". */
+async function answerDirectoryDialog(page: Page, directory: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: 'Choose workspace directories' })
+  await expect(
+    dialog,
+    'No dialog "Choose workspace directories" asks for the workspace directory of the imported profile.'
+  ).toBeVisible()
+  await dialog.getByRole('textbox', { name: 'Workspace directory of Personal', exact: true }).fill(directory)
+  await dialog.getByRole('button', { name: 'Save directories', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
+
 /** The environment of the app process: the real one, without the variables that change the app. */
 function appEnvironment(root: string): Record<string, string> {
   const env: Record<string, string> = {}
@@ -130,6 +148,7 @@ export const test = base.extend<{ aether: AetherApp }>({
     await app.context().tracing.start({ screenshots: true, snapshots: true })
 
     try {
+      await answerDirectoryDialog(page, projectDir)
       await use({ app, page, root, dataDir })
     } finally {
       const failed = testInfo.status !== testInfo.expectedStatus

@@ -9,9 +9,11 @@ const profile = z.object({
   avatar: z.string().nullable()
 })
 
-/** Lists the GitHub accounts that the GitHub CLI is signed in to. */
+/**
+ * Lists the GitHub accounts that the GitHub CLI is signed in to.
+ */
 export const listGithubAccounts = defineContract(
-  'workspaces.list-github-accounts',
+  'profiles.list-github-accounts',
   z.strictObject({}),
   z.strictObject({ accounts: z.array(profile) }),
   ['github-cli-missing', 'github-signed-out'],

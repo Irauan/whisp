@@ -8,7 +8,7 @@
 // - `src/app/contracts.ts` exports `contracts`, the registry: an array or an object of contracts.
 // - A contract comes from `defineContract(name, input, result, errors, examples)` in
 //   `src/building-blocks/contract.ts`. It has these properties:
-//   - `name`: the name for `invoke`, for example `workspaces.list-github-accounts`;
+//   - `name`: the name for `invoke`, for example `profiles.list-github-accounts`;
 //   - `input`: the zod schema of the input;
 //   - `examples.valid`: inputs that the input schema accepts, at least one;
 //   - `examples.invalid`: inputs that the input schema rejects, at least one.
@@ -23,8 +23,12 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(__dirname, '../..')
 const REGISTRY = 'src/app/contracts.ts'
 const FEATURES = 'src/features'
-/** The contract of the GitHub accounts query, the example slice of path step 2. */
-const LIST_GITHUB_ACCOUNTS = 'workspaces.list-github-accounts'
+/**
+ * The contract of the GitHub accounts query, the example slice of path step 2. User decision,
+ * 2026-11-26: "Profile" everywhere, so `workspaces.list-github-accounts` is now
+ * `profiles.list-github-accounts`.
+ */
+const LIST_GITHUB_ACCOUNTS = 'profiles.list-github-accounts'
 
 interface Schema {
   safeParse(value: unknown): { success: boolean }

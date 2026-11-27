@@ -1,43 +1,42 @@
-import { ChevronLeft, ChevronRight, PanelLeft, Search, SearchX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelLeft, Plus, Search, SearchX } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import {
-  contentOf,
-  currentAccount,
-  type GithubProfile,
-  type SessionSettings
-} from '../../shared/model'
-import { AccountDialog } from './components/AccountDialog'
-import { AccountSwitcher } from './components/AccountSwitcher'
 import { ConfirmDialog, SearchDialog } from './components/Dialogs'
 import {
-  AccountsPage,
   BotsPage,
   CustomizePage,
   EmptyPage,
   HomePage,
   ProjectsPage,
   PullRequestsPage,
-  WorkItemsPage
+  WorkItemsPage,
+  ProfilesPage
 } from './components/Pages'
+import { DirectoriesDialog } from './components/DirectoriesDialog'
 import { SessionPage } from './components/SessionPage'
 import { Sidebar } from './components/Sidebar'
+import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
+import { ProfileSwitcher } from './components/ProfileSwitcher'
 import { useNavigation, type View } from './navigation'
-import { useWorkspace } from './useWorkspace'
+import { useProfiles } from './useProfiles'
 
 type OpenDialog =
   | { kind: 'search' }
-  | { kind: 'add-account' }
-  | { kind: 'edit-account'; accountId: string }
-  | { kind: 'delete-account'; accountId: string }
-  | { kind: 'delete-session'; sessionId: string }
+  | { kind: 'add-profile' }
+  | { kind: 'profile-settings'; profileId: string }
+  | { kind: 'delete-profile'; profileId: string }
 
-const now = () => new Date().toISOString()
+/** Between story S2 and story S3 of m1-chat, the sessions are the drafts of the import, and they are read-only. */
+const NEW_SESSION_UNAVAILABLE = 'Starting a new session is coming soon.'
 
 export function App() {
-  const { workspace, error, dispatch } = useWorkspace()
+  const { state, error, chooseDirectories, add, edit, switchTo, remove } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
+  // View state: the user closed the dialog of the directories for now. It shows again at the next start.
+  const [directoriesPostponed, setDirectoriesPostponed] = useState(false)
+  // View state: the messages of the start that the user closed.
+  const [closedNotices, setClosedNotices] = useState<string[]>([])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -49,7 +48,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  if (!workspace) {
+  if (!state) {
     return (
       <div className="app">
         <main className="main">
@@ -60,45 +59,49 @@ export function App() {
     )
   }
 
-  const account = currentAccount(workspace)
-  // Show only the current account, so that the accounts stay apart.
-  const content = contentOf(workspace, account.id)
+  const { profiles, currentId, notices, sessions } = state
+  const current = profiles.find((profile) => profile.id === currentId) ?? null
+  const withoutDirectory = profiles.filter((profile) => profile.workspaceDirectory === null)
   const closeDialog = () => setDialog(null)
   const goFromDialog = (next: View) => {
     closeDialog()
     go(next)
   }
 
-  const openAddAccount = () => setDialog({ kind: 'add-account' })
+  const openAdd = () => setDialog({ kind: 'add-profile' })
 
-  const addAccount = (label: string, github: GithubProfile | null) => {
-    dispatch({ type: 'account-added', id: crypto.randomUUID(), label, github })
-    closeDialog()
-    reset()
+  const switchProfile = async (id: string) => {
+    if (id === currentId) return
+    // The history belongs to the other profile.
+    if ((await switchTo(id)) === null) reset()
   }
 
-  const switchAccount = (id: string) => {
-    if (id === account.id) return
-    dispatch({ type: 'account-switched', id })
-    // The history belongs to the other account.
-    reset()
+  const saveNew = async (values: ProfileValues) => {
+    const message = await add(values)
+    if (message === null) {
+      closeDialog()
+      reset()
+    }
+    return message
   }
 
-  const addSession = (prompt: string, settings: SessionSettings) => {
-    const id = crypto.randomUUID()
-    dispatch({ type: 'session-added', id, prompt, settings, at: now() })
-    go({ kind: 'session', sessionId: id })
+  const saveSettings = (profileId: string) => async (values: ProfileValues) => {
+    const message = await edit({ id: profileId, ...values })
+    if (message === null) closeDialog()
+    return message
   }
 
   const renderPage = () => {
     switch (view.kind) {
       case 'home':
+        if (!current) return <NoProfile onAdd={openAdd} />
         return (
           <HomePage
-            key={account.id}
-            sessions={content.sessions}
-            githubLogin={account.github?.login ?? null}
-            onStart={addSession}
+            key={current.id}
+            sessions={sessions}
+            githubLogin={current.github?.login ?? null}
+            unavailable={NEW_SESSION_UNAVAILABLE}
+            onStart={() => undefined}
           />
         )
       case 'pulls':
@@ -111,25 +114,21 @@ export function App() {
         return <BotsPage />
       case 'customize':
         return <CustomizePage />
-      case 'accounts':
+      case 'profiles':
         return (
-          <AccountsPage
-            workspace={workspace}
-            onAdd={openAddAccount}
-            onSwitch={switchAccount}
-            onEdit={(accountId) => setDialog({ kind: 'edit-account', accountId })}
-            onDelete={(accountId) => setDialog({ kind: 'delete-account', accountId })}
+          <ProfilesPage
+            profiles={profiles}
+            currentId={currentId}
+            onAdd={openAdd}
+            onSwitch={(profileId) => void switchProfile(profileId)}
+            onEdit={(profileId) => setDialog({ kind: 'profile-settings', profileId })}
+            onDelete={(profileId) => setDialog({ kind: 'delete-profile', profileId })}
           />
         )
       case 'session': {
-        const session = content.sessions.find((candidate) => candidate.id === view.sessionId)
+        const session = sessions.find((candidate) => candidate.id === view.sessionId)
         if (!session) break
-        return (
-          <SessionPage
-            session={session}
-            onDelete={() => setDialog({ kind: 'delete-session', sessionId: session.id })}
-          />
-        )
+        return <SessionPage session={session} />
       }
     }
     return (
@@ -140,52 +139,30 @@ export function App() {
   const renderDialog = () => {
     switch (dialog?.kind) {
       case 'search':
-        return <SearchDialog content={content} onClose={closeDialog} onGo={goFromDialog} />
-      case 'add-account':
-        return <AccountDialog onClose={closeDialog} onSave={addAccount} />
-      case 'edit-account': {
-        const { accountId } = dialog
-        return (
-          <AccountDialog
-            account={workspace.accounts.find((candidate) => candidate.id === accountId)}
-            onClose={closeDialog}
-            onSave={(label, github) => {
-              dispatch({ type: 'account-edited', id: accountId, label, github })
-              closeDialog()
-            }}
-          />
-        )
+        return <SearchDialog sessions={sessions} onClose={closeDialog} onGo={goFromDialog} />
+      case 'add-profile':
+        return <ProfileDialog onClose={closeDialog} onSave={saveNew} />
+      case 'profile-settings': {
+        const { profileId } = dialog
+        const profile = profiles.find((candidate) => candidate.id === profileId)
+        if (!profile) return null
+        return <ProfileDialog profile={profile} onClose={closeDialog} onSave={saveSettings(profileId)} />
       }
-      case 'delete-account': {
-        const { accountId } = dialog
-        const target = workspace.accounts.find((candidate) => candidate.id === accountId)
-        const { sessions } = contentOf(workspace, accountId)
+      case 'delete-profile': {
+        const { profileId } = dialog
+        const target = profiles.find((candidate) => candidate.id === profileId)
         return (
           <ConfirmDialog
-            title={`Remove ${target?.label ?? 'account'}?`}
-            body={`This also deletes its sessions (${sessions.length}). You cannot undo this. The GitHub CLI stays signed in.`}
-            confirmLabel="Remove account"
+            title={`Remove ${target?.name ?? 'profile'}?`}
+            body="This also deletes its sessions. You cannot undo this. The old files, the GitHub CLI and the Claude folder stay as they are."
+            confirmLabel="Remove profile"
             onClose={closeDialog}
             onConfirm={() => {
-              dispatch({ type: 'account-deleted', id: accountId })
-              closeDialog()
-              if (accountId === account.id) reset()
-            }}
-          />
-        )
-      }
-      case 'delete-session': {
-        const { sessionId } = dialog
-        const session = content.sessions.find((candidate) => candidate.id === sessionId)
-        return (
-          <ConfirmDialog
-            title={`Delete ${session?.title ?? 'session'}?`}
-            body="You cannot undo this."
-            confirmLabel="Delete session"
-            onClose={closeDialog}
-            onConfirm={() => {
-              dispatch({ type: 'session-deleted', id: sessionId })
-              goFromDialog({ kind: 'home' })
+              void remove(profileId).then((message) => {
+                if (message !== null) return
+                closeDialog()
+                if (profileId === currentId) reset()
+              })
             }}
           />
         )
@@ -230,27 +207,60 @@ export function App() {
     </div>
   )
 
+  const shownNotices = notices.filter((notice) => !closedNotices.includes(notice.code))
+
   return (
     <div className="app">
       {sidebarOpen && (
         <aside className="sidebar">
           {toolbar}
-          <Sidebar content={content} view={view} onGo={go} />
-          <AccountSwitcher
-            accounts={workspace.accounts}
-            current={account}
-            onSwitch={switchAccount}
-            onAdd={openAddAccount}
-            onManage={() => go({ kind: 'accounts' })}
+          <Sidebar sessions={sessions} view={view} onGo={go} />
+          <ProfileSwitcher
+            profiles={profiles}
+            current={current}
+            onSwitch={(profileId) => void switchProfile(profileId)}
+            onSettings={() => current && setDialog({ kind: 'profile-settings', profileId: current.id })}
+            onAdd={openAdd}
+            onManage={() => go({ kind: 'profiles' })}
           />
         </aside>
       )}
       <main className="main">
         <div className="title-strip">{!sidebarOpen && toolbar}</div>
         {error && <p className="error" role="alert">{error}</p>}
+        {shownNotices.map((notice) => (
+          <p key={notice.code} className="error" role="alert">
+            {notice.message}{' '}
+            <button type="button" className="link" onClick={() => setClosedNotices([...closedNotices, notice.code])}>
+              Close
+            </button>
+          </p>
+        ))}
         <div className="content">{renderPage()}</div>
       </main>
       {renderDialog()}
+      {withoutDirectory.length > 0 && !directoriesPostponed && (
+        <DirectoriesDialog
+          profiles={withoutDirectory}
+          onClose={() => setDirectoriesPostponed(true)}
+          onSave={chooseDirectories}
+        />
+      )}
     </div>
+  )
+}
+
+function NoProfile({ onAdd }: { onAdd(): void }) {
+  return (
+    <EmptyPage
+      icon={<Plus size={36} />}
+      title="No profile"
+      body="A profile holds your sessions and has its own workspace directory. Add one to start."
+      action={
+        <button type="button" className="button primary" onClick={onAdd}>
+          Add profile
+        </button>
+      }
+    />
   )
 }

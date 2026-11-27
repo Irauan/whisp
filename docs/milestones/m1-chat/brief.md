@@ -4,14 +4,14 @@ Status: approved by the user on 2026-11-25.
 
 ## Outcome
 
-The user chats with Claude in an Aether session. The session runs in a workspace, in a folder that the user chose.
+The user chats with Claude in an Aether session. The session runs in a profile, in a folder that the user chose.
 
 ## Current behavior and gap
 
 - A session is a draft. `SessionPage.tsx` says "Aether cannot run sessions yet."
 - The only chat is `AgentPanel.tsx` on a work item. Decision 0005 removes work items.
 - `src/main/agents/host.ts` shares one process between sessions, keeps one permission question, sets no permission mode, and passes the whole environment.
-- The renderer owns the workspace and saves JSON files.
+- The renderer owns the old workspace data and saves JSON files.
 - The session settings (model, mode, permissions, worktree, attachments) reach no agent.
 - `applyUpdate` in `src/shared/agent.ts` reduces a plan step to done or not done. The plan shows as a transcript entry only.
 - Seven known defects are listed in `docs/architecture.md`. This milestone fixes all seven.
@@ -20,7 +20,7 @@ The user chats with Claude in an Aether session. The session runs in a workspace
 
 ### Flows
 
-1. First start after the upgrade. Aether imports each account as a workspace. A dialog asks for the root of each workspace.
+1. First start after the upgrade. Aether imports each account as a profile. A dialog asks for the workspace directory of each profile.
 2. New session. The user chooses a folder, settings and a prompt, then sends. The session window opens and the reply streams.
 3. First use of a repository. Aether shows the trust question with the hooks and MCP servers it found. No agent process starts before the answer.
 4. Conversation. The user sends more messages. The user stops a turn. The user allows or refuses each tool in the permission queue.
@@ -31,7 +31,7 @@ The user chats with Claude in an Aether session. The session runs in a workspace
 
 | Part | Content |
 |---|---|
-| Header | Title, workspace, folder, model, mode |
+| Header | Title, profile, folder, model, mode |
 | Transcript | User text, agent text, thoughts (folded), tool calls with status, notices |
 | Plan widget | The latest plan of the agent, pinned above the composer |
 | Permission queue | One card per open request, oldest first, above the composer |
@@ -54,7 +54,7 @@ The user chats with Claude in an Aether session. The session runs in a workspace
 | Working | Streamed text and tool calls. Stop is available. |
 | Waiting for permission | The permission queue. Stop is available. |
 | Idle | The composer is ready. |
-| Not signed in | "Claude Code is not signed in." and the sign-in steps of the workspace. |
+| Not signed in | "Claude Code is not signed in." and the sign-in steps of the profile. |
 | Agent stopped | An error notice with the exit code and the last log lines. The next message starts a new process. |
 | Trust refused | "Aether did not start the agent in this repository." |
 
@@ -102,23 +102,23 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 
 | ID | Given | When | Then |
 |---|---|---|---|
-| A1 | Workspace "Personal" with root R, repository R/repo-a, trusted | The user creates a session in R/repo-a with "Say hello" | The reply streams into the session window. The entries are saved. (live) |
+| A1 | Profile "Personal" with workspace directory R, repository R/repo-a, trusted | The user creates a session in R/repo-a with "Say hello" | The reply streams into the session window. The entries are saved. (live) |
 | A2 | A1 is done | The user sends "Say it again" | The reply comes in the same agent session. (live) |
 | A3 | A long reply streams and a tool call is open | The user clicks Stop | "Stopped." shows, the tool call shows failed, and the composer is ready. (live) |
 | A4 | The agent asks two permissions at the same time | The user allows the first and refuses the second | Both cards show. The agent receives each answer for its own request. (live) |
 | A5 | A4 is repeated, with two open requests | The user clicks Stop | Both cards close. The agent receives "cancelled" for both. |
 | A6 | A session with two turns | The user quits and starts Aether, opens the session, and sends a message | The transcript shows both turns. The agent resumes the same session. (live) |
 | A7 | Two sessions in two repositories | The user sends in both within 100 ms | Both get replies. Each session has its own process. |
-| A8 | The agent answers "auth required" | The user sends a message | "Claude Code is not signed in." and the sign-in steps show. Aether does not crash. (live, with a workspace that has no sign-in) |
+| A8 | The agent answers "auth required" | The user sends a message | "Claude Code is not signed in." and the sign-in steps show. Aether does not crash. (live, with a profile that has no sign-in) |
 | A9 | Repository R/repo-b, not trusted, with a `SessionStart` hook and `.mcp.json` | The user sends the first message | The trust question lists the hook and the MCP server. No agent process exists. Cancel leaves no process and the hook does not run. |
-| A10 | A session folder outside the root, or under the root of another workspace | The user sends the first message | The directory question shows, as `docs/architecture.md` describes. |
+| A10 | A session folder outside the workspace directory, or under the workspace directory of another profile | The user sends the first message | The directory question shows, as `docs/architecture.md` describes. |
 | A11 | The agent sends a plan with 3 steps, then marks step 1 completed and step 2 in progress | — | The widget shows "Plan 1 of 3" with the three states. After a restart, the widget shows the same plan. |
 | A12 | Model Opus 5.5 and mode Ask | The session starts | The agent receives model `claude-opus-5-5` and mode `default`. Accept edits gives `acceptEdits`, Plan gives `plan`, Auto gives `auto`, and Approve all gives `bypassPermissions`. With a model that cannot use Auto, the notice shows. |
 | A13 | The settings menu | The user opens it | One Mode control shows the five modes. No Tool permissions control exists. Worktree and the session attachment show "coming soon" and are disabled. |
 | A14 | The last session used Approve all, or Auto | The user opens a new session | After Approve all, the mode shows Ask. After Auto, the mode shows Auto. |
 | A15 | A file attachment and a folder outside the session folder | The session starts | The first message has a resource link for each. The folder is an additional directory. |
-| A16 | Aether runs with `ANTHROPIC_API_KEY=x` and `FOO=y` in its environment | A session starts | The agent environment has neither. It has `GH_TOKEN` of the workspace GitHub account. |
-| A17 | A profile with `workspace.json` (2 accounts, 3 session drafts) and `runs/` | The first start after the upgrade | 2 workspaces and 3 sessions exist. Each draft has the mode from the import order. The old files are unchanged. |
+| A16 | Aether runs with `ANTHROPIC_API_KEY=x` and `FOO=y` in its environment | A session starts | The agent environment has neither. It has `GH_TOKEN` of the GitHub account of the profile. |
+| A17 | A user data folder with `workspace.json` (2 accounts, 3 session drafts) and `runs/` | The first start after the upgrade | 2 profiles and 3 sessions exist. Each draft has the mode from the import order. The old files are unchanged. |
 | A18 | An unreadable `workspace.json`, or an unreadable database | Aether starts | Aether keeps the file aside, shows a message, and never overwrites it. |
 | A19 | — | The user opens Projects or Work items | "Coming soon" shows. |
 | A20 | The agent process exits during a turn | — | An error notice shows the exit code. The next message starts a new process and resumes. |
@@ -151,6 +151,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 | Decision | Who | Record |
 |---|---|---|
 | Slices, state, SQLite, workspaces, removal, processes, permissions, skills, tests, rule tools | The user | `docs/decisions/0001` to `0010` |
+| Profiles and providers replace workspaces. Root becomes workspace directory. | The user, 2026-11-26 | `docs/decisions/0013-profiles-and-providers.md` |
 | Claude billing | The user. Still open. On 2026-11-25 the user chose: plan now, live checks wait. | `docs/decisions/0011-claude-billing.md` |
 | One Mode control with five values, and the mapping of session settings to the agent | The user, 2026-11-25 | `docs/decisions/0012-session-settings.md`, written in story S3 |
 | Order of steps 3 and 4 | The user, 2026-11-25 | This brief |
@@ -173,6 +174,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 
 - Live checks and acceptance wait for decision 0011. Reason: the stories and the CI checks do not need real Claude, so work can start now.
 - Between S4 and S6, a repository can run its hooks and MCP servers without a question. Reason: only the milestone branch has this gap, only the simulated agent runs there, and S6 merges before step 7.
+- Between S2 and S3, session drafts are read-only. Reason: S2 stops all writes to the old files, and S3 builds the session slices. User decision, 2026-11-26.
 
 ## Budget
 

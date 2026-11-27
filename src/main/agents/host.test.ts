@@ -3,14 +3,35 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ControlServer } from '../../../tests/simulated-agent/control'
-import type { AgentRun } from '../../shared/agent'
-import { AgentHost } from './host'
+import { emptyRun, type AgentRun } from '../../shared/agent'
+import { AgentHost, type RunStore } from './host'
 import type { AgentRegistry, ResolvedAgent } from './registry'
-import { RunStore } from './run-store'
+
+/** Keeps the runs in memory, so that a test needs no file. */
+class MemoryRunStore implements RunStore {
+  private readonly runs = new Map<string, AgentRun>()
+
+  async load(itemId: string): Promise<AgentRun> {
+    const run = this.runs.get(itemId)
+    // A turn cannot survive a restart of Aether.
+    return run ? { ...run, status: 'idle', question: null } : emptyRun(itemId)
+  }
+
+  async save(run: AgentRun): Promise<void> {
+    this.runs.set(run.itemId, structuredClone({ ...run, question: null }))
+  }
+
+  async remove(itemId: string): Promise<void> {
+    this.runs.delete(itemId)
+  }
+
+  async settled(): Promise<void> {}
+}
 
 let control: ControlServer
 let registry: AgentRegistry
 let folder: string
+let store: RunStore
 let host: AgentHost
 let onRun: (run: AgentRun) => void
 
@@ -28,7 +49,8 @@ beforeEach(async () => {
   registry = { get: async (id: string) => (id === fake.id ? fake : undefined) } as AgentRegistry
   folder = await mkdtemp(join(tmpdir(), 'aether-host-'))
   onRun = () => undefined
-  host = new AgentHost(registry, new RunStore(join(folder, 'runs')), (run) => onRun(run))
+  store = new MemoryRunStore()
+  host = new AgentHost(registry, store, (run) => onRun(run))
 })
 
 afterEach(async () => {
@@ -99,7 +121,7 @@ describe('AgentHost', () => {
   it('keeps the conversation after a restart and resumes its session', async () => {
     await send('w1', 'hello')
     await host.shutdown()
-    host = new AgentHost(registry, new RunStore(join(folder, 'runs')), () => undefined)
+    host = new AgentHost(registry, store, () => undefined)
     expect((await host.get('w1')).entries).toHaveLength(2)
     await send('w1', 'hello')
     const run = await host.get('w1')

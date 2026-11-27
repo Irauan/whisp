@@ -4,16 +4,12 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import iconIco from '../../resources/icon.ico?asset'
 import iconPng from '../../resources/icon.png?asset'
 import { contracts, events } from '../app/contracts'
+import { composeMain, type Composition } from '../app/main/composition'
 import { createInvoke, createSubscribe } from '../app/main/ipc'
-import { listGithubAccounts } from '../features/workspaces/list-github-accounts/list-github-accounts.contract'
-import { listGithubAccountsController } from '../features/workspaces/list-github-accounts/list-github-accounts.controller'
 import { GithubCli } from '../providers/github-cli/github-cli'
-import type { GithubAccounts } from '../shared/bridge'
 import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
-import { isWorkspace } from '../shared/model'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
 import { git, listRepositoryFiles } from './repository'
-import { WorkspaceFile } from './workspace-file'
 
 if (process.env.AETHER_DATA_DIR) app.setPath('userData', process.env.AETHER_DATA_DIR)
 
@@ -38,17 +34,29 @@ function isAppFrame(event: IpcMainInvokeEvent): boolean {
   return address === appPage
 }
 
-const invoke = createInvoke({
-  contracts,
-  controllers: { [listGithubAccounts.name]: listGithubAccountsController(github) },
-  isTrusted: isAppFrame,
-  log: (message, cause) => console.error(message, cause)
-})
-const subscription = createSubscribe({ events, isTrusted: isAppFrame })
-ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
-ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
+/** The database and the controllers. They exist after the start, before the first window. */
+let main: Composition | null = null
 
-const file = new WorkspaceFile(join(app.getPath('userData'), 'workspace.json'))
+/** Opens the database, runs the import and connects the handlers of `invoke` and `subscribe`. */
+function startMain(): void {
+  const composed = composeMain({ dataDir: app.getPath('userData'), github })
+  if (!composed.ok) {
+    // A newer database, or a failure that Aether cannot repair. Aether writes nothing and exits.
+    dialog.showErrorBox('Aether could not start', composed.error.message)
+    app.exit(1)
+    return
+  }
+  main = composed.value
+  const invoke = createInvoke({
+    contracts,
+    controllers: main.controllers,
+    isTrusted: isAppFrame,
+    log: (message, cause) => console.error(message, cause)
+  })
+  const subscription = createSubscribe({ events, isTrusted: isAppFrame })
+  ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
+  ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -87,16 +95,6 @@ function asText(value: unknown): string {
   return value
 }
 
-ipcMain.handle('workspace:load', () => file.load())
-ipcMain.handle('workspace:save', (_event, workspace: unknown) => {
-  if (!isWorkspace(workspace)) throw new Error('Refused to save data that is not a workspace.')
-  return file.save(workspace)
-})
-// The old channel. The renderer reads the accounts through `invoke` now. m1-chat removes this one.
-ipcMain.handle('github:accounts', async (): Promise<GithubAccounts> => {
-  const result = await github.listAccounts()
-  return result.ok ? { ok: true, profiles: result.value } : { ok: false, reason: result.error.message }
-})
 ipcMain.handle('folder:choose', () => chooseFolder())
 ipcMain.handle('folders:choose', () => chooseFolders())
 ipcMain.handle('files:choose', () => chooseFiles())
@@ -108,16 +106,8 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
   )
 )
 
-// Finish the saves in progress before the app exits.
-let settled = false
-app.on('before-quit', (event) => {
-  if (settled) return
-  event.preventDefault()
-  void file.settled().then(() => {
-    settled = true
-    app.quit()
-  })
-})
+// Each change is one transaction, so no save is in progress at the exit. Close the database.
+app.on('will-quit', () => main?.close())
 
 app.on('second-instance', () => {
   const [window] = BrowserWindow.getAllWindows()
@@ -134,6 +124,8 @@ if (hasLock) {
   app
     .whenReady()
     .then(() => {
+      startMain()
+      if (!main) return
       createWindow()
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()

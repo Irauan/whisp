@@ -7,7 +7,7 @@ export type View =
   | { kind: 'items' }
   | { kind: 'bots' }
   | { kind: 'customize' }
-  | { kind: 'accounts' }
+  | { kind: 'profiles' }
   | { kind: 'session'; sessionId: string }
 
 export interface History {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { AccountContent } from '../../../shared/model'
+import type { SessionDraft } from '../useProfiles'
 import type { View } from '../navigation'
 
 export function Modal(props: { label: string; className?: string; onClose(): void; children: ReactNode }) {
@@ -49,13 +49,13 @@ export function ConfirmDialog(props: {
 }
 
 export function SearchDialog(props: {
-  content: AccountContent
+  sessions: SessionDraft[]
   onClose(): void
   onGo(view: View): void
 }) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
-  const { sessions } = props.content
+  const { sessions } = props
 
   const results: { key: string; title: string; note: string; view: View }[] = sessions
     .map((session) => ({

@@ -9,7 +9,7 @@ const profiles = [
   { login: 'example-two', name: null, avatar: null }
 ]
 
-describe('workspaces.list-github-accounts', () => {
+describe('profiles.list-github-accounts', () => {
   it('returns the accounts of the port', async () => {
     const github: GithubPort = { listAccounts: async () => ok(profiles) }
     const result = await listGithubAccountsController(github)()
