@@ -1,5 +1,8 @@
 import type { Contract } from '../building-blocks/contract'
+import { createSession } from '../features/sessions/create/create.contract'
+import { deleteSession } from '../features/sessions/delete/delete.contract'
 import { listSessions } from '../features/sessions/list/list.contract'
+import { openSession } from '../features/sessions/open/open.contract'
 import { addProfile } from '../features/profiles/add/add.contract'
 import { chooseDirectories } from '../features/profiles/choose-directories/choose-directories.contract'
 import { editProfile } from '../features/profiles/edit/edit.contract'
@@ -17,7 +20,10 @@ export const contracts: readonly Contract[] = [
   editProfile,
   switchProfile,
   removeProfile,
-  listSessions
+  listSessions,
+  createSession,
+  openSession,
+  deleteSession
 ]
 
 /** The registry of events. `subscribe` accepts only these names. No event exists yet. */

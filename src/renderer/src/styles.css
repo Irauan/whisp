@@ -338,6 +338,10 @@ button:disabled {
   max-width: 760px;
 }
 
+.page .composer {
+  margin-top: 24px;
+}
+
 .composer-box {
   position: relative;
   z-index: 1;
@@ -538,12 +542,6 @@ button:disabled {
 .file svg {
   flex: none;
   color: var(--muted);
-}
-
-.popover.submenu {
-  position-area: right span-bottom;
-  position-try-fallbacks: flip-block, flip-inline;
-  margin: 0 4px;
 }
 
 .popover hr {

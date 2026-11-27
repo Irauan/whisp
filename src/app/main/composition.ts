@@ -23,8 +23,14 @@ import { switchProfile } from '../../features/profiles/switch/switch.contract'
 import { switchProfileController } from '../../features/profiles/switch/switch.controller'
 import type { Notice } from '../../features/profiles/profile'
 import { ProfileStore } from '../../features/profiles/profile.store'
+import { createSession } from '../../features/sessions/create/create.contract'
+import { createSessionController } from '../../features/sessions/create/create.controller'
+import { deleteSession } from '../../features/sessions/delete/delete.contract'
+import { deleteSessionController } from '../../features/sessions/delete/delete.controller'
 import { listSessions } from '../../features/sessions/list/list.contract'
 import { listSessionsController } from '../../features/sessions/list/list.controller'
+import { openSession } from '../../features/sessions/open/open.contract'
+import { openSessionController } from '../../features/sessions/open/open.controller'
 import type { Controller } from './ipc'
 
 /** The name of the database in the data folder (`userData`). */
@@ -87,7 +93,10 @@ export function composeMain({ dataDir, github, clock = systemClock, ids = random
       [editProfile.name]: editProfileController(database, clock, ids),
       [switchProfile.name]: switchProfileController(database),
       [removeProfile.name]: removeProfileController(database),
-      [listSessions.name]: listSessionsController(database)
+      [listSessions.name]: listSessionsController(database),
+      [createSession.name]: createSessionController(database, clock, ids),
+      [openSession.name]: openSessionController(database),
+      [deleteSession.name]: deleteSessionController(database)
     },
     notices,
     close: () => database.close()

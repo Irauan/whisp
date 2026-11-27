@@ -54,16 +54,32 @@ describe('sessions.list', () => {
             attachments: [{ kind: 'file', ref: 'C:\\notes.txt', label: 'notes.txt' }],
             createdAt: '2026-01-02'
           }
-        ]
+        ],
+        newSessionMode: 'plan'
       }
     })
     expect(listSessions.output.safeParse(result).success).toBe(true)
   })
 
-  it('lists nothing for a profile without sessions or an unknown profile', async () => {
+  it('lists nothing for a profile without sessions or an unknown profile, and a new session starts with Ask', async () => {
     const { list } = setup()
-    expect(await list({ profileId: 'w2' })).toEqual({ ok: true, value: { sessions: [] } })
-    expect(await list({ profileId: 'missing' })).toEqual({ ok: true, value: { sessions: [] } })
+    expect(await list({ profileId: 'w2' })).toEqual({ ok: true, value: { sessions: [], newSessionMode: 'ask' } })
+    expect(await list({ profileId: 'missing' })).toEqual({ ok: true, value: { sessions: [], newSessionMode: 'ask' } })
+  })
+
+  it('gives the mode of the newest created session to a new session, and Ask after Approve all', async () => {
+    const { insert, list } = setup()
+    // The newest session is the second row in the table: only the creation time says so.
+    insert.run('a', 'w1', 'A', 'a', 'auto', 'C:\\work', 'default', '[]', '2026-01-03')
+    insert.run('b', 'w1', 'B', 'b', 'approve-all', 'C:\\work', 'default', '[]', '2026-01-01')
+    insert.run('c', 'w2', 'C', 'c', 'plan', 'C:\\work', 'default', '[]', '2026-01-02')
+    expect(await list({ profileId: 'w1' })).toMatchObject({ ok: true, value: { newSessionMode: 'auto' } })
+    expect(await list({ profileId: 'w2' })).toMatchObject({ ok: true, value: { newSessionMode: 'plan' } })
+
+    insert.run('d', 'w1', 'D', 'd', 'approve-all', 'C:\\work', 'default', '[]', '2026-01-04')
+    const after = await list({ profileId: 'w1' })
+    expect(after).toMatchObject({ ok: true, value: { newSessionMode: 'ask' } })
+    expect(listSessions.output.safeParse(after).success).toBe(true)
   })
 
   it('throws on a row that breaks the schema, because the database is then damaged', async () => {

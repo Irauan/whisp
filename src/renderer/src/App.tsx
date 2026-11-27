@@ -12,10 +12,11 @@ import {
   ProfilesPage
 } from './components/Pages'
 import { DirectoriesDialog } from './components/DirectoriesDialog'
-import { SessionPage } from './components/SessionPage'
+import { OpenSession } from './components/OpenSession'
 import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
+import type { SessionSettings } from '../../shared/model'
 import { useNavigation, type View } from './navigation'
 import { useProfiles } from './useProfiles'
 
@@ -24,17 +25,17 @@ type OpenDialog =
   | { kind: 'add-profile' }
   | { kind: 'profile-settings'; profileId: string }
   | { kind: 'delete-profile'; profileId: string }
-
-/** Between story S2 and story S3 of m1-chat, the sessions are the drafts of the import, and they are read-only. */
-const NEW_SESSION_UNAVAILABLE = 'Starting a new session is coming soon.'
+  | { kind: 'delete-session'; sessionId: string }
 
 export function App() {
-  const { state, error, chooseDirectories, add, edit, switchTo, remove } = useProfiles()
+  const { state, error, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
   // View state: the user closed the dialog of the directories for now. It shows again at the next start.
   const [directoriesPostponed, setDirectoriesPostponed] = useState(false)
+  // View state: the text of the last command that failed, or null.
+  const [problem, setProblem] = useState<string | null>(null)
   // View state: the messages of the start that the user closed.
   const [closedNotices, setClosedNotices] = useState<string[]>([])
 
@@ -59,7 +60,7 @@ export function App() {
     )
   }
 
-  const { profiles, currentId, notices, sessions } = state
+  const { profiles, currentId, notices, sessions, newSessionMode } = state
   const current = profiles.find((profile) => profile.id === currentId) ?? null
   const withoutDirectory = profiles.filter((profile) => profile.workspaceDirectory === null)
   const closeDialog = () => setDialog(null)
@@ -91,6 +92,20 @@ export function App() {
     return message
   }
 
+  const startSession = (profileId: string) => async (prompt: string, settings: SessionSettings) => {
+    const created = await createSession({
+      profileId,
+      prompt,
+      mode: settings.mode,
+      model: settings.model,
+      sourcePath: settings.folder,
+      attachments: settings.attachments
+    })
+    if ('message' in created) return created.message
+    go({ kind: 'session', sessionId: created.id })
+    return null
+  }
+
   const renderPage = () => {
     switch (view.kind) {
       case 'home':
@@ -99,9 +114,9 @@ export function App() {
           <HomePage
             key={current.id}
             sessions={sessions}
+            newSessionMode={newSessionMode}
             githubLogin={current.github?.login ?? null}
-            unavailable={NEW_SESSION_UNAVAILABLE}
-            onStart={() => undefined}
+            onStart={startSession(current.id)}
           />
         )
       case 'pulls':
@@ -125,11 +140,14 @@ export function App() {
             onDelete={(profileId) => setDialog({ kind: 'delete-profile', profileId })}
           />
         )
-      case 'session': {
-        const session = sessions.find((candidate) => candidate.id === view.sessionId)
-        if (!session) break
-        return <SessionPage session={session} />
-      }
+      case 'session':
+        return (
+          <OpenSession
+            key={view.sessionId}
+            id={view.sessionId}
+            onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
+          />
+        )
     }
     return (
       <EmptyPage icon={<SearchX size={36} />} title="Not found" body="This page no longer exists." />
@@ -147,6 +165,25 @@ export function App() {
         const profile = profiles.find((candidate) => candidate.id === profileId)
         if (!profile) return null
         return <ProfileDialog profile={profile} onClose={closeDialog} onSave={saveSettings(profileId)} />
+      }
+      case 'delete-session': {
+        const { sessionId } = dialog
+        const target = sessions.find((candidate) => candidate.id === sessionId)
+        return (
+          <ConfirmDialog
+            title={`Delete ${target ? `"${target.title}"` : 'this session'}?`}
+            body="You cannot undo this. The old files of Aether stay as they are."
+            confirmLabel="Delete session"
+            onClose={closeDialog}
+            onConfirm={() => {
+              void deleteSession(sessionId).then((message) => {
+                closeDialog()
+                setProblem(message)
+                if (message === null) go({ kind: 'home' })
+              })
+            }}
+          />
+        )
       }
       case 'delete-profile': {
         const { profileId } = dialog
@@ -228,6 +265,14 @@ export function App() {
       <main className="main">
         <div className="title-strip">{!sidebarOpen && toolbar}</div>
         {error && <p className="error" role="alert">{error}</p>}
+        {problem && (
+          <p className="error" role="alert">
+            {problem}{' '}
+            <button type="button" className="link" onClick={() => setProblem(null)}>
+              Close
+            </button>
+          </p>
+        )}
         {shownNotices.map((notice) => (
           <p key={notice.code} className="error" role="alert">
             {notice.message}{' '}

@@ -1,25 +1,25 @@
 import { Blocks, Bot, CircleDot, Compass, GitPullRequest, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SessionSettings } from '../../../shared/model'
-import type { SessionDraft, ProfileView } from '../useProfiles'
+import type { Mode, SessionView, ProfileView } from '../useProfiles'
 import { Avatar, githubNote } from './Avatar'
 import { Mark } from './Mark'
 import { SessionComposer } from './SessionComposer'
 
 export function HomePage(props: {
-  sessions: SessionDraft[]
+  sessions: SessionView[]
+  newSessionMode: Mode
   githubLogin: string | null
-  /** Why a new session cannot start, or null. The composer shows it and disables Send. */
-  unavailable: string | null
-  onStart(prompt: string, settings: SessionSettings): void
+  /** Creates the session. It returns the text of an error, or null after a success. */
+  onStart(prompt: string, settings: SessionSettings): Promise<string | null>
 }) {
   return (
     <div className="home">
       <Mark size={150} />
       <SessionComposer
         sessions={props.sessions}
+        newSessionMode={props.newSessionMode}
         githubLogin={props.githubLogin}
-        unavailable={props.unavailable}
         onSubmit={props.onStart}
       />
     </div>
