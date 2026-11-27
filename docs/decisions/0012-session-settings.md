@@ -78,6 +78,20 @@ The user did not decide these points. The builder of story S3 recorded them, wit
 - The "settings menu" of check A13 is the set of the composer controls of a new session. Source: the coordinator.
 - The `&` suggestion counts as the session attachment of check A13. Source: the coordinator.
 
+## Readings in story S7
+
+The user did not decide these points. The builder of story S7 recorded them. The advisor decided each one, except the first, which the coordinator decided.
+
+- The list of models in Aether can lag behind Claude. The agent refuses a model that it does not know, the session shows a start notice, and no prompt goes out. Aether keeps no second list in the main process. Source: the coordinator, 2026-11-27.
+- The agent port reports the mode that the agent uses as an update `mode`. `providers/acp` translates `current_mode_update` and drops a mode ID that the port does not know.
+- The notice of the Auto fallback has the code `auto-fallback` and the tone info. It shows only when the saved mode is Auto and the agent reports Accept edits. No other change of the mode gives a notice. It shows again at each process start that has this fallback, a resume included.
+- A file, folder, repository file or repository folder attachment gives one resource link, with the path as a `file:` URI. A relative path is taken from the session folder.
+- An issue or pull request attachment adds its URL to the text for the agent, after the line "References:". The saved message of the user keeps the typed text.
+- The links and the URLs go with the turn that creates the first agent run. A first start that failed saved no run, so its retry sends them again. A resume sends no link.
+- Each `folder` attachment outside the session folder is an additional directory, at each process start, a resume included. Aether compares and passes the real path: `..`, junctions and letter case are resolved, and a folder that resolves into the session folder needs no entry.
+- Each start runs the gate of story S6 for the session folder, then for each additional directory in the order of the attachments. The gate reads the current content of each folder at each start. One question is open at a time. The first refusal ends the start with the refusal notice of S6, and no process starts.
+- `sessions.send-message` refuses an attachment of an unknown kind and a session attachment with the error `unsupported-attachment`, before the turn and before any process. The check runs when the message needs a new process. `sessions.create` keeps the kind as text, because the import of an old draft can hold any kind.
+
 ## Rejected
 
 - Keep two controls, Mode and Tool permissions. Claude has one permission mode, so two controls could select one effect twice or select a conflict.

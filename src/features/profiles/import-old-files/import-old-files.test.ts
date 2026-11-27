@@ -70,14 +70,13 @@ describe('importOldFilesHandler', () => {
 
     const store = new ProfileStore(database)
     expect(store.list()).toEqual([
-      { id: 'w-a', name: 'Personal', workspaceDirectory: null, github: null, claudeFolder: null, claudeProfileName: null, createdAt: '2026-02-03T04:05:06.000Z' },
+      { id: 'w-a', name: 'Personal', workspaceDirectory: null, github: null, claudeFolder: null, createdAt: '2026-02-03T04:05:06.000Z' },
       {
         id: 'w-b',
         name: 'Client Example',
         workspaceDirectory: null,
         github: { login: 'example-user', name: 'Example User', avatar: null },
         claudeFolder: null,
-        claudeProfileName: null,
         createdAt: '2026-02-03T04:05:06.000Z'
       }
     ])

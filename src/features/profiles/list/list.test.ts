@@ -19,7 +19,6 @@ const profile = (id: string, name: string, createdAt: string): Profile => ({
   workspaceDirectory: null,
   github: null,
   claudeFolder: null,
-  claudeProfileName: null,
   createdAt
 })
 
@@ -49,7 +48,7 @@ describe('profiles.list', () => {
       workspaceDirectory: 'C:\\directories\\first',
       github: { login: 'example-user', name: 'Example User', avatar: null }
     })
-    store.saveClaude('a', { configFolder: 'C:\\claude\\first', profileName: 'work' }, { next: () => 'provider-1' }, '2026-01-01')
+    store.saveClaude('a', { configFolder: 'C:\\claude\\first' }, { next: () => 'provider-1' }, '2026-01-01')
     store.insert(profile('b', 'Second', '2026-01-02'))
     store.setCurrent('b')
     const result = await listProfilesController(database, () => [])()
@@ -62,8 +61,7 @@ describe('profiles.list', () => {
             id: 'a',
             workspaceDirectory: 'C:\\directories\\first',
             github: { login: 'example-user', name: 'Example User', avatar: null },
-            claudeFolder: 'C:\\claude\\first',
-            claudeProfileName: 'work'
+            claudeFolder: 'C:\\claude\\first'
           },
           { id: 'b', workspaceDirectory: null, github: null }
         ]

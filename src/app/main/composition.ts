@@ -138,7 +138,7 @@ export function composeMain({
   // The slices never call each other, so the composition root connects them: the agent process of a
   // session reports its progress to `record-agent-update`.
   const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
-    recordAgentUpdateHandler({ transcript }, { sessionId, update })
+    recordAgentUpdateHandler({ transcript, store: sessionStore }, { sessionId, update })
   // The questions of the main process (decision 0007): the trust question and the directory questions.
   const questions = new Questions((event) => publish(QUESTIONS_CHANGED, event), ids)
   const trust = new TrustStore(database)

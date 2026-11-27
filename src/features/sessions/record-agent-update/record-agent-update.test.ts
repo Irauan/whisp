@@ -22,9 +22,9 @@ function setup() {
   let count = 0
   const transcript = new Transcript(store, (event) => events.push(event), { now: () => new Date('2026-01-02T00:00:00.000Z') }, { next: () => `e${++count}` })
   const record = (...updates: AgentUpdate[]) => {
-    for (const update of updates) recordAgentUpdateHandler({ transcript }, { sessionId: 's1', update })
+    for (const update of updates) recordAgentUpdateHandler({ transcript, store }, { sessionId: 's1', update })
   }
-  return { store, events, transcript, record }
+  return { store, database, events, transcript, record }
 }
 
 describe('record-agent-update', () => {
@@ -74,6 +74,33 @@ describe('record-agent-update', () => {
         { text: 'Three', status: 'pending' }
       ]
     })
+  })
+
+  it('adds a notice when the row says Auto and the agent reports Accept edits (A12)', () => {
+    const { store, database, record } = setup()
+    database.prepare("UPDATE sessions SET mode = 'auto' WHERE id = 's1'").run()
+    record({ type: 'mode', mode: 'accept-edits' })
+    const notices = store.entriesOf('s1').map((view) => view.entry)
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({ kind: 'notice', tone: 'info', code: 'auto-fallback' })
+    expect(notices[0]).toMatchObject({ text: expect.stringMatching(/\bAuto\b[\s\S]*\bAccept edits\b/) })
+  })
+
+  it('adds no notice for any other mode report, or when the row says another mode', () => {
+    const { store, database, record } = setup()
+    record({ type: 'mode', mode: 'accept-edits' })
+    record({ type: 'mode', mode: 'plan' })
+    database.prepare("UPDATE sessions SET mode = 'auto' WHERE id = 's1'").run()
+    record({ type: 'mode', mode: 'auto' }, { type: 'mode', mode: 'plan' })
+    expect(store.entriesOf('s1')).toEqual([])
+  })
+
+  it('does nothing for a mode report of a session that is gone', () => {
+    const { store, database, record } = setup()
+    database.prepare("UPDATE sessions SET mode = 'auto' WHERE id = 's1'").run()
+    database.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+    record({ type: 'mode', mode: 'accept-edits' })
+    expect(store.entriesOf('s1')).toEqual([])
   })
 
   it('does nothing for a session that is gone', () => {

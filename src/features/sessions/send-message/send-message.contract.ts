@@ -16,7 +16,7 @@ export const sendMessage = defineContract(
     text: z.string().trim().min(1).max(200_000)
   }),
   z.strictObject({}),
-  ['unknown-session', 'turn-active', 'invalid-folder'],
+  ['unknown-session', 'turn-active', 'invalid-folder', 'unsupported-attachment'],
   {
     valid: [
       { id: 's1', text: 'Say hello' },

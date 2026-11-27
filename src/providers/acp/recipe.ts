@@ -22,6 +22,8 @@ export interface AcpRecipe {
   launch(settings: Readonly<Record<string, unknown>>): Promise<Result<Launch>>
   /** The ID of the permission mode of the agent for a mode of the port. */
   modeId(mode: Mode): string
+  /** The mode of the port for the ID of a permission mode of the agent, or null for an ID that the port does not know. */
+  modeOf(id: string): Mode | null
   /** The message for a missing sign-in, with the sign-in steps of these settings. */
   notSignedIn(settings: Readonly<Record<string, unknown>>): string
 }

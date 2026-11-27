@@ -7,9 +7,10 @@ import type { Ids } from '../../../building-blocks/ids'
 import { err, ok, type Result } from '../../../building-blocks/result'
 import { noticeOfStop, type Entry } from '../entry'
 import type { Processes, Turn } from '../processes.store'
-import { MESSAGES, PROVIDER_KIND, type Session } from '../session'
+import { MESSAGES, PROVIDER_KIND, textForAgent, unsupportedAttachment, type Session } from '../session'
 import type { AgentRun, ProviderAccount, SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
+import { additionalDirectoriesOf, linksOf } from './attachments.handler'
 import type { SendMessageError } from './send-message.contract'
 
 export interface SendMessageDeps {
@@ -70,6 +71,9 @@ export function sendMessageHandler(deps: SendMessageDeps, input: { id: string; t
   const running = processes.get(session.id)
   // The folder can change after the session was created. A new process needs it, so check it again.
   if (!running && !isExistingFolder(session.sourcePath)) return refused('invalid-folder', MESSAGES.folderMissing)
+  // A start reads the attachments of the row. Refuse the kinds that Aether cannot send, before any process starts.
+  const unsupported = running ? null : unsupportedAttachment(session.attachments)
+  if (unsupported !== null) return refused('unsupported-attachment', unsupported)
 
   const turn = processes.beginTurn(session.id)
   transcript.setStatus(session.id, running ? 'working' : 'starting')
@@ -87,10 +91,13 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
   const { transcript, processes } = deps
   const id = session.id
   try {
+    // The links and the URLs go with the first message: the turn that creates the first agent run.
+    // A first start that failed saved no run, so its retry still counts as the first message.
+    const first = !processes.get(id) && deps.store.agentRunOf(id) === null
     const agent = await ensureProcess(deps, session, turn)
     if (agent === null) return
     transcript.setStatus(id, 'working')
-    const outcome = await agent.prompt(text)
+    const outcome = first ? await agent.prompt(textForAgent(text, session.attachments), linksOf(session)) : await agent.prompt(text)
     if (outcome.ok) {
       const stop = noticeOfStop(outcome.value)
       if (stop) transcript.addEntry(id, stop)
@@ -123,21 +130,41 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   const existing = processes.get(id)
   if (existing) return existing
 
-  // No process, no account and no token exist before the answer. This holds for a resume too.
-  const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder: session.sourcePath })
-  if (!permission.ok) {
-    // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
-    deps.transcript.addEntry(id, turn.stopped ? notice('info', 'Stopped.', 'stopped') : notice('info', permission.error.message, permission.error.code))
-    return null
+  // No process, no account and no token exist before the answers. This holds for a resume too.
+  // The folders are the main folder, then each additional directory by its real path (check A15). The
+  // gate asks for one folder after the other, so one question is open at a time, and the first
+  // refusal ends the start. The gate reads the content of each folder at each start.
+  // Each call of the gate takes its own mark of the cancel state, so a cancel (Stop, delete, quit)
+  // that comes while a call waits, and that call asks nothing, would not reach the next call. The
+  // turn is the one record of a cancel here, and `turn.stopped` is set in the same step as the
+  // cancel. So the turn is checked before each call, and the gate cannot open a question after it.
+  const extra = additionalDirectoriesOf(session)
+  for (const folder of [session.sourcePath, ...extra]) {
+    if (turn.stopped) return stoppedBeforeStart(deps, session)
+    const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder })
+    if (!permission.ok) {
+      // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
+      deps.transcript.addEntry(id, turn.stopped ? notice('info', 'Stopped.', 'stopped') : notice('info', permission.error.message, permission.error.code))
+      return null
+    }
   }
 
-  const prepared = await prepareStart(deps, session)
+  // A cancel during the last call: start no account and no token read for a turn that ended.
+  if (turn.stopped) return stoppedBeforeStart(deps, session)
+
+  const prepared = await prepareStart(deps, session, extra)
   try {
     return await startProcess(deps, session, turn, prepared)
   } finally {
     // The agent run names the account now, or the start failed. The account no longer counts as in a start.
     if (prepared.run === null) deps.starting.end(prepared.providerId)
   }
+}
+
+/** The turn was stopped before its process started: no question, no process. The turn shows "Stopped.". */
+function stoppedBeforeStart(deps: SendMessageDeps, session: Session): null {
+  deps.transcript.addEntry(session.id, notice('info', 'Stopped.', 'stopped'))
+  return null
 }
 
 /** Starts the process of the session, waits until it is ready, and saves the agent run. */
@@ -204,7 +231,7 @@ interface Prepared {
  * after a failed first start uses the account that the user fixed. It creates an empty account when
  * the profile has none. The account stays in `starting` until the start ends.
  */
-async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Prepared> {
+async function prepareStart(deps: SendMessageDeps, session: Session, additionalDirectories: readonly string[]): Promise<Prepared> {
   const { store, transcript, github, ids, clock, starting } = deps
   const run = store.agentRunOf(session.id)
   const account: ProviderAccount =
@@ -232,8 +259,8 @@ async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Pr
   return {
     input: {
       mainDirectory: session.sourcePath,
-      // Story S7 adds the folders of the attachments, after story S6 asks for them.
-      additionalDirectories: [],
+      // The real paths that the gate checked, never the typed ones.
+      additionalDirectories,
       model: session.model,
       mode: session.mode,
       sharedItems: [],

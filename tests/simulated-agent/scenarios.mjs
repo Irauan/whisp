@@ -1,7 +1,8 @@
 // The scenarios of the simulated agent.
 //
 // A scenario is plain data: two lists of steps. The agent runs `initialize` when a client
-// sends `initialize`, and `prompt` when a client sends `session/prompt`.
+// sends `initialize`, and `prompt` when a client sends `session/prompt`. A scenario can also give
+// `noAuto`: the models that cannot use the permission mode `auto` (see the scenario `no-auto`).
 //
 //   { do: 'gate', name }                          wait until the test opens the gate `name`
 //   { do: 'say', text }                           stream a chunk of the reply
@@ -49,11 +50,21 @@ export const scenarios = {
     prompt: chunks.map(say)
   }),
 
+  // Streams a reply, as `text` does. The models in `models` cannot use the permission mode `auto`,
+  // as with Claude Code: when the mode is `auto` and the model is one of them, the session uses
+  // `acceptEdits` and the agent sends a `current_mode_update`. The test chooses the models.
+  'no-auto': ({ models, chunks = ['Hel', 'lo'] } = {}) => {
+    if (!Array.isArray(models) || models.length === 0) {
+      throw new Error('The scenario "no-auto" needs `models`: the models that cannot use the mode auto.')
+    }
+    return { initialize: [], prompt: chunks.map(say), noAuto: [...models] }
+  },
+
   // Takes the steps from the options. Use it for a scenario that no test shares.
   steps: ({ initialize = [], prompt = [] } = {}) => ({ initialize, prompt })
 }
 
-/** Returns `{ initialize, prompt }` for a scenario name and its options. */
+/** Returns `{ initialize, prompt }`, and `noAuto` when the scenario has it, for a scenario name and its options. */
 export function resolveScenario(name, options = {}) {
   const build = Object.hasOwn(scenarios, name) ? scenarios[name] : undefined
   if (!build) throw new Error(`Unknown scenario "${name}". Known: ${Object.keys(scenarios).join(', ')}.`)

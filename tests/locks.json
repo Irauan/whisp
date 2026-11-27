@@ -99,16 +99,40 @@
     "sha256": "ad1db064746ccc0be8df163c120a5d678003e807536541e725b430e43fa4a18a",
     "story": "m1-chat/s6"
   },
+  "tests/acceptance/m1-chat/s7/attachments.spec.ts": {
+    "sha256": "2a19d436cb9d7661dc2ef347388617865973532cf31aa2ed88547530640417e5",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/claude-account.spec.ts": {
+    "sha256": "20f34d9a71bda1110e27415f4ed73664c27943a2b2233f113e7112b8275b8f05",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/directories.spec.ts": {
+    "sha256": "8b40f295e249a9dd44d7ffdfc65710ea54e16fbba0a4705c6db0b8c0a5c9366d",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/fixture.ts": {
+    "sha256": "cac2b44a7efc8d2ef60a58efb30cd06dd610b28d222d808b5b52d8b60555ce56",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/refusals.spec.ts": {
+    "sha256": "bac0c11d55663742015de519437169eaffa111c8e05c8003ca3c7b98dd3c2eae",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/settings.spec.ts": {
+    "sha256": "702d35ccb30b77629d48c1990a47d35db1e1ea35fa8b94a6353d027e765534a7",
+    "story": "m1-chat/s7"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
   },
   "tests/simulated-agent/agent.mjs": {
-    "sha256": "c6542f8d7ec4c45ca817bacf2ff148e6ca4cf9c974cbe1e83b372863b7964402",
+    "sha256": "b89d2e2cc04319966327cc246367d90e780ab885e3fb011d6eced71a4d98bd9a",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/agent.test.ts": {
-    "sha256": "21bbad148cedf89321ffc6e4eaac2e8f170ff0780c3cd9457f458ab12e345d82",
+    "sha256": "41c2ac753526bf0227935cc2626052692e697ba86fd308e233bbdc69d9b766fe",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.test.ts": {
@@ -116,11 +140,11 @@
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.ts": {
-    "sha256": "27a01bf70b6e810013a88a846bd1baabfad4f4722fdd3377e058fedd83d6e09c",
+    "sha256": "9909440f567af3312ee9d87a90072330581e03cc0b731ff9c7ee2ef412a5c52c",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/scenarios.mjs": {
-    "sha256": "e68bfbf5b7711994c3cf4d863e47521ce99c53bb08bd4656d9dd66d765e928c0",
+    "sha256": "93a5008f1360fec79eb4c6e760b07dac4f8ba4471c18908c7122d362b3fb127f",
     "story": "m0-gates/s4"
   }
 }

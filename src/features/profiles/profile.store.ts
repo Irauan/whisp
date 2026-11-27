@@ -28,7 +28,6 @@ function toProfile(row: Row): Profile {
     workspaceDirectory: text(row.workspace_directory),
     github: login === null ? null : { login, name: text(row.github_name), avatar: text(row.github_avatar) },
     claudeFolder: settings.configFolder ?? null,
-    claudeProfileName: settings.profileName ?? null,
     createdAt: String(row.created_at)
   }
 }

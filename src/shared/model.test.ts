@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODES } from '../building-blocks/mode'
+import { MODE_LABELS, MODES } from '../building-blocks/mode'
 import { baseName, labelOf, MODE_OPTIONS, MODELS, parseRequest } from './model'
 
 describe('parseRequest', () => {
@@ -30,6 +30,8 @@ describe('MODE_OPTIONS', () => {
   it('lists the five modes of the agent port, in the order of the Mode control', () => {
     expect(MODE_OPTIONS.map((option) => option.id)).toEqual([...MODES])
     expect(MODE_OPTIONS.map((option) => option.label)).toEqual(['Ask', 'Accept edits', 'Plan', 'Auto', 'Approve all'])
+    // The notices of the main process use the labels of the building block: they must read as the menu does.
+    expect(MODE_OPTIONS.map((option) => MODE_LABELS[option.id])).toEqual(MODE_OPTIONS.map((option) => option.label))
   })
 
   it('has no option about tool permissions', () => {

@@ -61,7 +61,6 @@ export function importOldFilesHandler({ profiles, imports, clock, ids, file }: I
         workspaceDirectory: null,
         github: account.github,
         claudeFolder: null,
-        claudeProfileName: null,
         createdAt: now
       })
     }

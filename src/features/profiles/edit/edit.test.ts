@@ -28,7 +28,6 @@ function setup() {
     workspaceDirectory: join(folder, 'old-directory'),
     github: { login: 'example-user', name: 'Example User', avatar: null },
     claudeFolder: null,
-    claudeProfileName: null,
     createdAt: '2026-01-01T00:00:00.000Z'
   })
   return { edit: editProfileController(database, { now: () => new Date("2026-01-02T03:04:05.000Z") }, { next: () => "provider-1" }, new AccountsInStart()), database, store }
@@ -39,19 +38,17 @@ const settings = (workspaceDirectory: string) => ({
   name: 'Client',
   workspaceDirectory,
   github: null,
-  claudeFolder: null,
-  claudeProfileName: null
+  claudeFolder: null
 })
 
 describe('profiles.edit', () => {
-  it('saves the name, the workspace directory, the GitHub account, the Claude folder and the Claude profile name', async () => {
+  it('saves the name, the workspace directory, the GitHub account, the Claude folder', async () => {
     const { edit, database, store } = setup()
     const claudeFolder = join(folder, 'claude')
     const result = await edit({
       ...settings(folder),
       github: { login: 'example-two', name: null, avatar: null },
-      claudeFolder,
-      claudeProfileName: 'client'
+      claudeFolder
     })
     expect(result).toEqual({ ok: true, value: {} })
     expect(editProfile.output.safeParse(result).success).toBe(true)
@@ -61,21 +58,20 @@ describe('profiles.edit', () => {
       workspaceDirectory: folder,
       github: { login: 'example-two', name: null, avatar: null },
       claudeFolder,
-      claudeProfileName: 'client',
       createdAt: '2026-01-01T00:00:00.000Z'
     })
     // The Claude settings are in the provider row, and the profiles table holds no Claude column.
     expect(database.prepare('SELECT id, kind, settings FROM providers').all()).toEqual([
-      { id: 'provider-1', kind: 'claude-code', settings: JSON.stringify({ configFolder: claudeFolder, profileName: 'client' }) }
+      { id: 'provider-1', kind: 'claude-code', settings: JSON.stringify({ configFolder: claudeFolder }) }
     ])
   })
 
   it('keeps the provider row, with empty settings, when the user clears the Claude settings, because a session can refer to it', async () => {
     const { edit, database, store } = setup()
-    await edit({ ...settings(folder), claudeFolder: join(folder, 'claude'), claudeProfileName: 'client' })
+    await edit({ ...settings(folder), claudeFolder: join(folder, 'claude') })
     await edit(settings(folder))
     expect(database.prepare('SELECT id, settings FROM providers').all()).toEqual([{ id: 'provider-1', settings: '{}' }])
-    expect(store.find('w1')).toMatchObject({ claudeFolder: null, claudeProfileName: null })
+    expect(store.find('w1')).toMatchObject({ claudeFolder: null })
   })
 
   it('makes no provider row when the user chose no Claude setting', async () => {
@@ -84,11 +80,11 @@ describe('profiles.edit', () => {
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
   })
 
-  it('removes the GitHub account, the Claude folder and the Claude profile when the user clears them', async () => {
+  it('removes the GitHub account, the Claude folder when the user clears them', async () => {
     const { edit, store } = setup()
-    await edit({ ...settings(folder), claudeFolder: join(folder, 'claude'), claudeProfileName: 'client' })
+    await edit({ ...settings(folder), claudeFolder: join(folder, 'claude') })
     await edit(settings(folder))
-    expect(store.find('w1')).toMatchObject({ github: null, claudeFolder: null, claudeProfileName: null })
+    expect(store.find('w1')).toMatchObject({ github: null, claudeFolder: null })
   })
 
   it('refuses a new workspace directory that is not an existing folder, and changes nothing', async () => {
