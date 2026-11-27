@@ -12,6 +12,9 @@
 //   { do: 'log', text }                           write a line to the log of the agent (stderr)
 //   { do: 'fail', code, message }                 answer the request with a JSON-RPC error
 //   { do: 'exit', code }                          end the agent process
+//   { do: 'ask' | 'elicit' | 'withdraw' | 'answers' | 'detach', ... }
+//                                                 permission requests and form elicitations that do
+//                                                 not wait for the answer (see `requests.mjs`)
 //
 // To add a scenario, add a function to `scenarios`. It takes the options that the test sends
 // and returns `{ initialize, prompt }`. Add a step kind in `agent.mjs` only when no step fits.
@@ -59,6 +62,39 @@ export const scenarios = {
     }
     return { initialize: [], prompt: chunks.map(say), noAuto: [...models] }
   },
+
+  // Added for story S5 of milestone m1-chat. Asks several permissions at the same time, one for
+  // each request (see the step `ask` of `requests.mjs`), waits for every answer, then replies.
+  // The default: two tool calls, each with "Allow" and "Refuse".
+  permissions: ({ requests = [{ id: 'run-tests', title: 'npm test', kind: 'execute' }, { id: 'read-log', title: 'Read last-run.txt', kind: 'read' }], gate, reply = 'Done.' } = {}) => ({
+    initialize: [],
+    prompt: [...(gate ? [gateStep(gate)] : []), { do: 'ask', requests }, { do: 'answers' }, say(reply)]
+  }),
+
+  // Added for story S5 of milestone m1-chat. One shell command with the three options of Claude
+  // Code: "Yes" (allow_once), "Yes, and don't ask again for … commands" (allow_always) and "No".
+  always: ({ id = 'run-tests', command = 'npm test', prefix = 'npm test', reply = 'Done.' } = {}) => ({
+    initialize: [],
+    prompt: [
+      {
+        do: 'ask',
+        requests: [
+          {
+            id,
+            title: command,
+            kind: 'execute',
+            options: [
+              { optionId: 'allow', name: 'Yes', kind: 'allow_once' },
+              { optionId: 'allow-always', name: `Yes, and don't ask again for ${prefix} commands`, kind: 'allow_always' },
+              { optionId: 'reject', name: 'No', kind: 'reject_once' }
+            ]
+          }
+        ]
+      },
+      { do: 'answers' },
+      say(reply)
+    ]
+  }),
 
   // Takes the steps from the options. Use it for a scenario that no test shares.
   steps: ({ initialize = [], prompt = [] } = {}) => ({ initialize, prompt })
