@@ -22,18 +22,13 @@ function withoutLongPrefix(path: string): string {
   return path
 }
 
-/** Windows ignores dots and spaces at the end of a name: `repo.` is `repo`. Remove them, so that both spellings give one key. */
-function withoutTrailingDots(path: string): string {
-  return WINDOWS ? path.replace(/[. ]+(?=\\|$)/g, '') : path
-}
-
 /**
  * The real path of a folder: absolute, with links resolved and the letter case of the disk. A UNC
  * path is returned as it is, without a call to the network. A path that does not exist resolves
  * through its nearest folder that exists. A failure returns the absolute path.
  */
 export function resolveReal(path: string): string {
-  const absolute = withoutTrailingDots(withoutLongPrefix(resolve(path)))
+  const absolute = withoutLongPrefix(resolve(path))
   if (isUnc(absolute)) return absolute
   const rest: string[] = []
   let probe = absolute
@@ -65,15 +60,14 @@ export function isInside(candidate: string, directory: string): boolean {
 
 /**
  * The root of the Git repository that holds the folder: the nearest folder, going up, that has an
- * entry `.git` (a folder, or a file in a worktree or a submodule). The walk stops after the key
- * `stopAt`, when it is given: a repository above the workspace directory is not the repository of a
- * folder in it. It runs no `git` process, so a repository cannot run a program here. Null when there is none.
+ * entry `.git` (a folder, or a file in a worktree or a submodule). The walk goes up to the root of the
+ * drive, also past the workspace directory (user decision, 2026-11-27). It runs no `git` process, so a
+ * repository cannot run a program here. Null when there is none.
  */
-export function repositoryRootOf(folder: string, stopAt: string | null = null): string | null {
+export function repositoryRootOf(folder: string): string | null {
   let current = resolveReal(folder)
   for (;;) {
     if (existsSync(join(current, '.git'))) return current
-    if (stopAt !== null && pathKey(current) === stopAt) return null
     const parent = dirname(current)
     if (parent === current) return null
     current = parent

@@ -54,7 +54,12 @@ function serversOf(file: Record<string, unknown>): FoundServer[] {
   })
 }
 
-const otherKeys = (file: Record<string, unknown>, listed: string): string[] => Object.keys(file).filter((key) => key !== listed)
+/**
+ * The top-level keys of a file by name. The key that the findings list apart (`hooks`, `mcpServers`)
+ * stays in the list when the scan lists nothing from it, so that no value hides in the file.
+ */
+const otherKeys = (file: Record<string, unknown>, listed: string, listedCount: number): string[] =>
+  Object.keys(file).filter((key) => key !== listed || listedCount === 0)
 
 /**
  * Finds what Claude Code reads without a question when a session starts in a folder (decision 0007):
@@ -78,15 +83,17 @@ export class ClaudeProjectScanner implements ProjectScanner {
       const path = join(CLAUDE_FOLDER, name)
       const settings = await readObject(join(folder, path))
       if (settings.state === 'ok') {
-        findings.hooks.push(...hooksOf(settings.value))
-        found(path, { name: path, keys: otherKeys(settings.value, 'hooks') })
+        const hooks = hooksOf(settings.value)
+        findings.hooks.push(...hooks)
+        found(path, { name: path, keys: otherKeys(settings.value, 'hooks', hooks.length) })
       } else if (settings.state === 'unreadable') findings.unreadable.push(path)
     }
 
     const servers = await readObject(join(folder, SERVERS))
     if (servers.state === 'ok') {
-      findings.mcpServers.push(...serversOf(servers.value))
-      found(SERVERS, { name: SERVERS, keys: otherKeys(servers.value, 'mcpServers') })
+      const listed = serversOf(servers.value)
+      findings.mcpServers.push(...listed)
+      found(SERVERS, { name: SERVERS, keys: otherKeys(servers.value, 'mcpServers', listed.length) })
     } else if (servers.state === 'unreadable') findings.unreadable.push(SERVERS)
     return findings
   }

@@ -61,9 +61,18 @@ describe('ClaudeProjectScanner', () => {
     expect(await scan()).toEqual({
       hooks: [],
       mcpServers: [],
-      files: [{ name: join('.claude', 'settings.json'), keys: ['apiKeyHelper', 'env'] }],
+      files: [{ name: join('.claude', 'settings.json'), keys: ['apiKeyHelper', 'env', 'hooks'] }],
       unreadable: []
     })
+  })
+
+  it('keeps the key hooks in the list when no command hook comes from it, so that no value hides (F1)', async () => {
+    write('.claude/settings.json', JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'prompt', prompt: 'x' }] }] } }))
+    write('.mcp.json', JSON.stringify({ mcpServers: {} }))
+    expect((await scan()).files).toEqual([
+      { name: join('.claude', 'settings.json'), keys: ['hooks'] },
+      { name: '.mcp.json', keys: ['mcpServers'] }
+    ])
   })
 
   it('lists an empty settings file and an empty .mcp.json: any such file asks (F2)', async () => {

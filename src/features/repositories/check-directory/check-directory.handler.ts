@@ -63,13 +63,14 @@ const allowed: DirectoryCheck = ok({})
 /**
  * The gate before an agent process starts, also before a resume (architecture, Directories and
  * trust; decision 0007). It decides which question applies and waits for the answer.
- * - A folder under the workspace directory of the profile: a Git repository, or a plain folder with
- *   a `SessionStart` hook or an MCP server, asks for trust once. Trust covers the whole repository.
- *   A plain folder without them asks nothing.
- * - A folder outside it, or under the workspace directory of another profile: the directory
- *   question, which also lists the hooks and MCP servers that Aether finds. No second question follows.
- * No agent process exists and no file of the folder runs before the answer. Aether reads two files
- * and runs no `git` process in the folder.
+ * - A folder in the most specific workspace directory, when it is the directory of the profile: a Git
+ *   repository always asks for trust. A plain folder asks when the scan finds a settings file, an
+ *   `.mcp.json`, a hook or a server. Trust covers the whole repository and stays for the profile.
+ *   A plain folder without findings asks nothing.
+ * - A folder outside every workspace directory, or in the directory of another profile: the
+ *   directory question, which also lists what Aether finds. No second question follows.
+ * No agent process exists and no file of the folder runs before the answer. Aether reads the files
+ * that the scanner names and runs no `git` process in the folder. A cancel during the scan opens no question.
  */
 export async function checkDirectoryHandler(deps: CheckDirectoryDeps, request: DirectoryRequest): Promise<DirectoryCheck> {
   const { store } = deps

@@ -186,7 +186,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 - The question for another profile offers the same answers as the question for a directory outside.
 - A directory question also lists what Aether finds in the folder. No second question follows.
 - Trust stays after the files change. This is a known limit: a hook that a later commit adds runs without a new question.
-- Before it compares paths, Aether resolves `..`, junctions and symbolic links. On Windows it ignores the letter case and the dots and spaces at the end of a name.
+- Before it compares paths, Aether resolves `..`, junctions and symbolic links. On Windows it ignores the letter case.
 - A UNC path is outside every workspace directory. Aether does not read it before the answer. A profile without a workspace directory has every folder outside.
 - The feature `repositories` holds the questions and the answers (migration `003`).
 - `send-message` calls the gate through a function that the composition root passes.

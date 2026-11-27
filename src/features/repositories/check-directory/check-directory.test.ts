@@ -453,18 +453,6 @@ describe('checkDirectoryHandler: what makes a plain folder ask (decision 1)', ()
       files: [{ name: '.claude/settings.json' }, { name: `${join('packages', 'app')}${sep}.claude/settings.local.json` }]
     })
   })
-
-  it('gives a path with a trailing dot the key of the repository', async () => {
-    if (process.platform !== 'win32') return
-    addProfile('personal', 'Personal', folder('personal'))
-    const repo = repository('personal', 'repo-a')
-    const { check, answer, store } = setup()
-    const first = check({ folder: repo })
-    await answer('trust')
-    await first
-    expect(store.isTrusted('personal', pathKey(`${repo}.`))).toBe(true)
-    expect((await check({ folder: `${repo}.` })).ok).toBe(true)
-  })
 })
 
 describe('checkDirectoryHandler: nested workspace directories (decision 2)', () => {

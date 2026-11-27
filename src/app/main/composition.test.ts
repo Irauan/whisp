@@ -507,6 +507,32 @@ describe('composeMain', () => {
       expect((await list()).value.questions).toEqual([])
       expect(starts).toHaveLength(0)
     })
+    it('asks for trust in a plain folder with an empty .claude/settings.local.json, through the scanner of Claude Code, and starts nothing (F1, F2)', async () => {
+      const { starts, port } = countingAgents()
+      const plain = join(rootDir, 'notes-tool')
+      await mkdir(join(plain, '.claude'), { recursive: true })
+      await writeFile(join(plain, '.claude', 'settings.local.json'), '{}')
+      // No scanner is passed: the composition uses the default one, as the app does.
+      const { call, composition } = start(port)
+      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
+      const [profile] = (await snapshotOf(call)).profiles
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Sort the notes', mode: 'ask', model: 'default', sourcePath: plain, attachments: [] })) as { ok: true; value: { id: string } }
+      await call('sessions.send-message', { id: created.value.id, text: 'Sort the notes' })
+      let listed: Listed
+      do {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        listed = (await call('repositories.list-questions', {})) as Listed
+      } while (listed.value.questions.length === 0)
+      expect(listed.value.questions[0]).toMatchObject({
+        kind: 'trust',
+        sessionId: created.value.id,
+        repository: 'notes-tool',
+        files: [{ name: join('.claude', 'settings.local.json'), keys: [] }]
+      })
+      expect(starts).toHaveLength(0)
+      await composition.shutdown()
+    })
+
     describe('a stop, a delete or a quit during the scan of the folder (F3)', () => {
       /** The reproduction of the reviewer: the scan waits for the test, and the user cancels in that time. */
       async function duringScan(cancel: (ctx: Awaited<ReturnType<typeof setupRepository>>, id: string) => Promise<void>) {

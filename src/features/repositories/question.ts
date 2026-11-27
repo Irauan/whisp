@@ -30,7 +30,7 @@ const base = {
 }
 
 export const questionSchema = z.discriminatedUnion('kind', [
-  /** A repository, or a plain folder with a hook or an MCP server, under the workspace directory. */
+  /** A Git repository, or a plain folder with a settings file or an `.mcp.json`, in the workspace directory of the profile. */
   z.strictObject({ kind: z.literal('trust'), ...base, repository: z.string(), ...foundSchema }),
   /** A folder outside the workspace directory of the profile. */
   z.strictObject({ kind: z.literal('outside'), ...base, ...foundSchema }),

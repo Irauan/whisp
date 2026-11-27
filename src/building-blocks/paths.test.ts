@@ -58,12 +58,6 @@ describe('resolveReal and pathKey', () => {
     expect(pathKey(real)).toBe(real.toLowerCase())
   })
 
-  it.runIf(WINDOWS)('gives a path with a trailing dot or space the key of the folder', () => {
-    const real = folder('workspace', 'repo-b')
-    expect(pathKey(`${real}.`)).toBe(pathKey(real))
-    expect(pathKey(`${real}. `)).toBe(pathKey(real))
-  })
-
   it('does not call the network for a UNC path', () => {
     expect(resolveReal('\\\\aether-no-such-server\\share\\folder')).toBe('\\\\aether-no-such-server\\share\\folder')
   })
@@ -123,18 +117,10 @@ describe('repositoryRootOf', () => {
     expect(repositoryRootOf(folder('workspace', 'notes'))).toBeNull()
   })
 
-  it('stops at the workspace directory, so a repository above it does not count', () => {
+  it('goes up past any folder, so a repository above the workspace directory is found', () => {
     mkdirSync(join(folder('home'), '.git'))
-    const workspace = folder('home', 'workspace')
-    const inside = folder('home', 'workspace', 'notes')
-    expect(repositoryRootOf(inside)).toBe(join(base, 'home'))
-    expect(repositoryRootOf(inside, pathKey(workspace))).toBeNull()
-  })
-
-  it('finds a repository that is the workspace directory itself', () => {
-    const workspace = folder('workspace')
-    mkdirSync(join(workspace, '.git'))
-    expect(repositoryRootOf(folder('workspace', 'notes'), pathKey(workspace))).toBe(workspace)
+    folder('home', 'workspace')
+    expect(repositoryRootOf(folder('home', 'workspace', 'notes'))).toBe(join(base, 'home'))
   })
 
   it('finds the repository behind a junction by the real path', () => {
