@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ControlServer } from '../../../tests/simulated-agent/control'
 import { err, ok } from '../../building-blocks/result'
@@ -57,6 +58,48 @@ function start(part: Partial<AgentStartInput> = {}, listened: Listened = listen(
   opened.push(process)
   return process
 }
+
+describe('AcpAgents, first message and mode report', () => {
+  it('sends the text, then one resource_link for each file or folder, with a file: URI and the name', async () => {
+    const file = join(folder, 'notes.txt')
+    const other = join(folder, 'other folder')
+    const process = start()
+    expect((await process.ready).ok).toBe(true)
+    expect(await process.prompt('Read these', [{ path: file, name: 'notes.txt' }, { path: other, name: 'other folder' }])).toEqual({ ok: true, value: 'end_turn' })
+    expect(control.received('session/prompt')[0]?.params).toMatchObject({
+      sessionId: 's1',
+      prompt: [
+        { type: 'text', text: 'Read these' },
+        { type: 'resource_link', uri: pathToFileURL(file).href, name: 'notes.txt' },
+        { type: 'resource_link', uri: pathToFileURL(other).href, name: 'other folder' }
+      ]
+    })
+  })
+
+  it('sends only the text when the message has no link', async () => {
+    const process = start()
+    await process.ready
+    await process.prompt('Say hello')
+    expect(control.received('session/prompt')[0]?.params).toMatchObject({ prompt: [{ type: 'text', text: 'Say hello' }] })
+  })
+
+  it('reports the mode that the agent falls back to: Auto with a model that cannot use it gives accept-edits', async () => {
+    await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+    const listened = listen()
+    const process = start({ mode: 'auto', model: 'claude-haiku-5-5' }, listened)
+    expect((await process.ready).ok).toBe(true)
+    expect(control.received('session/set_mode')[0]?.params).toMatchObject({ modeId: 'auto' })
+    expect(listened.updates).toEqual([{ type: 'mode', mode: 'accept-edits' }])
+  })
+
+  it('reports no mode change when the model can use Auto', async () => {
+    await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+    const listened = listen()
+    const process = start({ mode: 'auto', model: 'claude-opus-5-5' }, listened)
+    expect((await process.ready).ok).toBe(true)
+    expect(listened.updates).toEqual([])
+  })
+})
 
 describe('AcpAgents', () => {
   it('starts one session in the main directory and sets the mode before the first prompt', async () => {
@@ -206,7 +249,7 @@ describe('AcpAgents', () => {
 
   it('maps "auth required" to not-signed-in, with the sign-in steps of the settings', async () => {
     await control.scenario('sign-in-error')
-    const process = start({ settings: { configFolder: 'C:\\claude-folder', profileName: 'work' } })
+    const process = start({ settings: { configFolder: 'C:\\claude-folder' } })
     await process.ready
     const result = await process.prompt('go')
     expect(result.ok).toBe(false)
@@ -214,7 +257,7 @@ describe('AcpAgents', () => {
     expect(result.error.code).toBe('not-signed-in')
     expect(result.error.message).toMatch(/^Claude Code is not signed in\. /)
     expect(result.error.message).toContain('C:\\claude-folder')
-    expect(result.error.message).toContain('work')
+    expect(result.error.message).toContain('subscription')
   })
 
   it('reports the exit code and the last log lines when the process ends during a turn, once', async () => {
@@ -268,7 +311,7 @@ describe('AcpAgents', () => {
 
   it('builds the environment from the allow list, the Claude settings and the input', async () => {
     const process = start({
-      settings: { configFolder: 'C:\\claude-folder', profileName: 'work' },
+      settings: { configFolder: 'C:\\claude-folder' },
       environment: { GH_TOKEN: 'fake-token-of-two' }
     })
     const { env } = await control.waitForEnvironment()
@@ -278,7 +321,7 @@ describe('AcpAgents', () => {
     expect(env.PATH ?? env.Path).toBe(aether.PATH)
     expect(env.GH_TOKEN).toBe('fake-token-of-two')
     expect(env.CLAUDE_CONFIG_DIR).toBe('C:\\claude-folder')
-    expect(env.ANTHROPIC_PROFILE).toBe('work')
+    expect(env.ANTHROPIC_PROFILE).toBeUndefined()
   })
 
   it('refuses the start when the settings are not valid for the provider', async () => {
@@ -307,6 +350,14 @@ describe('AcpAgents', () => {
 })
 
 describe('translateUpdate', () => {
+  const { modeOf } = claudeCodeRecipe()
+
+  it('gives a mode update as the mode of the port, and ignores a mode ID that the port does not know', () => {
+    expect(translateUpdate({ sessionUpdate: 'current_mode_update', currentModeId: 'acceptEdits' }, modeOf)).toEqual({ type: 'mode', mode: 'accept-edits' })
+    expect(translateUpdate({ sessionUpdate: 'current_mode_update', currentModeId: 'plan' }, modeOf)).toEqual({ type: 'mode', mode: 'plan' })
+    expect(translateUpdate({ sessionUpdate: 'current_mode_update', currentModeId: 'dontAsk' }, modeOf)).toBeNull()
+  })
+
   it('ignores the updates that Aether does not show', () => {
     expect(translateUpdate({ sessionUpdate: 'current_mode_update', currentModeId: 'plan' })).toBeNull()
     expect(translateUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'image', data: '', mimeType: 'image/png' } })).toBeNull()

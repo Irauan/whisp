@@ -125,7 +125,7 @@ export function composeMain({
   // The slices never call each other, so the composition root connects them: the agent process of a
   // session reports its progress to `record-agent-update`.
   const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
-    recordAgentUpdateHandler({ transcript }, { sessionId, update })
+    recordAgentUpdateHandler({ transcript, store: sessionStore }, { sessionId, update })
   const release = async (sessionId: string) => {
     transcript.forget(sessionId)
     await processes.release(sessionId)

@@ -9,7 +9,6 @@ export interface ProfileValues {
   workspaceDirectory: string
   github: { login: string; name: string | null; avatar: string | null } | null
   claudeFolder: string | null
-  claudeProfileName: string | null
 }
 
 interface Props {
@@ -27,7 +26,6 @@ export function ProfileDialog({ profile, onClose, onSave }: Props) {
   const [workspaceDirectory, setWorkspaceDirectory] = useState(profile?.workspaceDirectory ?? '')
   const [login, setLogin] = useState(profile?.github?.login ?? '')
   const [claudeFolder, setClaudeFolder] = useState(profile?.claudeFolder ?? '')
-  const [claudeProfileName, setClaudeProfileName] = useState(profile?.claudeProfileName ?? '')
   const [problem, setProblem] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const { found, readAgain } = useGithubAccounts()
@@ -64,8 +62,7 @@ export function ProfileDialog({ profile, onClose, onSave }: Props) {
         // The main process accepts only a picture as a data URL.
         avatar: github.avatar?.startsWith('data:image/') ? github.avatar : null
       },
-      claudeFolder: orNull(claudeFolder),
-      claudeProfileName: orNull(claudeProfileName)
+      claudeFolder: orNull(claudeFolder)
     })
     setSaving(false)
     if (message) setProblem(message)
@@ -151,15 +148,6 @@ export function ProfileDialog({ profile, onClose, onSave }: Props) {
           >
             Browse
           </button>
-          <label className="field">
-            Claude profile name
-            <input
-              value={claudeProfileName}
-              maxLength={100}
-              placeholder="The profile name"
-              onChange={(event) => setClaudeProfileName(event.target.value)}
-            />
-          </label>
           <p className="muted">Aether stores no key and no token. Sign in to Claude in this folder.</p>
         </fieldset>
         {problem && (

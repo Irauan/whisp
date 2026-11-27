@@ -5,6 +5,7 @@ import {
   isDraft,
   isOpenTool,
   mergeTool,
+  noticeOfModeChange,
   noticeOfStop,
   planEntry,
   sessionEventSchema,
@@ -125,6 +126,27 @@ describe('noticeOfStop', () => {
       expect(noticeOfStop(reason)).toMatchObject({ tone: 'error' })
     }
     expect(noticeOfStop('end_turn')).toBeNull()
+  })
+})
+
+describe('noticeOfModeChange', () => {
+  it('says that Claude uses Accept edits when Aether asked for Auto and the agent reports Accept edits', () => {
+    const notice = noticeOfModeChange('auto', 'accept-edits')
+    expect(notice).toMatchObject({ kind: 'notice', tone: 'info', code: 'auto-fallback' })
+    expect(notice?.text).toMatch(/\bAuto\b[\s\S]*\bAccept edits\b/)
+    expect(entrySchema.safeParse(notice).success).toBe(true)
+  })
+
+  it.each([
+    ['auto', 'auto'],
+    ['auto', 'plan'],
+    ['auto', 'ask'],
+    ['plan', 'accept-edits'],
+    ['ask', 'accept-edits'],
+    ['approve-all', 'accept-edits'],
+    ['accept-edits', 'accept-edits']
+  ] as const)('gives no notice when Aether asked for %s and the agent reports %s', (asked, reported) => {
+    expect(noticeOfModeChange(asked, reported)).toBeNull()
   })
 })
 

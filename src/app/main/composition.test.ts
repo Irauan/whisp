@@ -180,13 +180,13 @@ describe('composeMain', () => {
     const { call } = start()
     const { profiles } = await snapshotOf(call)
     const [personal, client] = profiles
-    const added = (await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })) as {
+    const added = (await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })) as {
       value: { id: string }
     }
 
     for (const [name, input] of [
       ['profiles.choose-directories', { directories: [{ profileId: personal!.id, workspaceDirectory: rootDir }, { profileId: client!.id, workspaceDirectory: rootDir }] }],
-      ['profiles.edit', { id: client!.id, name: 'Renamed', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: 'work' }],
+      ['profiles.edit', { id: client!.id, name: 'Renamed', workspaceDirectory: rootDir, github: null, claudeFolder: null }],
       ['profiles.switch', { id: personal!.id }],
       ['profiles.remove', { id: added.value.id }],
       ['profiles.remove', { id: client!.id }]
@@ -235,7 +235,7 @@ describe('composeMain', () => {
       await control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
       const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => ({ ...process.env, ANTHROPIC_API_KEY: 'x' }) })
       const first = start(agents)
-      const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null, claudeProfileName: null })) as { ok: true }
+      const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null })) as { ok: true }
       expect(added.ok).toBe(true)
       const [profile] = (await snapshotOf(first.call)).profiles
       const created = (await first.call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'plan', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
@@ -322,7 +322,7 @@ describe('composeMain', () => {
 
     const { composition, call } = start(agents)
     const folders = { f1: join(rootDir, 'claude-f1'), f3: join(rootDir, 'claude-f3') }
-    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1, claudeProfileName: null })
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1 })
     const [profile] = (await snapshotOf(call)).profiles
     const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
     const id = created.value.id
@@ -332,7 +332,7 @@ describe('composeMain', () => {
     await started(1)
     expect(fakes[0]!.input.settings).toEqual({ configFolder: folders.f1 })
     // The user edits the Claude folder of the profile in this time.
-    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3, claudeProfileName: null })).toMatchObject({ ok: true })
+    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3 })).toMatchObject({ ok: true })
     fakes[0]!.ready('agent-1')
     await until(() => events().some(isIdle))
 

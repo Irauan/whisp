@@ -7,9 +7,10 @@ import type { Ids } from '../../../building-blocks/ids'
 import { err, ok, type Result } from '../../../building-blocks/result'
 import { noticeOfStop, type Entry } from '../entry'
 import type { Processes, Turn } from '../processes.store'
-import { MESSAGES, PROVIDER_KIND, type Session } from '../session'
+import { MESSAGES, PROVIDER_KIND, textForAgent, unsupportedAttachment, type Session } from '../session'
 import type { AgentRun, ProviderAccount, SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
+import { additionalDirectoriesOf, linksOf } from './attachments.handler'
 import type { SendMessageError } from './send-message.contract'
 
 export interface SendMessageDeps {
@@ -54,6 +55,9 @@ export function sendMessageHandler(deps: SendMessageDeps, input: { id: string; t
   const running = processes.get(session.id)
   // The folder can change after the session was created. A new process needs it, so check it again.
   if (!running && !isExistingFolder(session.sourcePath)) return refused('invalid-folder', MESSAGES.folderMissing)
+  // A start reads the attachments of the row. Refuse the kinds that Aether cannot send, before any process starts.
+  const unsupported = running ? null : unsupportedAttachment(session.attachments)
+  if (unsupported !== null) return refused('unsupported-attachment', unsupported)
 
   const turn = processes.beginTurn(session.id)
   transcript.setStatus(session.id, running ? 'working' : 'starting')
@@ -71,10 +75,13 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
   const { transcript, processes } = deps
   const id = session.id
   try {
+    // The links and the URLs go with the first message: the turn that creates the first agent run.
+    // A first start that failed saved no run, so its retry still counts as the first message.
+    const first = !processes.get(id) && deps.store.agentRunOf(id) === null
     const agent = await ensureProcess(deps, session, turn)
     if (agent === null) return
     transcript.setStatus(id, 'working')
-    const outcome = await agent.prompt(text)
+    const outcome = first ? await agent.prompt(textForAgent(text, session.attachments), linksOf(session)) : await agent.prompt(text)
     if (outcome.ok) {
       const stop = noticeOfStop(outcome.value)
       if (stop) transcript.addEntry(id, stop)
@@ -208,8 +215,8 @@ async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Pr
   return {
     input: {
       mainDirectory: session.sourcePath,
-      // Story S7 adds the folders of the attachments, after story S6 asks for them.
-      additionalDirectories: [],
+      // The folder attachments outside the session folder. Story S6 asks the directory question before the start.
+      additionalDirectories: additionalDirectoriesOf(session),
       model: session.model,
       mode: session.mode,
       sharedItems: [],

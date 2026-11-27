@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentListener,
@@ -6,6 +8,7 @@ import type {
   AgentStartInput,
   AgentUpdate,
   PromptErrorCode,
+  PromptLink,
   StartErrorCode,
   Started,
   StopReason
@@ -34,6 +37,8 @@ function deferred<Value>() {
 class FakeProcess implements AgentProcess {
   readonly start = deferred<Result<Started, StartErrorCode>>()
   readonly prompts: string[] = []
+  /** The links of each prompt, in the order of `prompts`. */
+  readonly links: (readonly PromptLink[])[] = []
   readonly turn = deferred<Result<StopReason, PromptErrorCode>>()
   cancels = 0
   closed = 0
@@ -53,8 +58,9 @@ class FakeProcess implements AgentProcess {
     this.listener.update(update)
   }
 
-  prompt(text: string): Promise<Result<StopReason, PromptErrorCode>> {
+  prompt(text: string, links: readonly PromptLink[] = []): Promise<Result<StopReason, PromptErrorCode>> {
     this.prompts.push(text)
+    this.links.push(links)
     return this.turn.promise
   }
 
@@ -145,6 +151,169 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
 }
 
 const entriesOf = (store: SessionStore, id = 's1') => store.entriesOf(id).map((view) => view.entry)
+
+/** Saves attachments in the row of a session, as `sessions.create` does. */
+function attach(database: ReturnType<typeof setup>['database'], id: string, attachments: { kind: string; ref: string; label: string }[]): void {
+  database.prepare('UPDATE sessions SET attachments = ? WHERE id = ?').run(JSON.stringify(attachments), id)
+}
+
+/** Lets the first prompt reach the process. */
+async function promptReached(agent: FakeProcess): Promise<void> {
+  agent.becomeReady('a1')
+  await agent.ready
+  for (let wait = 0; wait < 20 && agent.prompts.length === 0; wait += 1) await Promise.resolve()
+}
+
+describe('sessions.send-message, attachments and settings (A12, A15)', () => {
+  const OUTSIDE = join(tmpdir(), 'aether-other-folder')
+  const INSIDE = join(process.cwd(), 'src')
+  const NOTES = join(process.cwd(), 'notes.txt')
+  const ISSUE = 'https://github.com/example/repo/issues/7'
+
+  it('sends a link for each file and folder attachment with the first message, read from the saved row, and keeps the text of the user in the transcript', async () => {
+    const { database, store, send, processOf } = setup()
+    attach(database, 's1', [
+      { kind: 'file', ref: NOTES, label: 'notes.txt' },
+      { kind: 'folder', ref: OUTSIDE, label: 'aether-other-folder' },
+      { kind: 'repository-file', ref: join('src', 'a.ts'), label: 'a.ts' },
+      { kind: 'repository-folder', ref: 'src', label: 'src' }
+    ])
+    const { finished } = send('s1', 'Read them')
+    const agent = await processOf(0)
+    await promptReached(agent)
+    expect(agent.prompts).toEqual(['Read them'])
+    expect(agent.links[0]).toEqual([
+      { path: NOTES, name: 'notes.txt' },
+      { path: OUTSIDE, name: 'aether-other-folder' },
+      { path: join(process.cwd(), 'src', 'a.ts'), name: 'a.ts' },
+      { path: INSIDE, name: 'src' }
+    ])
+    agent.turn.resolve(ok('end_turn'))
+    await finished
+    expect(entriesOf(store)[0]).toEqual({ kind: 'user', text: 'Read them' })
+  })
+
+  it('adds the URL of an issue and of a pull request to the text for the agent, and not to the transcript', async () => {
+    const { database, store, send, processOf } = setup()
+    attach(database, 's1', [
+      { kind: 'issue', ref: ISSUE, label: '#7' },
+      { kind: 'pull-request', ref: 'https://github.com/example/repo/pull/9', label: '#9' }
+    ])
+    const { finished } = send('s1', 'Fix it')
+    const agent = await processOf(0)
+    await promptReached(agent)
+    expect(agent.prompts).toEqual([`Fix it\n\nReferences:\n${ISSUE}\nhttps://github.com/example/repo/pull/9`])
+    expect(agent.links[0]).toEqual([])
+    agent.turn.resolve(ok('end_turn'))
+    await finished
+    expect(entriesOf(store)[0]).toEqual({ kind: 'user', text: 'Fix it' })
+  })
+
+  it('sends the links with the first message only: the second message of the session has none', async () => {
+    const { database, send, processOf } = setup()
+    attach(database, 's1', [{ kind: 'file', ref: NOTES, label: 'notes.txt' }, { kind: 'issue', ref: ISSUE, label: '#7' }])
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    expect(agent.links[0]).toHaveLength(1)
+    await send('s1', 'Two').finished
+    expect(agent.prompts).toEqual([expect.stringContaining('References:'), 'Two'])
+    expect(agent.links[1]).toEqual([])
+  })
+
+  it('sends the links again when the first start failed, because no agent run exists yet', async () => {
+    const { database, send, processOf } = setup()
+    attach(database, 's1', [{ kind: 'file', ref: NOTES, label: 'notes.txt' }])
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    one.start.resolve(err('not-signed-in', 'Claude Code is not signed in. Open a terminal.'))
+    await first.finished
+    const second = send('s1', 'One again')
+    const two = await processOf(1)
+    two.becomeReady('a1')
+    two.turn.resolve(ok('end_turn'))
+    await second.finished
+    expect(two.links[0]).toEqual([{ path: NOTES, name: 'notes.txt' }])
+  })
+
+  it('sends no link after a resume: the agent run of the session exists', async () => {
+    const { database, processes, send, processOf } = setup()
+    attach(database, 's1', [{ kind: 'file', ref: NOTES, label: 'notes.txt' }])
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    one.listener.exited({ code: 0, logTail: '' })
+    expect(processes.get('s1')).toBeUndefined()
+    const second = send('s1', 'Two')
+    const two = await processOf(1)
+    expect(two.input.resume).toBe('a1')
+    two.becomeReady('a1', { resumed: true })
+    two.turn.resolve(ok('end_turn'))
+    await second.finished
+    expect(two.links[0]).toEqual([])
+  })
+
+  it('gives the agent a folder attachment outside the session folder as an additional directory, on each start', async () => {
+    const { database, send, processes, processOf } = setup()
+    attach(database, 's1', [
+      { kind: 'folder', ref: OUTSIDE, label: 'other' },
+      { kind: 'folder', ref: INSIDE, label: 'src' },
+      { kind: 'folder', ref: process.cwd(), label: 'itself' },
+      { kind: 'file', ref: join(OUTSIDE, 'x.txt'), label: 'x.txt' },
+      { kind: 'folder', ref: OUTSIDE.toUpperCase(), label: 'same folder, other case' }
+    ])
+    const first = send('s1', 'One')
+    const one = await processOf(0)
+    expect(one.input.additionalDirectories).toEqual([OUTSIDE])
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    one.listener.exited({ code: 0, logTail: '' })
+    expect(processes.get('s1')).toBeUndefined()
+    send('s1', 'Two')
+    const two = await processOf(1)
+    expect(two.input.additionalDirectories).toEqual([OUTSIDE])
+  })
+
+  it.each([
+    ['an attachment of an unknown kind', { kind: 'snippet', ref: 'x', label: 'notes.txt' }, /"snippet"/],
+    ['a session attachment', { kind: 'session', ref: 's2', label: 'Old chat' }, /coming soon/]
+  ])('refuses %s before the turn: no entry, no process, and the session stays idle', (_name, attachment, reason) => {
+    const { database, store, transcript, agents, send } = setup()
+    attach(database, 's1', [{ kind: 'file', ref: 'a.txt', label: 'a.txt' }, attachment])
+    const { result } = send('s1', 'Say hello')
+    expect(result).toMatchObject({ ok: false, error: { code: 'unsupported-attachment', message: expect.stringMatching(reason) } })
+    expect(entriesOf(store)).toEqual([])
+    expect(agents.processes).toEqual([])
+    expect(transcript.statusOf('s1')).toBe('idle')
+  })
+
+  it('does not check the attachments of a session that has a running process: the check is for a start', async () => {
+    const { database, send, processOf } = setup()
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    attach(database, 's1', [{ kind: 'snippet', ref: 'x', label: 'x' }])
+    expect(send('s1', 'Two').result).toEqual({ ok: true, value: {} })
+  })
+
+  it('shows a start notice and sends no prompt when the agent refuses the model that Aether does not know', async () => {
+    const { database, store, send, processOf } = setup()
+    database.prepare("UPDATE sessions SET model = 'claude-unknown-9-9' WHERE id = 's1'").run()
+    const { finished } = send('s1', 'Say hello')
+    const agent = await processOf(0)
+    agent.start.resolve(err('settings-refused', 'Claude Code did not accept the model "claude-unknown-9-9".'))
+    await finished
+    expect(agent.prompts).toEqual([])
+    expect(entriesOf(store)).toContainEqual(expect.objectContaining({ kind: 'notice', tone: 'error', code: 'start-failed' }))
+  })
+})
 
 describe('sessions.send-message', () => {
   it('accepts the message at once, shows the state Starting, and saves the message of the user', async () => {
@@ -294,12 +463,12 @@ describe('sessions.send-message', () => {
   it('gives a session without an account the current account of its profile at the first start', async () => {
     const { database, store, send, processOf } = setup()
     database
-      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{\"profileName\":\"work\"}', 1, '2026-01-01')")
+      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{\"configFolder\":\"C:/f1\"}', 1, '2026-01-01')")
       .run()
     expect(store.find('s1')?.providerId).toBeNull()
     const { finished } = send('s1', 'Say hello')
     const agent = await processOf(0)
-    expect(agent.input.settings).toEqual({ profileName: 'work' })
+    expect(agent.input.settings).toEqual({ configFolder: 'C:/f1' })
     agent.becomeReady('a1')
     agent.turn.resolve(ok('end_turn'))
     await finished

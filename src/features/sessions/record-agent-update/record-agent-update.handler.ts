@@ -1,8 +1,12 @@
 import type { AgentUpdate } from '../../../building-blocks/agent.port'
+import { noticeOfModeChange } from '../entry'
+import type { SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
 
 export interface RecordAgentUpdateDeps {
   transcript: Transcript
+  /** The saved sessions. The row holds the mode that Aether asked for. */
+  store: SessionStore
 }
 
 /**
@@ -11,7 +15,7 @@ export interface RecordAgentUpdateDeps {
  * the renderer, so it has no contract and no controller. The composition root connects the agent
  * process of each session to it.
  */
-export function recordAgentUpdateHandler({ transcript }: RecordAgentUpdateDeps, input: { sessionId: string; update: AgentUpdate }): void {
+export function recordAgentUpdateHandler({ transcript, store }: RecordAgentUpdateDeps, input: { sessionId: string; update: AgentUpdate }): void {
   const { sessionId, update } = input
   switch (update.type) {
     case 'text':
@@ -29,5 +33,13 @@ export function recordAgentUpdateHandler({ transcript }: RecordAgentUpdateDeps, 
     case 'plan':
       transcript.addPlan(sessionId, update)
       return
+    case 'mode': {
+      // Aether asked for the mode of the row. A report of another mode is a notice only for the
+      // fallback of Auto (decision 0012, item 2).
+      const asked = store.find(sessionId)?.mode
+      const notice = asked === undefined ? null : noticeOfModeChange(asked, update.mode)
+      if (notice) transcript.addEntry(sessionId, notice)
+      return
+    }
   }
 }

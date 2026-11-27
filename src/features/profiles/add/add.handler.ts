@@ -11,7 +11,6 @@ export interface AddProfileInput {
   workspaceDirectory: string
   github: GithubAccount | null
   claudeFolder: string | null
-  claudeProfileName: string | null
 }
 
 export interface AddProfileDeps {
@@ -32,7 +31,7 @@ export function addProfileHandler(
   const createdAt = clock.now().toISOString()
   store.transaction(() => {
     store.insert({ id, ...input, createdAt })
-    store.saveClaude(id, { configFolder: input.claudeFolder, profileName: input.claudeProfileName }, ids, createdAt)
+    store.saveClaude(id, { configFolder: input.claudeFolder }, ids, createdAt)
     store.setCurrent(id)
   })
   return ok({ id })

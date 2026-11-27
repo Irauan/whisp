@@ -30,6 +30,14 @@ export interface AgentStartInput {
   resume: string | null
 }
 
+/** A file or folder that the first message of a session names. The provider turns it into the link of its protocol. */
+export interface PromptLink {
+  /** An absolute path. */
+  path: string
+  /** The name that the agent shows, for example the file name. */
+  name: string
+}
+
 /** One step of a plan of the agent. */
 export type PlanStepStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -42,6 +50,8 @@ export type AgentUpdate =
   | { type: 'tool'; id: string; title: string; toolKind: string; status: ToolStatus }
   | { type: 'tool-update'; id: string; title: string | null; toolKind: string | null; status: ToolStatus | null }
   | { type: 'plan'; steps: { text: string; status: PlanStepStatus }[] }
+  /** The agent uses this mode now. Aether asked for a mode at the start, and the agent can use another one. */
+  | { type: 'mode'; mode: Mode }
 
 /** What the process tells Aether without being asked. */
 export interface AgentListener {
@@ -78,8 +88,11 @@ export type StopReason = 'end_turn' | 'cancelled' | 'max_tokens' | 'max_turn_req
 export interface AgentProcess {
   /** Resolves when the agent session exists, with the mode and the model applied. */
   readonly ready: Promise<Result<Started, StartErrorCode>>
-  /** Sends one user message and resolves when the turn ends. It waits for `ready`. */
-  prompt(text: string): Promise<Result<StopReason, PromptErrorCode>>
+  /**
+   * Sends one user message and resolves when the turn ends. It waits for `ready`. Each link is a
+   * file or folder that the message names. The caller sends links with the first message only.
+   */
+  prompt(text: string, links?: readonly PromptLink[]): Promise<Result<StopReason, PromptErrorCode>>
   /** Cancels the turn. Before `ready` it cancels the start. It never rejects. */
   cancel(): Promise<void>
   /**

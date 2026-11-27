@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { defineContract } from '../../../building-blocks/contract'
-import { claudeFolderSchema, claudeProfileNameSchema, githubAccountInputSchema, workspaceDirectorySchema, profileNameSchema } from '../profile'
+import { claudeFolderSchema, githubAccountInputSchema, workspaceDirectorySchema, profileNameSchema } from '../profile'
 
-/** Saves the settings of a profile: name, workspaceDirectory, GitHub account, Claude folder and Claude profile. */
+/** Saves the settings of a profile: name, workspaceDirectory, GitHub account, Claude folder. */
 export const editProfile = defineContract(
   'profiles.edit',
   z.strictObject({
@@ -10,31 +10,31 @@ export const editProfile = defineContract(
     name: profileNameSchema,
     workspaceDirectory: workspaceDirectorySchema,
     github: githubAccountInputSchema.nullable(),
-    claudeFolder: claudeFolderSchema,
-    claudeProfileName: claudeProfileNameSchema
+    claudeFolder: claudeFolderSchema
   }),
   z.strictObject({}),
   ['unknown-profile', 'invalid-workspace-directory', 'invalid-claude-folder'],
   {
     valid: [
-      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: null },
+      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null },
       {
         id: 'w1',
         name: 'Work',
         workspaceDirectory: 'C:\\work',
         github: { login: 'example-user', name: 'Example User', avatar: null },
-        claudeFolder: 'C:\\claude',
-        claudeProfileName: 'work'
+        claudeFolder: 'C:\\claude'
       }
     ],
     invalid: [
       null,
       {},
-      { name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: null },
-      { id: '', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: null },
-      { id: 'w1', name: '', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: null },
-      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: '', claudeProfileName: null },
-      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: null, extra: 1 }
+      { name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null },
+      { id: '', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null },
+      { id: 'w1', name: '', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null },
+      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: '' },
+      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, extra: 1 },
+      // The field "Claude profile name" is gone (user decision, 2026-11-27).
+      { id: 'w1', name: 'Work', workspaceDirectory: 'C:\\work', github: null, claudeFolder: null, claudeProfileName: 'work' }
     ]
   }
 )

@@ -12,7 +12,6 @@ export interface EditProfileInput {
   workspaceDirectory: string
   github: GithubAccount | null
   claudeFolder: string | null
-  claudeProfileName: string | null
 }
 
 export function editProfileHandler(
@@ -32,7 +31,7 @@ export function editProfileHandler(
   }
   store.transaction(() => {
     store.update({ ...current, ...settings })
-    store.saveClaude(id, { configFolder: settings.claudeFolder, profileName: settings.claudeProfileName }, ids, clock.now().toISOString())
+    store.saveClaude(id, { configFolder: settings.claudeFolder }, ids, clock.now().toISOString())
   })
   return ok({})
 }

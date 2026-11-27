@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MODES, type Mode } from '../../building-blocks/mode'
-import { modeForNewSession, TITLE_LIMIT, titleOf } from './session'
+import { FILE_KINDS, modeForNewSession, TITLE_LIMIT, textForAgent, titleOf, unsupportedAttachment, URL_KINDS, type Attachment } from './session'
 
 const at = (mode: Mode, createdAt: string) => ({ mode, createdAt })
 
@@ -39,6 +39,39 @@ describe('modeForNewSession', () => {
     const copy = structuredClone(sessions)
     modeForNewSession(sessions)
     expect(sessions).toEqual(copy)
+  })
+})
+
+const attachment = (kind: string, ref = 'x', label = 'x'): Attachment => ({ kind, ref, label })
+
+describe('unsupportedAttachment', () => {
+  it('accepts no attachment, and each kind that the agent gets', () => {
+    expect(unsupportedAttachment([])).toBeNull()
+    expect(unsupportedAttachment([...FILE_KINDS, ...URL_KINDS].map((kind) => attachment(kind)))).toBeNull()
+  })
+
+  it('names an attachment of a kind that Aether does not know, and says its kind', () => {
+    expect(unsupportedAttachment([attachment('file'), attachment('snippet', 'a', 'notes.txt')])).toMatch(/"snippet"/)
+  })
+
+  it('refuses a session attachment: it is coming soon (decision 0012)', () => {
+    expect(unsupportedAttachment([attachment('session', 's1', 'Old chat')])).toMatch(/Old chat.*coming soon/i)
+  })
+})
+
+describe('textForAgent', () => {
+  it('keeps the text when no attachment is an issue or a pull request', () => {
+    expect(textForAgent('Read it', [attachment('file', 'C:\\a.txt')])).toBe('Read it')
+    expect(textForAgent('Read it', [])).toBe('Read it')
+  })
+
+  it('adds the URL of each issue and pull request after the text (decision 0012, item 5)', () => {
+    const text = textForAgent('Fix it', [
+      attachment('issue', 'https://github.com/example/repo/issues/7'),
+      attachment('file', 'C:\\a.txt'),
+      attachment('pull-request', 'https://github.com/example/repo/pull/9')
+    ])
+    expect(text).toBe('Fix it\n\nReferences:\nhttps://github.com/example/repo/issues/7\nhttps://github.com/example/repo/pull/9')
   })
 })
 
