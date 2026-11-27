@@ -152,7 +152,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 |---|---|---|
 | Slices, state, SQLite, workspaces, removal, processes, permissions, skills, tests, rule tools | The user | `docs/decisions/0001` to `0010` |
 | Profiles and providers replace workspaces. Root becomes workspace directory. | The user, 2026-11-26 | `docs/decisions/0013-profiles-and-providers.md` |
-| Claude billing | The user. Still open. On 2026-11-25 the user chose: plan now, live checks wait. | `docs/decisions/0011-claude-billing.md` |
+| Claude billing: subscription only | The user, 2026-11-27 | `docs/decisions/0011-claude-billing.md` |
 | One Mode control with five values, and the mapping of session settings to the agent | The user, 2026-11-25 | `docs/decisions/0012-session-settings.md`, written in story S3 |
 | Order of steps 3 and 4 | The user, 2026-11-25 | This brief |
 | Milestone 0 before m1-chat, with path step 2 in Milestone 0 | The user, 2026-11-25 | This brief |
@@ -168,7 +168,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 | `node:sqlite` is a release candidate. | Slice tests with a real database. |
 | One process costs about 305 MB. | A22 limits the idle processes. |
 | A compromised renderer can answer a permission question. | Accepted in `docs/architecture.md`. No check. |
-| Live checks need a usable Claude sign-in. | Decision 0011. See accepted gaps. |
+| Live checks need a usable Claude sign-in. | Decision 0011: the live checks of step 7 use the subscription of the user. |
 
 ## Accepted gaps
 

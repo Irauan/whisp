@@ -56,7 +56,7 @@ S6 to S8 are independent after S4. S5 needs S8, because S5 puts its cards inline
 
 ## Live checks (step 7)
 
-The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. These checks wait for decision 0011. All stories and CI checks can proceed without it.
+The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. Decision 0011 (2026-11-27): these checks use the subscription of the user.
 
 ## Todo list
 
@@ -69,10 +69,10 @@ The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. These checks
 - [x] S2 Profiles in SQLite. PR #24, squash merge `e113836`.
 - [x] S3 Session slices, with decision 0012. PR #25, squash merge `2858c5f`.
 - [x] S4 Chat in a session. PR #26, squash merge `c649218`.
-- [ ] Demo of the walking skeleton to the user
+- [x] Demo of the walking skeleton to the user, after the S4 merge.
 - [ ] S5 Permission queue
-- [ ] S6 Repository and directory trust
-- [ ] S7 Session settings reach the agent
+- [x] S6 Repository and directory trust. PR #28, squash merge `50bd85a`.
+- [x] S7 Session settings reach the agent. PR #27, squash merge `597d6c5`.
 - [ ] S8 Plan widget
 - [ ] S9 Idle release and process limit
 - [ ] Step 7: milestone validation, with the live checks
