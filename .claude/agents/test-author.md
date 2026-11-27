@@ -13,7 +13,7 @@ You are the test author. Your input is files: the brief, the plan, the architect
 - Write the acceptance tests of one story under `tests/acceptance/<milestone>/<story>/`.
 - Derive each test from a check in the brief. Use the spec and the mockups for the flows, the states and the names.
 - Name the check in the test.
-- Run each test.
+- Run each test with `npm run acceptance:story -- --base origin/milestone/<id>`. Do not run the full suite.
 - Each test must fail for the expected reason: the behavior is missing, not a typo or a broken setup.
 - Commit the tests before any code commit of the story.
 - The story needs at least two commits: the tests, then the code.

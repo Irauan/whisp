@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - 'milestone/**'
+  # A manual run checks the full acceptance suite, for example on the milestone branch once all
+  # stories are merged (milestone validation).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -115,6 +118,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -123,7 +128,32 @@ jobs:
         run: node -e "const [a,b]=process.versions.node.split('.').map(Number); if (a<24||(a===24&&b<15)) { console.error('Node 24.15 or later is required. Found '+process.version); process.exit(1) }"
       - run: npm ci
       # Builds the app, then runs Playwright on it with the simulated agent.
-      - run: npm run acceptance
+      # User decision, 2026-11-27: a story PR and a push to a milestone branch run only the
+      # scenarios that the change touches (scripts/acceptance-scope.mjs). A PR to main, a push to
+      # main and a manual run check the full suite.
+      # On a story PR, the job runs the copy of the script from the base branch, so a PR cannot
+      # narrow the run that judges it. When the base has no copy yet, the job runs the copy of the PR.
+      - name: Run the acceptance tests
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          script=scripts/acceptance-scope.mjs
+          if [ "$EVENT" = pull_request ] && [[ "$BASE_REF" == milestone/* ]]; then
+            if git cat-file -e "origin/$BASE_REF:$script" 2>/dev/null; then
+              git show "origin/$BASE_REF:$script" > "$RUNNER_TEMP/acceptance-scope.mjs"
+              script="$RUNNER_TEMP/acceptance-scope.mjs"
+              echo "acceptance: runs the copy of scripts/acceptance-scope.mjs from origin/$BASE_REF"
+            fi
+            node "$script" --base "origin/$BASE_REF" --branch "$HEAD_REF"
+          elif [ "$EVENT" = push ] && [[ "$REF_NAME" == milestone/* ]]; then
+            node "$script" --base "$BEFORE"
+          else
+            node "$script" --all
+          fi
       - name: Upload the Playwright results
         if: failure()
         uses: actions/upload-artifact@v4
