@@ -174,7 +174,15 @@ The main process asks these questions, and stores the answers. The renderer cann
 | The agent reads or writes outside the session directories | Claude asks. Aether shows the request in the permission queue. |
 
 - Trust applies to one repository, not to the whole workspace directory.
-- No agent process starts before the trust answer. This includes an early start.
+- A plain folder under the workspace directory with a `SessionStart` hook or an `.mcp.json` server also asks for trust, for that folder. A plain folder without them starts at once.
+- Answers belong to one profile. Trust of a repository in one profile does not trust it in another.
+- "Allow once" covers one session and lives in memory. "Always allow for this profile" covers that folder and stays after a restart.
+- A directory question also lists the hooks and MCP servers that Aether finds. No second question follows.
+- Before it compares paths, Aether resolves `..`, junctions and symbolic links. On Windows it ignores the letter case.
+- A UNC path is outside every workspace directory. A profile without a workspace directory has every folder outside.
+- The feature `repositories` holds the questions and the answers (migration `003`).
+- `send-message` calls the gate through a function that the composition root passes. Stop, delete and quit answer `cancel`.
+- No agent process starts before the trust answer. This includes an early start and a resume.
 - "Approve all" also removes the last question in the table.
 - After an approval, an agent shell command can reach any directory of the user.
 
@@ -286,7 +294,6 @@ These parts stay as they are: React, the visual design and CSS tokens, navigatio
 | Defect | Place | Fixed in step |
 |---|---|---|
 | Aether cancels each permission request, so a tool that needs a question fails. The queue replaces this. | `src/providers/acp/acp-agents.ts` | 6, story S5 |
-| A repository runs its hooks and MCP servers at session start, without a question. | `src/providers/acp/acp-agents.ts` | 6, story S6 |
 
 ## Open points
 

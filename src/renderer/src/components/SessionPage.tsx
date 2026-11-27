@@ -21,12 +21,15 @@ import { Transcript } from './Transcript'
 export function SessionPage({
   view,
   profileName,
+  asking,
   onModeSaved,
   onDelete
 }: {
   view: SessionSnapshot
   /** The name of the profile of the session, or null when the profile is not known. */
   profileName: string | null
+  /** True while a question waits for the user. The agent has not started, so the page does not say so. */
+  asking: boolean
   onModeSaved(): void
   onDelete(): void
 }) {
@@ -119,7 +122,7 @@ export function SessionPage({
       ) : (
         <Transcript entries={view.entries} />
       )}
-      {status === 'starting' && (
+      {status === 'starting' && !asking && (
         <p className="agent-status muted">
           <Loader size={16} className="spin" aria-hidden="true" />
           <span>Starting Claude Code</span>
