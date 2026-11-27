@@ -18,11 +18,11 @@ Subscription only, for personal use.
 
 - Aether never passes `--hide-claude-auth`. The launch recipe of Claude Code has no such argument.
 - A Claude account is signed in with the Claude subscription. The sign-in steps of the notice "Claude Code is not signed in." name that sign-in.
-- The risk of the terms of Anthropic is the risk of the user to judge. Aether does not ask for written approval from Anthropic.
+- The risk of the terms of Anthropic is the risk of the user to judge.
 - The repository may become private.
 
 ## Rejected
 
 - Keep the flag and use a Console account. It bills per use.
-- Remove the flag only after written approval from Anthropic. The user chose to judge the risk.
+- Remove the flag after written approval from Anthropic. The user chose to judge the risk.
 - Use a Claude Enterprise plan. The user chose the subscription.

@@ -26,9 +26,9 @@ const isUrlKind = (kind: string): boolean => (URL_KINDS as readonly string[]).in
  */
 export function unsupportedAttachment(attachments: readonly Attachment[]): string | null {
   for (const { kind, label } of attachments) {
-    if (kind === 'session') return `The session attachment "${label}" is coming soon. Remove it to start the session.`
+    if (kind === 'session') return `The session attachment "${label}" is coming soon. Aether cannot start a session with it.`
     if (!isFileKind(kind) && !isUrlKind(kind)) {
-      return `Aether cannot send the attachment "${label}": it does not know the kind "${kind}". Remove it to start the session.`
+      return `Aether cannot send the attachment "${label}": it does not know the kind "${kind}".`
     }
   }
   return null

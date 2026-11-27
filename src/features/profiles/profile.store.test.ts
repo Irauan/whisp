@@ -53,7 +53,7 @@ describe('ProfileStore.saveProvider', () => {
     const { database, store, ids } = setup()
     store.saveClaude('p1', { configFolder: null }, ids, '2026-01-01')
     expect(rows(database)).toEqual([])
-    store.saveClaude('p1', { configFolder: 'C:\claude' }, ids, '2026-01-01')
+    store.saveClaude('p1', { configFolder: 'C:\\claude' }, ids, '2026-01-01')
     store.saveClaude('p1', { configFolder: null }, ids, '2026-01-02')
     expect(rows(database)).toEqual([{ id: 'v1', profile_id: 'p1', kind: 'claude-code', settings: '{}' }])
   })
