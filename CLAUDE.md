@@ -8,7 +8,8 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 - Read [docs/architecture.md](docs/architecture.md) before you change code.
 - Read [docs/decisions/](docs/decisions/) before you touch an approved decision. Never change one alone.
 - Read [docs/models.md](docs/models.md) to choose a model and an effort.
-- Read [docs/milestones/](docs/milestones/) for the brief and the plan of the current milestone.
+- Read [docs/milestones/](docs/milestones/) for the brief, the plan and the story specs of the current milestone.
+- Read [docs/user-preferences.md](docs/user-preferences.md) before you decide or escalate a question.
 - State lives in files. Do not rely on the conversation of another session.
 
 ## Environment
@@ -35,10 +36,3 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 
 - The repository is public. Never write a token, a key or real account data in a file.
 - Use fake data in tests and examples.
-
-## Writing
-
-- Write in the active voice. Use the imperative for instructions.
-- Keep one topic in each sentence.
-- Keep each instruction to 20 words or fewer. Keep each description to 25 words or fewer.
-- Keep each paragraph to 6 sentences or fewer.
