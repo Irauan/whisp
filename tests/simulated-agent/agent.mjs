@@ -19,12 +19,16 @@
 //                   { type: 'message', message }                an ACP message from the client
 //                   { type: 'gate', name, state }               'waiting' or 'passed'
 //                   { type: 'exit', code }                      the agent ends on a scenario step
+//                   { type: 'child', pid, parent }              a step started a child process that
+//                                                               outlives the agent (step 'child')
 //                   { type: 'ack', id, error? }                 a command took effect
 //   test -> agent   { type: 'start', scenario, opened }         answer to hello. The agent
 //                                                               handles no ACP request before it.
 //                   { type: 'scenario', id, name, options }     choose the scenario
 //                   { type: 'open', id, gate }                  open a gate. It stays open.
+import { spawn } from 'node:child_process'
 import net from 'node:net'
+import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 import { agent, methods, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk'
 import { resolveScenario } from './scenarios.mjs'
@@ -173,11 +177,31 @@ async function runSteps(steps, { signal, sessionId, client }) {
         await report({ type: 'exit', code: step.code })
         process.exit(step.code)
         break
+      case 'child':
+        await startChild()
+        break
       default:
         throw new Error(`Unknown step "${step.do}".`)
     }
   }
   return 'end_turn'
+}
+
+/**
+ * Starts a child process that outlives the agent (`child.mjs`), as a background command of Claude
+ * can. It is detached, so it does not end when the agent ends: only a kill ends it. It takes the
+ * pipe name as its argument, so its command line names the pipe of the test. Reports its process
+ * ID and the process ID of the agent, its parent.
+ */
+async function startChild() {
+  const script = fileURLToPath(new URL('./child.mjs', import.meta.url))
+  const child = spawn(process.execPath, [script, pipeName], { detached: true, stdio: 'ignore', windowsHide: true })
+  await new Promise((resolve, reject) => {
+    child.once('spawn', resolve)
+    child.once('error', reject)
+  })
+  child.unref()
+  await report({ type: 'child', pid: child.pid, parent: process.pid })
 }
 
 // The ACP side.
@@ -301,4 +325,9 @@ const observed = {
 }
 
 const connection = app.connect(observed)
-void connection.closed.then(() => process.exit(0))
+// The client closed stdin. A scenario with `exitGate` waits at that gate first, so a test can act
+// while the agent ends. Nothing cancels this wait: only the gate or a kill ends it.
+void connection.closed.then(async () => {
+  if (scenario.exitGate) await waitAtGate(scenario.exitGate, new AbortController().signal)
+  process.exit(0)
+})

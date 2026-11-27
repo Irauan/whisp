@@ -2,8 +2,9 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPort } from '../../building-blocks/agent.port'
+import type { Clock } from '../../building-blocks/clock.port'
 import { err, ok } from '../../building-blocks/result'
 import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.port'
 import { ControlServer } from '../../../tests/simulated-agent/control'
@@ -11,7 +12,7 @@ import { AcpAgents } from '../../providers/acp/acp-agents'
 import { claudeCodeRecipe } from '../../providers/claude-code/claude-code'
 import type { ProjectScanner } from '../../building-blocks/project-scanner.port'
 import { contracts } from '../contracts'
-import { composeMain, DATABASE_FILE, type Composition } from './composition'
+import { composeMain, DATABASE_FILE, RETIRE_INTERVAL_MS, type Composition } from './composition'
 import { createInvoke } from './ipc'
 
 let dataDir: string
@@ -64,13 +65,14 @@ interface Event {
 const events = () => published.map((entry) => entry.payload as Event)
 const isIdle = (event: Event) => event.change.type === 'status' && event.change.status === 'idle'
 
-function start(agents: AgentPort = noAgents, scanner?: ProjectScanner) {
+function start(agents: AgentPort = noAgents, scanner?: ProjectScanner, clock?: Clock) {
   published = []
   const composed = composeMain({
     dataDir,
     github,
     agents,
     scanner,
+    clock,
     publish: (name, payload) => {
       published.push({ name, payload })
       wake?.()
@@ -285,7 +287,8 @@ describe('composeMain', () => {
       for (const composition of open) await composition.shutdown()
       await control.close()
     }
-  })
+    // Each close of a process lists its process tree first (S9-4), so this test, with its two closes, gets a longer limit.
+  }, 30_000)
 
   it('keeps the settings that a process started with: an edit of the account during the first start makes a new account, and the resume uses the old one (R2-1)', async () => {
     // A port whose processes wait for the test.
@@ -365,6 +368,85 @@ describe('composeMain', () => {
     await until(() => events().some(isIdle))
     await composition.shutdown()
   })
+
+  it('releases an idle process on the timer after 30 minutes of idle time, and stops the timer at the shutdown (S9, rule 1)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      let closed = 0
+      let starts = 0
+      const agents: AgentPort = {
+        start: () => {
+          starts += 1
+          return {
+            ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
+            prompt: async () => ok('end_turn' as const),
+            cancel: async () => undefined,
+            close: async () => void (closed += 1)
+          }
+        }
+      }
+      let time = new Date('2026-03-01T09:00:00.000Z').getTime()
+      const { composition, call } = start(agents, undefined, { now: () => new Date(time) })
+      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+      const [profile] = (await snapshotOf(call)).profiles
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+      expect(await call('sessions.send-message', { id: created.value.id, text: 'Say hello' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect(starts).toBe(1)
+
+      // A tick before the release time keeps the process. A tick after it closes the process.
+      time += 29 * 60_000
+      await vi.advanceTimersByTimeAsync(RETIRE_INTERVAL_MS)
+      expect(closed).toBe(0)
+      time += 60_000
+      await vi.advanceTimersByTimeAsync(RETIRE_INTERVAL_MS)
+      expect(closed).toBe(1)
+
+      // The shutdown stops the timer: no tick runs after it.
+      expect(vi.getTimerCount()).toBe(1)
+      await composition.shutdown()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes the processes of a removed profile together, not one by one (M1)', async () => {
+    let started = 0
+    let ended = 0
+    const finish: (() => void)[] = []
+    const agents: AgentPort = {
+      start: () => ({
+        ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
+        prompt: async () => ok('end_turn' as const),
+        cancel: async () => undefined,
+        close: () =>
+          new Promise<void>((resolve) => {
+            started += 1
+            finish.push(() => {
+              ended += 1
+              resolve()
+            })
+          })
+      })
+    }
+    const { call } = start(agents)
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+    const [profile] = (await snapshotOf(call)).profiles
+    for (let n = 1; n <= 3; n += 1) {
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: `s${n}`, mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+      published = []
+      expect(await call('sessions.send-message', { id: created.value.id, text: `s${n}` })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+    }
+
+    const removing = call('profiles.remove', { id: profile!.id })
+    // Every close has started, and none has ended: the closes run together.
+    for (let turn = 0; turn < 100 && started < 3; turn += 1) await Promise.resolve()
+    expect({ started, ended }).toEqual({ started: 3, ended: 0 })
+    for (const end of finish.splice(0)) end()
+    expect(await removing).toEqual({ ok: true, value: {} })
+  }, 30_000)
 
   it('keeps an unreadable workspace.json in place, shows a notice and imports nothing', async () => {
     const unreadable = Buffer.from('{"version":4,"accounts":[{"id":"personal","label":"Personal"\r\n')

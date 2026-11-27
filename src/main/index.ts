@@ -117,7 +117,10 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
 // Before Aether quits, end the agent processes: cancel, close, and kill the process trees after a limit.
 // The quit goes on when they are gone, or when the limit of the whole wait passes: one hang must not
 // keep Aether open for ever. Each change is one transaction, so no save is in progress at the exit.
-// The limit is larger than the longest end of a process: its close limits add up to about 11 seconds.
+// The limit is larger than the longest end of a process. Each step of a close has its own limit (see
+// `shutdown` in `acp-agents.ts`): the list of the process tree 5 s, the close of the session 3 s, the end
+// after stdin 3 s, `taskkill` 5 s, the end after the kill 3 s, the kill of the survivors 5 s. That is 24 s,
+// and the turn that waits for the exit adds 2 s. The closes of all processes run together.
 const QUIT_LIMIT_MS = 30_000
 let quitting = false
 app.on('before-quit', (event) => {

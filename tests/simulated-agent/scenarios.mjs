@@ -2,7 +2,9 @@
 //
 // A scenario is plain data: two lists of steps. The agent runs `initialize` when a client
 // sends `initialize`, and `prompt` when a client sends `session/prompt`. A scenario can also give
-// `noAuto`: the models that cannot use the permission mode `auto` (see the scenario `no-auto`).
+// `noAuto`: the models that cannot use the permission mode `auto` (see the scenario `no-auto`), and
+// `exitGate`: a gate that the agent waits at after the client closes its stdin, before it ends
+// (see the scenario `slow-exit`).
 //
 //   { do: 'gate', name }                          wait until the test opens the gate `name`
 //   { do: 'say', text }                           stream a chunk of the reply
@@ -12,6 +14,8 @@
 //   { do: 'log', text }                           write a line to the log of the agent (stderr)
 //   { do: 'fail', code, message }                 answer the request with a JSON-RPC error
 //   { do: 'exit', code }                          end the agent process
+//   { do: 'child' }                               start a child process that outlives the agent, and
+//                                                 report its process ID (see the scenario `child-process`)
 //
 // To add a scenario, add a function to `scenarios`. It takes the options that the test sends
 // and returns `{ initialize, prompt }`. Add a step kind in `agent.mjs` only when no step fits.
@@ -60,11 +64,28 @@ export const scenarios = {
     return { initialize: [], prompt: chunks.map(say), noAuto: [...models] }
   },
 
+  // Added for story S9 of milestone m1-chat (idle release).
+  // Starts a child process that outlives the agent, then streams a reply, as `text` does. The child
+  // is detached: when the agent ends, the child still runs, until a kill. The agent reports the
+  // process ID of the child and its own on the control pipe (`waitForChild` of `control.ts`).
+  'child-process': ({ chunks = ['Hel', 'lo'] } = {}) => ({
+    initialize: [],
+    prompt: [{ do: 'child' }, ...chunks.map(say)]
+  }),
+
+  // Streams a reply, as `text` does. When the client closes the stdin of the agent, the agent waits
+  // at the gate `gate` before it ends. So a test can act while a process closes.
+  'slow-exit': ({ gate = 'exit', chunks = ['Hel', 'lo'] } = {}) => ({
+    initialize: [],
+    prompt: chunks.map(say),
+    exitGate: gate
+  }),
+
   // Takes the steps from the options. Use it for a scenario that no test shares.
   steps: ({ initialize = [], prompt = [] } = {}) => ({ initialize, prompt })
 }
 
-/** Returns `{ initialize, prompt }`, and `noAuto` when the scenario has it, for a scenario name and its options. */
+/** Returns `{ initialize, prompt }`, and `noAuto` and `exitGate` when the scenario has them, for a scenario name and its options. */
 export function resolveScenario(name, options = {}) {
   const build = Object.hasOwn(scenarios, name) ? scenarios[name] : undefined
   if (!build) throw new Error(`Unknown scenario "${name}". Known: ${Object.keys(scenarios).join(', ')}.`)

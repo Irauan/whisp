@@ -36,8 +36,10 @@ import { QUESTIONS_CHANGED } from '../../features/repositories/question'
 import { Questions } from '../../features/repositories/questions.store'
 import { TrustStore } from '../../features/repositories/trust.store'
 import { SESSIONS_CHANGED } from '../../features/sessions/entry'
+import { RELEASE_LIMITS } from '../../features/sessions/idle-release'
 import { Processes } from '../../features/sessions/processes.store'
 import { recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
+import { retireIdleHandler } from '../../features/sessions/retire-idle/retire-idle.handler'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import { sendMessageController } from '../../features/sessions/send-message/send-message.controller'
 import { SessionStore } from '../../features/sessions/session.store'
@@ -63,6 +65,9 @@ export const DATABASE_FILE = 'aether.db'
 
 /** The old file that the import reads. Aether never writes it. */
 export const OLD_WORKSPACE_FILE = 'workspace.json'
+
+/** How often the release of idle agent processes runs (decision 0006, spec S9, rule 1). */
+export const RETIRE_INTERVAL_MS = 30_000
 
 export interface Composition {
   /** The controller of each contract in the registry, by contract name. */
@@ -155,6 +160,18 @@ export function composeMain({
     transcript.forget(sessionId)
     await processes.release(sessionId)
   }
+  // The release of idle agent processes (decision 0006). A timer runs it for rule 1, and the end of
+  // each turn for rule 2. It never rejects. A tick after the shutdown does nothing.
+  let stopped = false
+  const retireIdle = () => {
+    if (!stopped) void retireIdleHandler({ store: sessionStore, transcript, processes, clock, limits: RELEASE_LIMITS, log })
+  }
+  const retireTimer = setInterval(retireIdle, RETIRE_INTERVAL_MS)
+  retireTimer.unref()
+  const stopRetiring = () => {
+    stopped = true
+    clearInterval(retireTimer)
+  }
   const stop = stopSessionController({ store: sessionStore, transcript, processes })
   const removeProfile = removeProfileController(database)
 
@@ -168,13 +185,14 @@ export function composeMain({
       [switchProfile.name]: switchProfileController(database),
       // Removing a profile removes its sessions. Their agent processes end first.
       [removeProfileContract.name]: async (input: { id: string }) => {
-        for (const sessionId of sessionStore.idsByProfile(input.id)) await release(sessionId)
+        // The closes run together: each one lists its process tree, so one by one the wait would add up.
+        await Promise.all(sessionStore.idsByProfile(input.id).map(release))
         return removeProfile(input)
       },
       [listSessions.name]: listSessionsController(database),
       [createSession.name]: createSessionController(database, clock, ids),
       [openSession.name]: openSessionController(database, transcript),
-      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, guard, clock, ids, log }),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, guard, turnEnded: retireIdle, clock, ids, log }),
       // Stop also answers "cancel" for the open question of the session. The turn then ends with "Stopped.".
       [stopSession.name]: async (input: { id: string }) => {
         const result = await stop(input)
@@ -189,10 +207,15 @@ export function composeMain({
     },
     notices,
     shutdown: () => {
+      // The timer stops first: no release runs while the processes end, or after the database closes.
+      stopRetiring()
       // A turn that waits for an answer never ends by itself. Answer "cancel" first, or the quit waits for ever.
       questions.cancelAll()
       return processes.releaseAll()
     },
-    close: () => database.close()
+    close: () => {
+      stopRetiring()
+      database.close()
+    }
   })
 }

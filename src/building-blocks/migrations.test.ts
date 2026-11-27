@@ -13,7 +13,8 @@ import { MIGRATIONS, orderMigrations } from './migrations'
 const HASHES: Record<number, string> = {
   1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708',
   2: 'bacb2a45fb0a1f4d5f0acf8e4ea0adbffd92344c26d266c935cf74e1e8b643ce',
-  3: 'a283f8e1ea5bd771eae404bc687f4d0c7338d99a38eb812d70d66955d4101e15'
+  3: 'a283f8e1ea5bd771eae404bc687f4d0c7338d99a38eb812d70d66955d4101e15',
+  4: '014b8186c16d97ad0d31d8aa5047d9cf103c800a757943f4f20aa0709fd9074b'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -99,7 +100,7 @@ describe('the migrations of the product', () => {
       .run()
     // The snapshot columns of the first draft of version 2 do not exist.
     expect(Object.keys(database.prepare('SELECT * FROM sessions').get() ?? {}).sort()).toEqual(
-      ['attachments', 'created_at', 'id', 'mode', 'model', 'profile_id', 'prompt', 'provider_id', 'source_path', 'title'].sort()
+      ['attachments', 'created_at', 'id', 'mode', 'model', 'profile_id', 'prompt', 'provider_id', 'source_path', 'started_by', 'title'].sort()
     )
 
     const insertRun = database.prepare(
@@ -207,7 +208,7 @@ describe('the migrations of the product', () => {
       first.value.database.prepare("INSERT INTO profiles (id, name, created_at) VALUES ('p1', 'Personal', '2026-01-01')").run()
       first.value.database.close()
 
-      const second = openDatabase(path, MIGRATIONS)
+      const second = openDatabase(path, MIGRATIONS.slice(0, 3))
       if (!second.ok) throw new Error(second.error.message)
       const { database } = second.value
       expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
@@ -220,6 +221,38 @@ describe('the migrations of the product', () => {
       database.prepare("DELETE FROM profiles WHERE id = 'p1'").run()
       expect(database.prepare('SELECT count(*) AS total FROM trusted_repositories').get()).toEqual({ total: 0 })
       expect(database.prepare('SELECT count(*) AS total FROM allowed_directories').get()).toEqual({ total: 0 })
+      database.close()
+    } finally {
+      await rm(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('version 4 gives each earlier session the starter `person`, and a new row too', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'aether-migration-'))
+    try {
+      const path = join(folder, 'aether.db')
+      const first = openDatabase(path, MIGRATIONS.slice(0, 3))
+      if (!first.ok) throw new Error(first.error.message)
+      first.value.database.prepare("INSERT INTO profiles (id, name, created_at) VALUES ('p1', 'Personal', '2026-01-01')").run()
+      first.value.database
+        .prepare("INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, created_at) VALUES ('s1', 'p1', 't', 'p', 'ask', 'f', 'default', '2026-01-02')")
+        .run()
+      first.value.database.close()
+
+      const second = openDatabase(path, MIGRATIONS)
+      if (!second.ok) throw new Error(second.error.message)
+      const { database } = second.value
+      expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 })
+      database
+        .prepare("INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, created_at) VALUES ('s2', 'p1', 't', 'p', 'ask', 'f', 'default', '2026-01-03')")
+        .run()
+      expect(database.prepare('SELECT id, started_by FROM sessions ORDER BY id').all()).toEqual([
+        { id: 's1', started_by: 'person' },
+        { id: 's2', started_by: 'person' }
+      ])
+      // No CHECK lists the values: the code validates them (user preference 5).
+      database.prepare("UPDATE sessions SET started_by = 'automation' WHERE id = 's2'").run()
+      expect(database.prepare("SELECT started_by FROM sessions WHERE id = 's2'").get()).toEqual({ started_by: 'automation' })
       database.close()
     } finally {
       await rm(folder, { recursive: true, force: true })
