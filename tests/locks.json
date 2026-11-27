@@ -8,7 +8,7 @@
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/github-accounts.spec.ts": {
-    "sha256": "64f41567ce44ff473fd51be0c8a3b936d0089a093e7bbe460e2e2238f3d4e935",
+    "sha256": "981ec5fa6e85c4d9e6e6faa50be78c2238d2d9b95f5e7feb119d15ad39d6cdb6",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/invoke-guard.spec.ts": {
@@ -20,15 +20,15 @@
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s1/fixture.ts": {
-    "sha256": "b33700c704de4bce3d14de511fa1a082c1132a8e2adea8a8f2e04e1d3259d423",
+    "sha256": "40bcda97402cfb3003c97e02294713b327765b88d1bd85fc4f9820cbe9a12f43",
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
-    "sha256": "d158031b7d329e58a863a1731abb1432ab6daab08eaf22adf726b1a5bccaf8fb",
+    "sha256": "53a31d221ee73aa4f7d6f4aca983061a199352a84da777fa2ac589cec4f90d28",
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s2/import.spec.ts": {
-    "sha256": "d83b23a6ecb9f4ccfb3f8cabbfc07e3b506b12fe14f958a596f93af24d9d6165",
+    "sha256": "ce9a9c1a5ffc78cbe5f0bb6093366977b1099cef148c78d3cf0c03d75eb65222",
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s2/unreadable-files.spec.ts": {

@@ -9,15 +9,18 @@
 //   stops. It reads a copy, so the read cannot change the file of the app.
 //
 // The UI that these tests expect (S2 test contract):
-// - The import dialog: role `dialog`, name "Choose workspace roots". It has one text field per
-//   imported workspace, named "Root of <workspace name>", and a button "Save roots".
-// - The workspace menu: the switcher button shows the name of the current workspace. Its menu
-//   is a `group` named "Workspaces", with one button per workspace, named by the workspace.
-// - The workspace settings: the menu has a button "Workspace settings". It opens a `dialog`
-//   named "Workspace settings" for the current workspace. The dialog has a text field "Name"
-//   with the name of the workspace, a text field "Root" with its root, the GitHub account of
-//   the workspace as the text "@<login>", a button "Save" that saves and closes it, and a
-//   button "Cancel" that closes it.
+// Terms (user decision, 2026-11-26): each old account becomes a profile. The workspace directory
+// of a profile is the folder that holds its repositories.
+// - The import dialog: role `dialog`, name "Choose workspace directories". It has one text
+//   field per imported profile, named "Workspace directory of <profile name>", and a button
+//   "Save directories".
+// - The profile menu: the switcher button shows the name of the current profile. Its menu is a
+//   `group` named "Profiles", with one button per profile, named by the profile.
+// - The profile settings: the menu has a button "Profile settings". It opens a `dialog` named
+//   "Profile settings" for the current profile. The dialog has a text field "Name" with the
+//   name of the profile, a text field "Workspace directory" with its workspace directory, the
+//   GitHub account of the profile as the text "@<login>", a button "Save" that saves and
+//   closes it, and a button "Cancel" that closes it.
 // - The messages of A18: an element with role `alert`.
 import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -34,9 +37,9 @@ export const DATABASE = 'aether.db'
 export const MODES = ['ask', 'accept-edits', 'plan', 'auto', 'approve-all'] as const
 export type Mode = (typeof MODES)[number]
 
-export const ROOT_DIALOG = 'Choose workspace roots'
-export const SAVE_ROOTS = 'Save roots'
-export const rootField = (workspace: string) => `Root of ${workspace}`
+export const DIRECTORY_DIALOG = 'Choose workspace directories'
+export const SAVE_DIRECTORIES = 'Save directories'
+export const directoryField = (profile: string) => `Workspace directory of ${profile}`
 
 /** The real data folder of the person who runs the test. The tests must not touch it. */
 function realDataDir(): string {
@@ -302,17 +305,21 @@ export const test = base.extend<{ aether: AetherApp }>({
 })
 
 /**
- * Answers the import dialog of flow 1: one root for each workspace, then "Save roots".
+ * Answers the import dialog of flow 1: one workspace directory for each profile, then
+ * "Save directories".
  * The dialog must show. A wait "if it shows" would race with the start of the app.
  */
-export async function answerRootDialog(page: Page, roots: Record<string, string>): Promise<void> {
-  const dialog = page.getByRole('dialog', { name: ROOT_DIALOG })
-  await expect(dialog, `A17 (flow 1): no dialog "${ROOT_DIALOG}" asks for the root of each workspace.`).toBeVisible()
-  for (const [workspace, path] of Object.entries(roots)) {
-    await dialog.getByRole('textbox', { name: rootField(workspace), exact: true }).fill(path)
+export async function answerDirectoryDialog(page: Page, directories: Record<string, string>): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: DIRECTORY_DIALOG })
+  await expect(
+    dialog,
+    `A17 (flow 1): no dialog "${DIRECTORY_DIALOG}" asks for the workspace directory of each profile.`
+  ).toBeVisible()
+  for (const [profile, path] of Object.entries(directories)) {
+    await dialog.getByRole('textbox', { name: directoryField(profile), exact: true }).fill(path)
   }
-  await dialog.getByRole('button', { name: SAVE_ROOTS, exact: true }).click()
-  await expect(dialog, `The dialog "${ROOT_DIALOG}" stays open after "${SAVE_ROOTS}".`).toBeHidden()
+  await dialog.getByRole('button', { name: SAVE_DIRECTORIES, exact: true }).click()
+  await expect(dialog, `The dialog "${DIRECTORY_DIALOG}" stays open after "${SAVE_DIRECTORIES}".`).toBeHidden()
 }
 
 export { expect }
