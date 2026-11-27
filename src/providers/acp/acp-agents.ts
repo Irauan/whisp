@@ -1,5 +1,6 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { Readable, Writable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import {
   client,
   methods,
@@ -7,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   RequestError,
   type ClientConnection,
+  type ContentBlock,
   type InitializeResponse,
   type SessionUpdate
 } from '@agentclientprotocol/sdk'
@@ -18,11 +20,13 @@ import type {
   AgentStartInput,
   AgentUpdate,
   PromptErrorCode,
+  PromptLink,
   StartErrorCode,
   Started,
   StopReason,
   ToolStatus
 } from '../../building-blocks/agent.port'
+import type { Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
 import type { AcpRecipe } from './recipe'
 
@@ -70,8 +74,12 @@ function textOf(content: unknown): string | null {
 }
 
 /** Turns a `session/update` of ACP into an update of the port. An update that Aether does not show gives null. */
-export function translateUpdate(update: SessionUpdate): AgentUpdate | null {
+export function translateUpdate(update: SessionUpdate, modeOf: (id: string) => Mode | null = () => null): AgentUpdate | null {
   switch (update.sessionUpdate) {
+    case 'current_mode_update': {
+      const mode = modeOf(update.currentModeId)
+      return mode === null ? null : { type: 'mode', mode }
+    }
     case 'agent_message_chunk': {
       const text = textOf(update.content)
       return text === null ? null : { type: 'text', text }
@@ -263,7 +271,7 @@ class AcpProcess implements AgentProcess {
         this.connection = client({ name: 'Aether' })
           .onNotification(methods.client.session.update, ({ params }) => {
             if (params.sessionId !== this.sessionId) return
-            const update = translateUpdate(params.update)
+            const update = translateUpdate(params.update, (id) => this.options.recipe.modeOf(id))
             if (update) this.listener.update(update)
           })
           // Story S5 builds the permission queue. Until then no request is allowed.
@@ -341,17 +349,18 @@ class AcpProcess implements AgentProcess {
     return ok(true)
   }
 
-  async prompt(text: string): Promise<Result<StopReason, PromptErrorCode>> {
+  async prompt(text: string, links: readonly PromptLink[] = []): Promise<Result<StopReason, PromptErrorCode>> {
     const ready = await this.ready
     if (!ready.ok) return err(ready.error.code === 'not-signed-in' ? 'not-signed-in' : 'failed', ready.error.message)
     const sessionId = this.sessionId
     if (sessionId === null) return err('failed', `${this.name} has no session.`)
     this.turnActive = true
     try {
-      const response = await this.context.request(methods.agent.session.prompt, {
-        sessionId,
-        prompt: [{ type: 'text', text }]
-      })
+      const prompt: ContentBlock[] = [
+        { type: 'text', text },
+        ...links.map(({ path, name }): ContentBlock => ({ type: 'resource_link', uri: pathToFileURL(path).href, name }))
+      ]
+      const response = await this.context.request(methods.agent.session.prompt, { sessionId, prompt })
       return ok(response.stopReason)
     } catch (error) {
       if (error instanceof RequestError) {

@@ -24,7 +24,6 @@ export const NAME_LIMIT = 40
 export const profileNameSchema = z.string().trim().min(1).max(NAME_LIMIT)
 export const workspaceDirectorySchema = z.string().trim().min(1).max(1024)
 export const claudeFolderSchema = z.string().trim().min(1).max(1024).nullable()
-export const claudeProfileNameSchema = z.string().trim().min(1).max(100).nullable()
 
 /**
  * One profile: one usage, with its own workspace directory and GitHub account (decisions 0004 and
@@ -38,8 +37,6 @@ export interface Profile {
   github: GithubAccount | null
   /** The Claude configuration folder (`CLAUDE_CONFIG_DIR`) of the provider `claude-code`. */
   claudeFolder: string | null
-  /** The Claude profile name (`ANTHROPIC_PROFILE`) of the provider `claude-code`. */
-  claudeProfileName: string | null
   createdAt: string
 }
 
@@ -49,14 +46,13 @@ export const profileViewSchema = z.strictObject({
   name: z.string(),
   workspaceDirectory: z.string().nullable(),
   github: githubAccountSchema.nullable(),
-  claudeFolder: z.string().nullable(),
-  claudeProfileName: z.string().nullable()
+  claudeFolder: z.string().nullable()
 })
 
 export type ProfileView = z.output<typeof profileViewSchema>
 
-export function viewOf({ id, name, workspaceDirectory, github, claudeFolder, claudeProfileName }: Profile): ProfileView {
-  return { id, name, workspaceDirectory, github, claudeFolder, claudeProfileName }
+export function viewOf({ id, name, workspaceDirectory, github, claudeFolder }: Profile): ProfileView {
+  return { id, name, workspaceDirectory, github, claudeFolder }
 }
 
 /** A message for the user about the start of Aether: a file that Aether could not read. */

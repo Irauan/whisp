@@ -420,6 +420,83 @@ describe('simulated agent', () => {
     })
   })
 
+  // Added for story S7 of milestone m1-chat: the arguments in the start report, the capability
+  // `additionalDirectories`, and the scenario `no-auto` (a model that cannot use the mode auto).
+  describe('arguments, directories and the auto fallback', () => {
+    const modeUpdates = (agent: Harness) => agent.updates.filter((update) => update.sessionUpdate === 'current_mode_update')
+
+    it('reports the arguments after its script: the pipe name, then each argument that the client added', async () => {
+      const { command, args } = control.agent
+      const child = spawn(command, [...args, '--extra-flag'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+      try {
+        const start = await control.waitForEnvironment()
+        expect(start.pid).toBe(child.pid)
+        expect(start.args).toEqual([control.pipeName, '--extra-flag'])
+      } finally {
+        child.kill()
+      }
+      startAgent()
+      expect((await control.waitForEnvironment()).args).toEqual([control.pipeName])
+    })
+
+    it('advertises additionalDirectories, as Claude Code does', async () => {
+      const agent = startAgent()
+      expect(await agent.initialize()).toMatchObject({ agentCapabilities: { sessionCapabilities: { resume: {}, additionalDirectories: {} } } })
+    })
+
+    it('falls back to acceptEdits and sends current_mode_update when the model of the session cannot use auto', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      // The mode first, then the model: auto holds until the model changes.
+      await agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId: 'auto' })
+      expect(modeUpdates(agent)).toEqual([])
+      await agent.connection.agent.request(methods.agent.session.setConfigOption, { sessionId, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(agent)).toEqual([{ sessionUpdate: 'current_mode_update', currentModeId: 'acceptEdits' }])
+      const resumed = await agent.connection.agent.request(methods.agent.session.resume, { sessionId, cwd: process.cwd(), mcpServers: [] })
+      expect(resumed.modes?.currentModeId).toBe('acceptEdits')
+      expect(await agent.prompt(sessionId)).toEqual({ stopReason: 'end_turn' })
+      expect(texts(agent.updates)).toEqual(['Hel', 'lo'])
+    })
+
+    it('also falls back when the model comes first and the mode auto follows', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      await agent.connection.agent.request(methods.agent.session.setConfigOption, { sessionId, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(agent)).toEqual([])
+      await agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId: 'auto' })
+      expect(modeUpdates(agent)).toEqual([{ sessionUpdate: 'current_mode_update', currentModeId: 'acceptEdits' }])
+    })
+
+    it('keeps auto for a model that can use it, and in every other scenario', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const first = startAgent()
+      await first.initialize()
+      const kept = await first.newSession()
+      await first.connection.agent.request(methods.agent.session.setMode, { sessionId: kept, modeId: 'auto' })
+      await first.connection.agent.request(methods.agent.session.setConfigOption, { sessionId: kept, configId: 'model', value: 'claude-opus-5-5' })
+      expect(modeUpdates(first)).toEqual([])
+      const resumed = await first.connection.agent.request(methods.agent.session.resume, { sessionId: kept, cwd: process.cwd(), mcpServers: [] })
+      expect(resumed.modes?.currentModeId).toBe('auto')
+
+      await control.scenario('text')
+      const second = startAgent()
+      await second.initialize()
+      const other = await second.newSession()
+      await second.connection.agent.request(methods.agent.session.setMode, { sessionId: other, modeId: 'auto' })
+      await second.connection.agent.request(methods.agent.session.setConfigOption, { sessionId: other, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(second)).toEqual([])
+    })
+
+    it('refuses the scenario no-auto without models, in the test', async () => {
+      await expect(control.scenario('no-auto')).rejects.toThrow('needs `models`')
+      await expect(control.scenario('no-auto', { models: [] })).rejects.toThrow('needs `models`')
+    })
+  })
+
   describe('control channel', () => {
     it('changes the scenario of a running agent for the next prompt', async () => {
       await control.scenario('text')

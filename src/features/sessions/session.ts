@@ -11,6 +11,35 @@ export const attachmentSchema = z.strictObject({
 
 export type Attachment = z.output<typeof attachmentSchema>
 
+/** The attachment kinds that become a link to a file or a folder in the first message. */
+export const FILE_KINDS = ['file', 'folder', 'repository-file', 'repository-folder'] as const
+
+/** The attachment kinds that give a URL, which the first message holds as text. */
+export const URL_KINDS = ['issue', 'pull-request'] as const
+
+const isFileKind = (kind: string): boolean => (FILE_KINDS as readonly string[]).includes(kind)
+const isUrlKind = (kind: string): boolean => (URL_KINDS as readonly string[]).includes(kind)
+
+/**
+ * The reason that Aether cannot send the attachments, or null when it can. The first attachment
+ * that fails gives the reason: a kind that Aether does not know, or a session (coming soon).
+ */
+export function unsupportedAttachment(attachments: readonly Attachment[]): string | null {
+  for (const { kind, label } of attachments) {
+    if (kind === 'session') return `The session attachment "${label}" is coming soon. Aether cannot start a session with it.`
+    if (!isFileKind(kind) && !isUrlKind(kind)) {
+      return `Aether cannot send the attachment "${label}": it does not know the kind "${kind}".`
+    }
+  }
+  return null
+}
+
+/** The text of the first message for the agent: the text of the user, then the URL of each issue and pull request. */
+export function textForAgent(text: string, attachments: readonly Attachment[]): string {
+  const urls = attachments.filter(({ kind }) => isUrlKind(kind)).map(({ ref }) => ref)
+  return urls.length === 0 ? text : `${text}\n\nReferences:\n${urls.join('\n')}`
+}
+
 /**
  * One session of a profile. In this version a session is a draft: the import of the old
  * `workspace.json` or the user creates it, and the prompt waits in the composer. A later story

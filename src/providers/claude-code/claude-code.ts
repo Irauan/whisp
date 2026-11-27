@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
-import type { Mode } from '../../building-blocks/mode'
+import { MODES, type Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
 import type { AcpRecipe, Launch } from '../acp/recipe'
 
@@ -16,11 +16,11 @@ export const CLAUDE_MODES: Record<Mode, string> = {
 
 /**
  * The settings of the provider `claude-code`, as the session saved them: the Claude configuration
- * folder and the Claude profile name. A setting that the user did not choose is absent.
+ * folder. A Claude account is only its folder (user decision, 2026-11-27). A setting that the user
+ * did not choose is absent. A key of an earlier version, such as `profileName`, is dropped.
  */
 const settingsSchema = z.object({
-  configFolder: z.string().min(1).optional(),
-  profileName: z.string().min(1).optional()
+  configFolder: z.string().min(1).optional()
 })
 
 type ClaudeSettings = z.output<typeof settingsSchema>
@@ -44,9 +44,8 @@ export interface ClaudeCodeOptions {
 const require = createRequire(__filename)
 
 /**
- * The adapter that Aether ships with. It runs the Claude Code that comes with it.
- * `--hide-claude-auth` keeps Aether off claude.ai subscriptions: Anthropic does not allow other
- * products to use them. Claude Code then runs on an Anthropic Console sign-in.
+ * The adapter that Aether ships with. It runs the Claude Code that comes with it. Aether uses the
+ * Claude subscription of the user and never passes `--hide-claude-auth` (decision 0011).
  */
 function builtIn(): Result<Pick<Launch, 'command' | 'args'>> {
   let script: string
@@ -56,7 +55,7 @@ function builtIn(): Result<Pick<Launch, 'command' | 'args'>> {
     return err('adapter-missing', 'The Claude Code adapter is not installed.')
   }
   // Electron runs the adapter as plain Node (see ELECTRON_RUN_AS_NODE below), so the user needs no Node install.
-  return ok({ command: process.execPath, args: [script, '--hide-claude-auth'] })
+  return ok({ command: process.execPath, args: [script] })
 }
 
 function parseSettings(settings: Readonly<Record<string, unknown>>): Result<ClaudeSettings> {
@@ -65,24 +64,20 @@ function parseSettings(settings: Readonly<Record<string, unknown>>): Result<Clau
 }
 
 /** The variables that the Claude settings give. */
-function claudeEnvironment({ configFolder, profileName }: ClaudeSettings): Record<string, string> {
-  return {
-    ...(configFolder === undefined ? {} : { CLAUDE_CONFIG_DIR: configFolder }),
-    ...(profileName === undefined ? {} : { ANTHROPIC_PROFILE: profileName })
-  }
+function claudeEnvironment({ configFolder }: ClaudeSettings): Record<string, string> {
+  return configFolder === undefined ? {} : { CLAUDE_CONFIG_DIR: configFolder }
 }
 
 /** The sign-in steps for the Claude settings of a session. */
 export function signInSteps(settings: Readonly<Record<string, unknown>>): string {
   const parsed = settingsSchema.safeParse(settings)
-  const { configFolder, profileName } = parsed.success ? parsed.data : {}
+  const { configFolder } = parsed.success ? parsed.data : {}
   const steps = [
     'Claude Code is not signed in.',
-    'Sign in with an Anthropic Console account.',
+    'Sign in with your Claude subscription.',
     'Open a terminal.',
     ...(configFolder === undefined ? [] : [`Set CLAUDE_CONFIG_DIR to ${configFolder}.`]),
-    ...(profileName === undefined ? [] : [`Set ANTHROPIC_PROFILE to ${profileName}.`]),
-    'Run `npx @agentclientprotocol/claude-agent-acp --cli auth login --console`.',
+    'Run `npx @agentclientprotocol/claude-agent-acp --cli auth login --claudeai`.',
     'Then send your message again.'
   ]
   return steps.join(' ')
@@ -107,6 +102,7 @@ export function claudeCodeRecipe(options: ClaudeCodeOptions = {}): AcpRecipe {
       })
     },
     modeId: (mode) => CLAUDE_MODES[mode],
+    modeOf: (id) => MODES.find((mode) => CLAUDE_MODES[mode] === id) ?? null,
     notSignedIn: signInSteps
   }
 }

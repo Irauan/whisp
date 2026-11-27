@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { AgentUpdate } from '../../building-blocks/agent.port'
+import { MODE_LABELS, type Mode } from '../../building-blocks/mode'
 
 /** The states of a tool call (ACP names them the same way). */
 export const TOOL_STATUSES = ['pending', 'in_progress', 'completed', 'failed'] as const
@@ -116,6 +117,21 @@ export function noticeOfStop(reason: string): Extract<Entry, { kind: 'notice' }>
       return { kind: 'notice', tone: 'error', text: 'The agent declined this request.', code: 'refusal' }
     default:
       return null
+  }
+}
+
+/**
+ * The notice for a mode that the agent uses and Aether did not ask for. Only the fallback that
+ * Claude Code makes has one: a model that cannot use Auto makes Claude use Accept edits (decision
+ * 0012, item 2). No other change of the mode gives a notice. The result is null then.
+ */
+export function noticeOfModeChange(asked: Mode, reported: Mode): Extract<Entry, { kind: 'notice' }> | null {
+  if (asked !== 'auto' || reported !== 'accept-edits') return null
+  return {
+    kind: 'notice',
+    tone: 'info',
+    text: `${MODE_LABELS.auto} is not available for this model. Claude uses ${MODE_LABELS['accept-edits']}.`,
+    code: 'auto-fallback'
   }
 }
 

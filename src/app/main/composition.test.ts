@@ -182,13 +182,13 @@ describe('composeMain', () => {
     const { call } = start()
     const { profiles } = await snapshotOf(call)
     const [personal, client] = profiles
-    const added = (await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })) as {
+    const added = (await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })) as {
       value: { id: string }
     }
 
     for (const [name, input] of [
       ['profiles.choose-directories', { directories: [{ profileId: personal!.id, workspaceDirectory: rootDir }, { profileId: client!.id, workspaceDirectory: rootDir }] }],
-      ['profiles.edit', { id: client!.id, name: 'Renamed', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: 'work' }],
+      ['profiles.edit', { id: client!.id, name: 'Renamed', workspaceDirectory: rootDir, github: null, claudeFolder: null }],
       ['profiles.switch', { id: personal!.id }],
       ['profiles.remove', { id: added.value.id }],
       ['profiles.remove', { id: client!.id }]
@@ -237,7 +237,7 @@ describe('composeMain', () => {
       await control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
       const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => ({ ...process.env, ANTHROPIC_API_KEY: 'x' }) })
       const first = start(agents)
-      const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null, claudeProfileName: null })) as { ok: true }
+      const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null })) as { ok: true }
       expect(added.ok).toBe(true)
       const [profile] = (await snapshotOf(first.call)).profiles
       const created = (await first.call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'plan', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
@@ -324,7 +324,7 @@ describe('composeMain', () => {
 
     const { composition, call } = start(agents)
     const folders = { f1: join(rootDir, 'claude-f1'), f3: join(rootDir, 'claude-f3') }
-    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1, claudeProfileName: null })
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1 })
     const [profile] = (await snapshotOf(call)).profiles
     const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
     const id = created.value.id
@@ -334,7 +334,7 @@ describe('composeMain', () => {
     await started(1)
     expect(fakes[0]!.input.settings).toEqual({ configFolder: folders.f1 })
     // The user edits the Claude folder of the profile in this time.
-    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3, claudeProfileName: null })).toMatchObject({ ok: true })
+    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3 })).toMatchObject({ ok: true })
     fakes[0]!.ready('agent-1')
     await until(() => events().some(isIdle))
 
@@ -424,7 +424,7 @@ describe('composeMain', () => {
       const repository = join(rootDir, 'repo-b')
       await mkdir(join(repository, '.git'), { recursive: true })
       const composed = start(port, scanner)
-      await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
+      await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
       const [profile] = (await snapshotOf(composed.call)).profiles
       const create = async (prompt: string) => {
         const created = (await composed.call('sessions.create', { profileId: profile!.id, prompt, mode: 'ask', model: 'default', sourcePath: repository, attachments: [] })) as { ok: true; value: { id: string } }
@@ -514,7 +514,7 @@ describe('composeMain', () => {
       await writeFile(join(plain, '.claude', 'settings.local.json'), '{}')
       // No scanner is passed: the composition uses the default one, as the app does.
       const { call, composition } = start(port)
-      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
+      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
       const [profile] = (await snapshotOf(call)).profiles
       const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Sort the notes', mode: 'ask', model: 'default', sourcePath: plain, attachments: [] })) as { ok: true; value: { id: string } }
       await call('sessions.send-message', { id: created.value.id, text: 'Sort the notes' })
@@ -580,6 +580,84 @@ describe('composeMain', () => {
           })
         })
         expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        for (let wait = 0; wait < 30 && !ended; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(ended).toBe(true)
+      })
+    })
+
+    describe('a stop, a delete or a quit during the gate of the main folder, with an additional directory outside (A15 with A10)', () => {
+      /**
+       * The main folder is a plain folder in the workspace directory: its scan asks nothing. The
+       * session has a folder attachment outside the workspace directory: it would ask the directory
+       * question. The cancel comes while the scan of the main folder waits.
+       */
+      async function duringMainFolderScan(cancel: (ctx: { call: ReturnType<typeof start>['call']; composition: Composition }, id: string) => Promise<void>) {
+        const { starts, port } = countingAgents()
+        let release: () => void = () => undefined
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        let scans = 0
+        const scanner: ProjectScanner = {
+          scan: async () => {
+            scans += 1
+            if (scans === 1) await gate
+            return { hooks: [], mcpServers: [], files: [], unreadable: [] }
+          }
+        }
+        const plain = join(rootDir, 'plain')
+        await mkdir(plain, { recursive: true })
+        const elsewhere = join(dataDir, '..', 'elsewhere')
+        await mkdir(elsewhere, { recursive: true })
+        const composed = start(port, scanner)
+        await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+        const [profile] = (await snapshotOf(composed.call)).profiles
+        const created = (await composed.call('sessions.create', {
+          profileId: profile!.id,
+          prompt: 'Sort',
+          mode: 'ask',
+          model: 'default',
+          sourcePath: plain,
+          attachments: [{ kind: 'folder', ref: elsewhere, label: 'elsewhere' }]
+        })) as { ok: true; value: { id: string } }
+        const id = created.value.id
+        await composed.call('sessions.send-message', { id, text: 'Sort' })
+        for (let wait = 0; wait < 30 && scans === 0; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(scans).toBe(1)
+        await cancel(composed, id)
+        release()
+        for (let wait = 0; wait < 60; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        const listed = (await composed.call('repositories.list-questions', {})) as Listed
+        return { ...composed, id, starts, scans: () => scans, questions: listed.value.questions }
+      }
+
+      it('opens no question after Stop, starts no process, and the turn ends with "Stopped."', async () => {
+        const ctx = await duringMainFolderScan(async ({ call }, id) => void (await call('sessions.stop', { id })))
+        expect(ctx.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        // The gate for the additional directory never ran.
+        expect(ctx.scans()).toBe(1)
+        expect(await ctx.call('sessions.open', { id: ctx.id })).toMatchObject({
+          ok: true,
+          value: { status: 'idle', entries: [{ entry: { kind: 'user' } }, { entry: { text: 'Stopped.' } }] }
+        })
+      })
+
+      it('opens no question after a delete of the session, and starts no process', async () => {
+        const ctx = await duringMainFolderScan(async ({ call }, id) => void (await call('sessions.delete', { id })))
+        expect(ctx.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+      })
+
+      it('opens no question after a shutdown, starts no process, and the shutdown ends', async () => {
+        let ended = false
+        const ctx = await duringMainFolderScan(async ({ composition }) => {
+          void composition.shutdown().then(() => {
+            ended = true
+          })
+        })
+        expect(ctx.questions).toEqual([])
         expect(ctx.starts).toHaveLength(0)
         for (let wait = 0; wait < 30 && !ended; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
         expect(ended).toBe(true)

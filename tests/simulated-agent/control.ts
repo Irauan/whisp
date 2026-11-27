@@ -17,7 +17,7 @@
 //   - A report that no wait took stays kept. A later wait for the same gate takes it, even when
 //     it belongs to an earlier turn. Take each report that a turn makes, or use a gate name for
 //     each turn, so that a later wait does not meet a stale report.
-// Each agent process reports its process ID, its folder and its environment when it connects.
+// Each agent process reports its process ID, its folder, its environment and its arguments when it connects.
 // `pids`, `environments` and `processMessages` keep them, so a test can tell the processes apart.
 // The protocol is described at the top of `agent.mjs`.
 import { randomUUID } from 'node:crypto'
@@ -37,11 +37,13 @@ export interface AcpMessage {
 
 export type ScenarioName = keyof typeof scenarios
 
-/** The start of one agent process: its process ID, its folder and its environment. */
+/** The start of one agent process: its process ID, its folder, its environment and its arguments. */
 export interface AgentEnvironment {
   pid: number
   cwd: string
   env: Record<string, string>
+  /** The arguments after the script of the agent: the pipe name, then any argument that the client added. */
+  args: string[]
 }
 
 /** An ACP message and the process ID of the agent that received it. */
@@ -171,7 +173,7 @@ export class ControlServer {
     return (event as Extract<AgentEvent, { type: 'hello' }>).pid
   }
 
-  /** Waits for the next start report of an agent process: its process ID, its folder and its environment. */
+  /** Waits for the next start report of an agent process: its process ID, its folder, its environment and its arguments. */
   async waitForEnvironment(): Promise<AgentEnvironment> {
     const { type: _type, ...start } = (await this.inbox.take((e) => e.type === 'environment')) as Extract<
       AgentEvent,
@@ -239,7 +241,7 @@ export class ControlServer {
       this.pids.push(event.pid)
       this.write(connection, { type: 'start', scenario: this.chosen, opened: [...this.opened] })
     }
-    if (event.type === 'environment') this.environments.push({ pid: event.pid, cwd: event.cwd, env: event.env })
+    if (event.type === 'environment') this.environments.push({ pid: event.pid, cwd: event.cwd, env: event.env, args: event.args })
     if (event.type === 'message') {
       this.messages.push(event.message)
       // A message comes after the hello of its agent, so the pid is known. A bare test socket may skip the hello.

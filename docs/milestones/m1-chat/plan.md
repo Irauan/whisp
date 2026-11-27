@@ -68,7 +68,7 @@ The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. These checks
 - [x] S1 Remove projects and work items. PR #23, squash merge `65c54cc`.
 - [x] S2 Profiles in SQLite. PR #24, squash merge `e113836`.
 - [x] S3 Session slices, with decision 0012. PR #25, squash merge `2858c5f`.
-- [ ] S4 Chat in a session
+- [x] S4 Chat in a session. PR #26, squash merge `c649218`.
 - [ ] Demo of the walking skeleton to the user
 - [ ] S5 Permission queue
 - [ ] S6 Repository and directory trust

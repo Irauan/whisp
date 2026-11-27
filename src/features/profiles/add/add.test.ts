@@ -29,14 +29,14 @@ function setup() {
   return { add, database, store: new ProfileStore(database) }
 }
 
-const input = (workspaceDirectory: string) => ({ name: 'Work', workspaceDirectory, github: null, claudeFolder: null, claudeProfileName: null })
+const input = (workspaceDirectory: string) => ({ name: 'Work', workspaceDirectory, github: null, claudeFolder: null })
 
 describe('profiles.add', () => {
   it('saves the profile and makes it the current one', async () => {
     const { add, database, store } = setup()
     const github = { login: 'example-user', name: 'Example User', avatar: 'data:image/png;base64,AAAA' }
     const claudeFolder = join(folder, 'claude')
-    const result = await add({ ...input(folder), github, claudeFolder, claudeProfileName: 'work' })
+    const result = await add({ ...input(folder), github, claudeFolder })
     expect(result).toEqual({ ok: true, value: { id: 'id-1' } })
     expect(addProfile.output.safeParse(result).success).toBe(true)
     expect(store.find('id-1')).toEqual({
@@ -45,14 +45,13 @@ describe('profiles.add', () => {
       workspaceDirectory: folder,
       github,
       claudeFolder,
-      claudeProfileName: 'work',
       createdAt: '2026-01-02T03:04:05.000Z'
     })
     expect(store.currentId()).toBe('id-1')
 
     // The Claude settings are in one provider row of the profile: id-2.
     expect(database.prepare('SELECT id, profile_id, kind, settings FROM providers').all()).toEqual([
-      { id: 'id-2', profile_id: 'id-1', kind: 'claude-code', settings: JSON.stringify({ configFolder: claudeFolder, profileName: 'work' }) }
+      { id: 'id-2', profile_id: 'id-1', kind: 'claude-code', settings: JSON.stringify({ configFolder: claudeFolder }) }
     ])
 
     await add(input(folder))

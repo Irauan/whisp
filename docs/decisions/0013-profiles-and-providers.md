@@ -4,6 +4,8 @@ Date: 2026-11-26
 Decided by: the user, during story S2 of milestone m1-chat.
 Status: accepted, partly replaced by decision 0014 (2026-11-27). 0014 replaces the rule of one provider row for each kind (item 3) and the snapshot of the provider settings (the section "A later change of the provider settings"). The other points stay.
 
+Note, 2026-11-27, story S7: the user removed the field "Claude profile name" (`ANTHROPIC_PROFILE`). See the section "Claude profile name removed".
+
 ## Context
 
 Decision 0004 named the unit of usage a "workspace" and gave it a root directory and one Claude sign-in. The S2 story built it. During the story the user changed the data model before the first release of the database. A workspace needs more than one way to run agents, and a session needs to remember how it started.
@@ -36,6 +38,14 @@ A change of the settings of a provider applies to new sessions only (`docs/archi
 - A resume of the session uses the snapshot, not the current row.
 - S4 creates the provider row at the first start when the profile has none.
 - Migration `001` does not change for this.
+
+## Claude profile name removed
+
+User decision, 2026-11-27, in story S7 of milestone m1-chat. It changes item 1 (the label of `ANTHROPIC_PROFILE`) and item 3 (the settings of the kind `claude-code`).
+
+- A Claude account is only its configuration folder (`CLAUDE_CONFIG_DIR`).
+- The UI has no field "Claude profile name". The provider settings schema has no `profileName`. The agent environment has no `ANTHROPIC_PROFILE`.
+- A saved row can still hold the old key `profileName`. Aether ignores it on read and never writes it. No migration changes the row.
 
 ## Replaces in 0004
 

@@ -16,23 +16,32 @@ describe('claudeCodeRecipe', () => {
     expect(MODES.map((mode) => recipe.modeId(mode))).toEqual(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions'])
   })
 
-  it('starts the adapter that Aether ships with, as plain Node, with the Console sign-in only', async () => {
+  it('translates a permission mode of Claude back to a mode of the port, and not an ID that the port does not know', () => {
+    const recipe = claudeCodeRecipe()
+    expect(['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions'].map((id) => recipe.modeOf(id))).toEqual([...MODES])
+    expect(recipe.modeOf('dontAsk')).toBeNull()
+    expect(recipe.modeOf('')).toBeNull()
+  })
+
+  it('starts the adapter that Aether ships with, as plain Node, with no argument but its script (subscription only, decision 0011)', async () => {
     const launch = await claudeCodeRecipe().launch({})
     expect(launch.ok).toBe(true)
     if (!launch.ok) return
     expect(launch.value.command).toBe(process.execPath)
     expect(launch.value.args[0]).toMatch(/claude-agent-acp.*index\.js$/)
-    expect(launch.value.args).toContain('--hide-claude-auth')
+    expect(launch.value.args).toHaveLength(1)
+    expect(launch.value.args).not.toContain('--hide-claude-auth')
     expect(launch.value.env).toEqual({ ELECTRON_RUN_AS_NODE: '1' })
   })
 
-  it('sets the Claude variables from the settings, and no other Claude variable', async () => {
+  it('sets the Claude folder from the settings, and no other Claude variable', async () => {
+    const launch = await claudeCodeRecipe().launch({ configFolder: 'C:\\claude-one' })
+    expect(launch.ok && launch.value.env).toEqual({ ELECTRON_RUN_AS_NODE: '1', CLAUDE_CONFIG_DIR: 'C:\\claude-one' })
+  })
+
+  it('ignores the old key profileName of a saved account: it gives no ANTHROPIC_PROFILE', async () => {
     const launch = await claudeCodeRecipe().launch({ configFolder: 'C:\\claude-one', profileName: 'work' })
-    expect(launch.ok && launch.value.env).toEqual({
-      ELECTRON_RUN_AS_NODE: '1',
-      CLAUDE_CONFIG_DIR: 'C:\\claude-one',
-      ANTHROPIC_PROFILE: 'work'
-    })
+    expect(launch.ok && launch.value.env).toEqual({ ELECTRON_RUN_AS_NODE: '1', CLAUDE_CONFIG_DIR: 'C:\\claude-one' })
   })
 
   it('lets an entry of agents.json replace only the program and the arguments', async () => {
@@ -72,11 +81,13 @@ describe('signInSteps', () => {
     expect(signInSteps({})).toMatch(/^Claude Code is not signed in\. \S/)
   })
 
-  it('names the Claude folder and the Claude profile name of the settings', () => {
+  it('names the Claude folder of the settings and the sign-in of the Claude subscription', () => {
     const text = signInSteps({ configFolder: 'C:\\claude-one', profileName: 'work' })
     expect(text).toContain('Set CLAUDE_CONFIG_DIR to C:\\claude-one.')
-    expect(text).toContain('Set ANTHROPIC_PROFILE to work.')
-    expect(text).toContain('auth login --console')
+    expect(text).toContain('Sign in with your Claude subscription.')
+    expect(text).toContain('auth login --claudeai')
+    expect(text).not.toContain('--console')
+    expect(text).not.toContain('ANTHROPIC_PROFILE')
   })
 
   it('does not tell the user to set an API key in the environment of Aether', () => {
