@@ -56,7 +56,7 @@
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/environment.spec.ts": {
-    "sha256": "62463a35c719441e7f6ed41661075277d82aea05039fe7c15fc30cd5eb70fe31",
+    "sha256": "505e4ec97d09ce88a007ecea7b9518281e31abb783872bd867f3d31c020d284f",
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/fixture.ts": {

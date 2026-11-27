@@ -35,13 +35,22 @@ test.describe('A16: the agent environment comes from an allow list', () => {
     const leakedClaudeFolder = `${chat.root}\\claude-folder-of-aether`
     await chat.control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
     await writeOldProfile(chat, [DRAFT_IN_REPO_A], GITHUB.two)
-    const page = await startImported(chat, {
+    const aetherEnv = {
       ANTHROPIC_API_KEY: 'x',
       FOO: 'y',
       CLAUDE_CODE_OAUTH_TOKEN: 'fake-oauth-token-of-aether',
       CLAUDE_CONFIG_DIR: leakedClaudeFolder,
       GH_TOKEN: AETHER_GH_TOKEN
-    })
+    }
+    const page = await startImported(chat, aetherEnv)
+
+    // Precondition: Aether itself has the variables, so their absence in the agent means something.
+    const names = Object.keys(aetherEnv)
+    const inAether = await chat.app.evaluate((_electron, wanted) => wanted.map((name) => process.env[name] ?? null), names)
+    expect(inAether, 'A16 precondition: the main process of Aether must have the variables that the test set.').toEqual(
+      Object.values(aetherEnv)
+    )
+
     await startSession(page, 'Say hello', 'A16')
     const start = await reach(chat.control.waitForEnvironment(), 'A16: the session started no agent process.')
     await expectInTranscript(page, 'Hello from the agent.', 'A16: the session gets no reply.')
@@ -59,16 +68,19 @@ test.describe('A16: the agent environment comes from an allow list', () => {
     ).toBe(false)
 
     const token = variable(env, 'GH_TOKEN')
+    // The check compares a label, so a failure never prints the value that the agent got.
     const found =
-      token === undefined
-        ? 'no GH_TOKEN'
-        : token === AETHER_GH_TOKEN
-          ? 'the GH_TOKEN of Aether'
-          : token === ACTIVE_ACCOUNT_TOKEN || token === tokenOf(GITHUB.one)
-            ? 'the token of the active account of gh, not of the profile'
-            : 'another value'
-    expect(token, `A16: the agent must get GH_TOKEN of the GitHub account @${GITHUB.two} of the profile. It got ${found}.`).toBe(
-      tokenOf(GITHUB.two)
+      token === tokenOf(GITHUB.two)
+        ? 'the token of the profile account'
+        : token === undefined
+          ? 'no GH_TOKEN'
+          : token === AETHER_GH_TOKEN
+            ? 'the GH_TOKEN of Aether'
+            : token === ACTIVE_ACCOUNT_TOKEN || token === tokenOf(GITHUB.one)
+              ? 'the token of the active account of gh, not of the profile'
+              : 'another value'
+    expect(found, `A16: the agent must get GH_TOKEN of the GitHub account @${GITHUB.two} of the profile.`).toBe(
+      'the token of the profile account'
     )
   })
 })
