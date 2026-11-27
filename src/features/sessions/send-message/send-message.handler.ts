@@ -130,15 +130,21 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   const existing = processes.get(id)
   if (existing) return existing
 
-  // No process, no account and no token exist before the answer. This holds for a resume too.
-  const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder: session.sourcePath })
-  if (!permission.ok) {
-    // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
-    deps.transcript.addEntry(id, turn.stopped ? notice('info', 'Stopped.', 'stopped') : notice('info', permission.error.message, permission.error.code))
-    return null
+  // No process, no account and no token exist before the answers. This holds for a resume too.
+  // The folders are the main folder, then each additional directory by its real path (check A15). The
+  // gate asks for one folder after the other, so one question is open at a time, and the first
+  // refusal ends the start. The gate reads the content of each folder at each start.
+  const extra = additionalDirectoriesOf(session)
+  for (const folder of [session.sourcePath, ...extra]) {
+    const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder })
+    if (!permission.ok) {
+      // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
+      deps.transcript.addEntry(id, turn.stopped ? notice('info', 'Stopped.', 'stopped') : notice('info', permission.error.message, permission.error.code))
+      return null
+    }
   }
 
-  const prepared = await prepareStart(deps, session)
+  const prepared = await prepareStart(deps, session, extra)
   try {
     return await startProcess(deps, session, turn, prepared)
   } finally {
@@ -211,7 +217,7 @@ interface Prepared {
  * after a failed first start uses the account that the user fixed. It creates an empty account when
  * the profile has none. The account stays in `starting` until the start ends.
  */
-async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Prepared> {
+async function prepareStart(deps: SendMessageDeps, session: Session, additionalDirectories: readonly string[]): Promise<Prepared> {
   const { store, transcript, github, ids, clock, starting } = deps
   const run = store.agentRunOf(session.id)
   const account: ProviderAccount =
@@ -239,8 +245,8 @@ async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Pr
   return {
     input: {
       mainDirectory: session.sourcePath,
-      // The folder attachments outside the session folder. Story S6 asks the directory question before the start.
-      additionalDirectories: additionalDirectoriesOf(session),
+      // The real paths that the gate checked, never the typed ones.
+      additionalDirectories,
       model: session.model,
       mode: session.mode,
       sharedItems: [],

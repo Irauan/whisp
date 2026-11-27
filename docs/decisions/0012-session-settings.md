@@ -88,7 +88,8 @@ The user did not decide these points. The builder of story S7 recorded them. The
 - A file, folder, repository file or repository folder attachment gives one resource link, with the path as a `file:` URI. A relative path is taken from the session folder.
 - An issue or pull request attachment adds its URL to the text for the agent, after the line "References:". The saved message of the user keeps the typed text.
 - The links and the URLs go with the turn that creates the first agent run. A first start that failed saved no run, so its retry sends them again. A resume sends no link.
-- Each `folder` attachment outside the session folder is an additional directory, at each process start, a resume included. Story S6 asks the directory question before the start.
+- Each `folder` attachment outside the session folder is an additional directory, at each process start, a resume included. Aether compares and passes the real path: `..`, junctions and letter case are resolved, and a folder that resolves into the session folder needs no entry.
+- Each start runs the gate of story S6 for the session folder, then for each additional directory in the order of the attachments. The gate reads the current content of each folder at each start. One question is open at a time. The first refusal ends the start with the refusal notice of S6, and no process starts.
 - `sessions.send-message` refuses an attachment of an unknown kind and a session attachment with the error `unsupported-attachment`, before the turn and before any process. The check runs when the message needs a new process. `sessions.create` keeps the kind as text, because the import of an old draft can hold any kind.
 
 ## Rejected

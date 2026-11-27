@@ -1,5 +1,6 @@
 import type { PromptLink } from '../../../building-blocks/agent.port'
-import { absoluteIn, isInsideFolder } from '../../../building-blocks/folder'
+import { absoluteIn } from '../../../building-blocks/folder'
+import { isInside, pathKey, resolveReal } from '../../../building-blocks/paths'
 import { FILE_KINDS, type Session } from '../session'
 
 /**
@@ -21,16 +22,21 @@ export function linksOf({ attachments, sourcePath }: Pick<Session, 'attachments'
 }
 
 /**
- * The folders of the `folder` attachments that lie outside the session folder, each once. The agent
- * can reach them only when its session names them. A folder at or under the session folder needs no entry.
+ * The real paths of the `folder` attachments that lie outside the session folder, each once, in the
+ * order of the attachments. Each path is resolved as the questions of story S6 resolve it: `..`,
+ * junctions and letter case go away. A folder that is the session folder, or lies in it, needs no
+ * entry, also when it is a junction to such a folder. The agent can reach the other folders only
+ * when its session names them, and the start asks the questions for each of them first.
  */
 export function additionalDirectoriesOf({ attachments, sourcePath }: Pick<Session, 'attachments' | 'sourcePath'>): string[] {
-  const found: string[] = []
+  const main = pathKey(sourcePath)
+  const found = new Map<string, string>()
   for (const { kind, ref } of attachments) {
     if (kind !== 'folder') continue
-    const path = absoluteIn(sourcePath, ref)
-    if (isInsideFolder(sourcePath, path)) continue
-    if (!found.some((other) => isInsideFolder(other, path) && isInsideFolder(path, other))) found.push(path)
+    const real = resolveReal(absoluteIn(sourcePath, ref))
+    const key = pathKey(real)
+    if (isInside(key, main) || found.has(key)) continue
+    found.set(key, real)
   }
-  return found
+  return [...found.values()]
 }
