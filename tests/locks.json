@@ -167,6 +167,14 @@
     "sha256": "1f2aad35814ec8f8a7566974cab38f6a45bc6598ea0859abc1cfd0a250a26e83",
     "story": "m1-chat/s9"
   },
+  "tests/acceptance/support/hidden-windows.cjs": {
+    "sha256": "c9a4f113a4afe89aa95bd39ac70ef25532e4020bd8b39dde3adc8240bd60f9cb",
+    "story": "m1-chat/test-windows"
+  },
+  "tests/acceptance/support/windows.ts": {
+    "sha256": "526861bc6b9fab4217a00ec62d79b5dafe1b9a6aecd7e47bb71b9ef5755f1114",
+    "story": "m1-chat/test-windows"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
