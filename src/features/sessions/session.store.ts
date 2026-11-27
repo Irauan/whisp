@@ -116,6 +116,11 @@ export class SessionStore {
     return this.database.prepare('UPDATE sessions SET mode = ? WHERE id = ?').run(mode, id).changes > 0
   }
 
+  /** Saves the model of a draft. Returns false when the session does not exist. */
+  setModel(id: string, model: string): boolean {
+    return this.database.prepare('UPDATE sessions SET model = ? WHERE id = ?').run(model, id).changes > 0
+  }
+
   /** The newest agent run of the session, with the settings of its account. Null before the first start. */
   agentRunOf(sessionId: string): AgentRun | null {
     const row = this.database
@@ -200,6 +205,14 @@ export class SessionStore {
   updateEntry(view: EntryView): boolean {
     const entry = entrySchema.parse(view.entry)
     return this.database.prepare('UPDATE entries SET kind = ?, data = ? WHERE id = ?').run(entry.kind, JSON.stringify(entry), view.id).changes > 0
+  }
+
+  /** The latest plan entry of the session, from any turn, or null when it has none. */
+  latestPlan(sessionId: string): EntryView | null {
+    const row = this.database
+      .prepare("SELECT id, data FROM entries WHERE session_id = ? AND kind = 'plan' ORDER BY position DESC LIMIT 1")
+      .get(sessionId)
+    return row ? toEntry(row) : null
   }
 
   /**

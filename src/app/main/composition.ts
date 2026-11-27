@@ -43,6 +43,8 @@ import { sendMessageController } from '../../features/sessions/send-message/send
 import { SessionStore } from '../../features/sessions/session.store'
 import { setMode } from '../../features/sessions/set-mode/set-mode.contract'
 import { setModeController } from '../../features/sessions/set-mode/set-mode.controller'
+import { setModel } from '../../features/sessions/set-model/set-model.contract'
+import { setModelController } from '../../features/sessions/set-model/set-model.controller'
 import { stopSession } from '../../features/sessions/stop/stop.contract'
 import { stopSessionController } from '../../features/sessions/stop/stop.controller'
 import { Transcript } from '../../features/sessions/transcript.store'
@@ -182,6 +184,7 @@ export function composeMain({
       [listQuestions.name]: listQuestionsController(questions),
       [answerQuestion.name]: answerQuestionController({ questions }),
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
+      [setModel.name]: setModelController({ store: sessionStore, transcript }),
       [deleteSession.name]: deleteSessionController(database, release)
     },
     notices,

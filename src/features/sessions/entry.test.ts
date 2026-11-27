@@ -4,6 +4,7 @@ import {
   failedTool,
   isDraft,
   isOpenTool,
+  isSamePlan,
   mergeTool,
   noticeOfModeChange,
   noticeOfStop,
@@ -162,4 +163,34 @@ describe('isDraft', () => {
       expect(isDraft({ ...draft, ...change })).toBe(false)
     }
   )
+})
+
+describe('isSamePlan', () => {
+  const steps = (...items: [string, 'pending' | 'in_progress' | 'completed'][]) => items.map(([text, status]) => ({ text, status }))
+
+  it('is progress when the texts are the same, in the same order, with other states', () => {
+    const first = steps(['One', 'pending'], ['Two', 'pending'])
+    const next = steps(['One', 'completed'], ['Two', 'in_progress'])
+    expect(isSamePlan({ kind: 'plan', steps: first }, { kind: 'plan', steps: next })).toBe(true)
+    expect(isSamePlan({ kind: 'plan', steps: first }, { kind: 'plan', steps: first })).toBe(true)
+  })
+
+  it('is a new plan when a text differs, the order differs, or the number of steps differs', () => {
+    const base = { kind: 'plan' as const, steps: steps(['One', 'pending'], ['Two', 'pending']) }
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['One', 'pending'], ['Three', 'pending']) })).toBe(false)
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['Two', 'pending'], ['One', 'pending']) })).toBe(false)
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['One', 'pending']) })).toBe(false)
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['One', 'pending'], ['Two', 'pending'], ['Three', 'pending']) })).toBe(false)
+    expect(isSamePlan(base, { kind: 'plan', steps: [] })).toBe(false)
+  })
+
+  it('compares the texts as exact strings', () => {
+    const base = { kind: 'plan' as const, steps: steps(['One', 'pending']) }
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['one', 'pending']) })).toBe(false)
+    expect(isSamePlan(base, { kind: 'plan', steps: steps(['One ', 'pending']) })).toBe(false)
+  })
+
+  it('counts two plans with no steps as the same plan', () => {
+    expect(isSamePlan({ kind: 'plan', steps: [] }, { kind: 'plan', steps: [] })).toBe(true)
+  })
 })

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ControlServer } from '../../../tests/simulated-agent/control'
 import { err, ok } from '../../building-blocks/result'
 import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate } from '../../building-blocks/agent.port'
+import { splitLog } from '../../shared/log-marker'
 import { claudeCodeRecipe } from '../claude-code/claude-code'
 import { AcpAgents, translateUpdate } from './acp-agents'
 
@@ -271,6 +272,28 @@ describe('AcpAgents', () => {
     expect(!result.ok && result.error.message).toContain('simulated agent: the disk is full')
     expect(listened.exits).toHaveLength(1)
     expect(listened.exits[0]?.code).toBe(7)
+  })
+
+  it('puts the last log lines of a stopped agent and of a failed start behind the marker line', async () => {
+    await control.scenario('crash', { exitCode: 7, log: 'simulated agent: the disk is full' })
+    const process = start()
+    await process.ready
+    const stopped = await process.prompt('go')
+    expect(!stopped.ok && splitLog(stopped.error.message)).toEqual({
+      message: expect.stringMatching(/^Claude Code stopped \(exit code 7\)\.$/),
+      log: 'simulated agent: the disk is full'
+    })
+
+    await control.scenario('steps', {
+      initialize: [{ do: 'log', text: 'simulated agent: no config' }, { do: 'fail', code: -32603, message: 'The first\nline of the start error' }]
+    })
+    const starting = start()
+    const ready = await starting.ready
+    expect(ready).toMatchObject({ ok: false, error: { code: 'failed' } })
+    expect(!ready.ok && splitLog(ready.error.message)).toEqual({
+      message: expect.stringMatching(/^Claude Code did not start\. The first\nline of the start error$/),
+      log: 'simulated agent: no config'
+    })
   })
 
   it('removes the values that Aether gave the agent from the log lines', async () => {

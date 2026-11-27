@@ -123,6 +123,38 @@
     "sha256": "702d35ccb30b77629d48c1990a47d35db1e1ea35fa8b94a6353d027e765534a7",
     "story": "m1-chat/s7"
   },
+  "tests/acceptance/m1-chat/s8/composer.spec.ts": {
+    "sha256": "007e014859e491af589f4c0e3bd23fe0bc6721362a490bad0e9a6cf964c1dff0",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/failed-turn.spec.ts": {
+    "sha256": "8e9b93935b771ec57875dee4b405c9900427ba29317306626ccffbfe6067e02d",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/fixture.ts": {
+    "sha256": "8a5f6bd18ab944a0311044e60b91c6baf913e2dd3d924145aec18b996704cdab",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/frame.spec.ts": {
+    "sha256": "003be3830c4c65130e9f9f6ee7b16b30a041d5e8503af6395d0ddc4c585d0b3b",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/frame.ts": {
+    "sha256": "eb4c2542eab69a474879df0d56282f096bf4127be53058ddf880415059171844",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/model.spec.ts": {
+    "sha256": "f6dcb6a92905bb3642430132f5ef23fdf4d29bf5bc4712145f46729260e08006",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-updates.spec.ts": {
+    "sha256": "ad8c8ce8b3e93160690687dc84f4f819b8fd582e24455588aef8179659f24460",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-widget.spec.ts": {
+    "sha256": "ff6a18dbdb77f8942f2fc9c6f6f3212b2907ed97aec8a48032977fe9715d97af",
+    "story": "m1-chat/s8"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"

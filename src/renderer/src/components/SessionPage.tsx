@@ -1,54 +1,52 @@
-import { ArrowUp, Loader, Square, Trash2 } from 'lucide-react'
-import { useState, type KeyboardEvent } from 'react'
+import { Loader, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { sendMessage } from '../../../features/sessions/send-message/send-message.contract'
 import { setMode } from '../../../features/sessions/set-mode/set-mode.contract'
+import { setModel } from '../../../features/sessions/set-model/set-model.contract'
 import { stopSession } from '../../../features/sessions/stop/stop.contract'
-import { labelOf, MODELS } from '../../../shared/model'
 import { invokeContract } from '../invoke'
-import type { SessionSnapshot } from '../session-view'
+import { latestPlan, shownModel, type SessionSnapshot } from '../session-view'
 import type { Mode } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
-import { ModeMenu } from './ModeMenu'
+import { Dock } from './Dock'
+import { PlanWidget } from './PlanWidget'
+import { ReplyComposer } from './ReplyComposer'
 import { Transcript } from './Transcript'
 
 /**
- * A session in its window (brief, Session window). The main process owns the conversation: this
- * window shows the snapshot and its events, and sends the commands Send, Stop and the change of
- * the mode of a draft. The composer holds only the text that the user has not sent.
- * `onModeSaved` tells the app to load a new snapshot of the sessions, because the mode of a new
- * session depends on the newest one.
+ * A session in its window (brief, Session window). The window is a fixed frame (story S8): the
+ * header at the top, the transcript as the only scroll area, and the bottom dock, always in view,
+ * with the status line, the plan widget and the composer. The main process owns the conversation:
+ * this window shows the snapshot and its events, and sends the commands Send, Stop and the change
+ * of the mode and the model of a draft. The composer holds only the text that the user has not sent.
+ * `onSettingsSaved` tells the app to load a new snapshot of the sessions, because the mode and the
+ * model of a new session depend on the newest one.
  */
 export function SessionPage({
   view,
-  profileName,
   asking,
-  onModeSaved,
+  onSettingsSaved,
   onDelete
 }: {
   view: SessionSnapshot
-  /** The name of the profile of the session, or null when the profile is not known. */
-  profileName: string | null
   /** True while a question waits for the user. The agent has not started, so the page does not say so. */
   asking: boolean
-  onModeSaved(): void
+  onSettingsSaved(): void
   onDelete(): void
 }) {
   const { session, status, draft } = view
   // View state: the text of the composer. A draft starts with its prompt (flow 6).
   const [text, setText] = useState(draft ? session.prompt : '')
-  // View state: the mode that the user chose in a draft, until the snapshot shows it.
+  // View state: the mode and the model that the user chose in a draft, until the snapshot shows them.
   const [chosenMode, setChosenMode] = useState<Mode | null>(null)
+  const [chosenModel, setChosenModel] = useState<string | null>(null)
   // View state: the text of the last command that failed, or null.
   const [problem, setProblem] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
   const running = status !== 'idle'
   const ready = !running && !sending && text.trim() !== ''
-  const rows: [string, string][] = [
-    ...(profileName === null ? [] : ([['Profile', profileName]] as [string, string][])),
-    ['Folder', session.sourcePath],
-    ['Model', labelOf(MODELS, session.model)]
-  ]
+  const steps = latestPlan(view.entries)
 
   const send = () => {
     if (!ready) return
@@ -73,7 +71,7 @@ export function SessionPage({
     void invokeContract(setMode, { id: session.id, mode }).then((result) => {
       if (result.ok) {
         // The mode that a new session starts with depends on the newest session (decision 0012).
-        onModeSaved()
+        onSettingsSaved()
       } else {
         // The saved mode stays. Show it again.
         setChosenMode(null)
@@ -82,87 +80,86 @@ export function SessionPage({
     })
   }
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    send()
+  const changeModel = (model: string) => {
+    setProblem(null)
+    setChosenModel(model)
+    void invokeContract(setModel, { id: session.id, model }).then((result) => {
+      if (result.ok) {
+        // The model that a new session starts with depends on the newest session.
+        onSettingsSaved()
+      } else {
+        setChosenModel(null)
+        setProblem(result.error.message)
+      }
+    })
   }
 
+  // The attachments belong to the first message. They show at the top of the scroll area.
+  const attachments =
+    session.attachments.length > 0 ? (
+      <section className="panel">
+        <h2>Attachments</h2>
+        <ul>
+          {session.attachments.map((item) => (
+            <li key={item.kind + item.ref} className="attachment" title={item.ref}>
+              <AttachmentIcon kind={item.kind} size={16} />
+              <span>{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : null
+
   return (
-    <div className="page">
-      <header className="page-head">
+    <div className="session-frame">
+      <header className="page-head session-head">
         <h1>{session.title}</h1>
         <button type="button" className="icon-button" aria-label="Delete session" title="Delete session" onClick={onDelete}>
           <Trash2 size={18} />
         </button>
       </header>
-      <dl className="facts">
-        {rows.map(([name, value]) => (
-          <div key={name}>
-            <dt className="muted">{name}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {session.attachments.length > 0 && (
-        <section className="panel">
-          <h2>Attachments</h2>
-          <ul>
-            {session.attachments.map((item) => (
-              <li key={item.kind + item.ref} className="attachment" title={item.ref}>
-                <AttachmentIcon kind={item.kind} size={16} />
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       {draft ? (
-        <p className="muted description">This session has not started. Send starts it with the prompt below.</p>
-      ) : (
-        <Transcript entries={view.entries} />
-      )}
-      {status === 'starting' && !asking && (
-        <p className="agent-status muted">
-          <Loader size={16} className="spin" aria-hidden="true" />
-          <span>Starting Claude Code</span>
-        </p>
-      )}
-      {status === 'working' && (
-        <p className="agent-status muted">
-          <Loader size={16} className="spin" aria-hidden="true" />
-          <span>Working</span>
-        </p>
-      )}
-      <form
-        className="composer"
-        onSubmit={(event) => {
-          event.preventDefault()
-          send()
-        }}
-      >
-        <div className="composer-box">
-          <textarea aria-label="Prompt" rows={3} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKeyDown} />
-          <div className="composer-actions session-actions">
-            <ModeMenu mode={chosenMode ?? session.mode} disabled={!draft} onChange={changeMode} />
-            <span className="spacer" />
-            {running ? (
-              <button type="button" className="send" aria-label="Stop" title="Stop" onClick={stop}>
-                <Square size={16} />
-              </button>
-            ) : (
-              <button type="submit" className="send" aria-label="Send" title="Send" disabled={!ready}>
-                <ArrowUp size={20} />
-              </button>
-            )}
-          </div>
+        <div className="session-body">
+          {attachments}
+          <p className="muted description">This session has not started. Send starts it with the prompt below.</p>
         </div>
+      ) : (
+        <Transcript entries={view.entries} lead={attachments} />
+      )}
+      <Dock>
+        {status === 'starting' && !asking && (
+          <p className="agent-status muted">
+            <Loader size={16} className="spin" aria-hidden="true" />
+            <span>Starting Claude Code</span>
+          </p>
+        )}
+        {status === 'working' && (
+          <p className="agent-status muted">
+            <Loader size={16} className="spin" aria-hidden="true" />
+            <span>Working</span>
+          </p>
+        )}
+        {steps && <PlanWidget steps={steps} />}
         {problem && (
           <p className="error composer-error" role="alert">
             {problem}
           </p>
         )}
-      </form>
+        <ReplyComposer
+          text={text}
+          mode={chosenMode ?? session.mode}
+          // The chosen model stays after Send: the snapshot of this window holds the model of its load.
+          model={shownModel(chosenModel, session.model)}
+          draft={draft}
+          running={running}
+          ready={ready}
+          onText={setText}
+          onMode={changeMode}
+          onModel={changeModel}
+          onSend={send}
+          onStop={stop}
+        />
+      </Dock>
     </div>
   )
 }

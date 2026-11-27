@@ -134,14 +134,76 @@ describe('Transcript', () => {
     expect(store.entriesOf('s1').map((view) => view.entry)).toMatchObject([{ status: 'completed' }, { status: 'failed' }, { status: 'failed' }])
   })
 
-  it('adds each plan as a new entry with the three step states', () => {
-    const { store, transcript } = setup()
-    transcript.addPlan('s1', { type: 'plan', steps: [{ text: 'One', status: 'pending' }, { text: 'Two', status: 'pending' }] })
-    transcript.addPlan('s1', { type: 'plan', steps: [{ text: 'One', status: 'completed' }, { text: 'Two', status: 'in_progress' }] })
-    expect(store.entriesOf('s1').map((view) => view.entry)).toEqual([
-      { kind: 'plan', steps: [{ text: 'One', status: 'pending' }, { text: 'Two', status: 'pending' }] },
-      { kind: 'plan', steps: [{ text: 'One', status: 'completed' }, { text: 'Two', status: 'in_progress' }] }
+  const plan = (...items: [string, 'pending' | 'in_progress' | 'completed'][]) => ({
+    type: 'plan' as const,
+    steps: items.map(([text, status]) => ({ text, status }))
+  })
+
+  it('adds the first plan as a new entry with the three step states', () => {
+    const { store, events, transcript } = setup()
+    transcript.addPlan('s1', plan(['One', 'pending'], ['Two', 'pending']))
+    expect(store.entriesOf('s1')).toEqual([{ id: 'e1', entry: { kind: 'plan', steps: [{ text: 'One', status: 'pending' }, { text: 'Two', status: 'pending' }] } }])
+    expect(events.map((event) => event.change.type)).toEqual(['entry-added'])
+  })
+
+  it('replaces the latest plan entry in place when only the states change (progress)', () => {
+    const { store, events, transcript } = setup()
+    transcript.addPlan('s1', plan(['One', 'pending'], ['Two', 'pending']))
+    transcript.addEntry('s1', { kind: 'user', text: 'later' })
+    transcript.addPlan('s1', plan(['One', 'completed'], ['Two', 'in_progress']))
+    // The entry keeps its ID and its position, so the marker of the transcript stays at the place of the plan.
+    expect(store.entriesOf('s1')).toEqual([
+      { id: 'e1', entry: { kind: 'plan', steps: [{ text: 'One', status: 'completed' }, { text: 'Two', status: 'in_progress' }] } },
+      { id: 'e2', entry: { kind: 'user', text: 'later' } }
     ])
+    expect(events.map((event) => event.change.type)).toEqual(['entry-added', 'entry-added', 'entry-replaced'])
+    expect(events.at(-1)?.change).toMatchObject({ type: 'entry-replaced', entry: { id: 'e1' } })
+  })
+
+  it('adds a new plan entry when the texts, their order or their number change', () => {
+    const { store, transcript } = setup()
+    transcript.addPlan('s1', plan(['One', 'pending'], ['Two', 'pending']))
+    transcript.addPlan('s1', plan(['Two', 'pending'], ['One', 'pending']))
+    transcript.addPlan('s1', plan(['Two', 'pending']))
+    transcript.addPlan('s1', plan())
+    expect(store.entriesOf('s1').map((view) => (view.entry.kind === 'plan' ? view.entry.steps.length : -1))).toEqual([2, 2, 1, 0])
+  })
+
+  it('compares with the latest plan entry of the session, also from an earlier turn, and treats two empty plans as progress', () => {
+    const { store, make, transcript } = setup()
+    transcript.addPlan('s1', plan(['One', 'pending']))
+    transcript.addEntry('s1', { kind: 'user', text: 'next turn' })
+    transcript.addPlan('s1', plan())
+    // A new Transcript, as after a restart, reads the latest plan entry from the database.
+    const restarted = make()
+    restarted.addPlan('s1', plan())
+    expect(store.entriesOf('s1').map((view) => view.entry.kind)).toEqual(['plan', 'user', 'plan'])
+    restarted.addPlan('s1', plan(['One', 'pending']))
+    expect(store.entriesOf('s1')).toHaveLength(4)
+  })
+
+  it('closes the open text of the agent before it writes a plan, so text before and after a plan stays apart', () => {
+    const { store, transcript } = setup()
+    transcript.addText('s1', 'agent', 'Before ')
+    transcript.addPlan('s1', plan(['One', 'pending']))
+    transcript.addText('s1', 'agent', 'after.')
+    transcript.addPlan('s1', plan(['One', 'completed']))
+    transcript.addText('s1', 'agent', 'More.')
+    transcript.flush('s1')
+    expect(store.entriesOf('s1').map((view) => view.entry)).toEqual([
+      { kind: 'agent', text: 'Before ' },
+      { kind: 'plan', steps: [{ text: 'One', status: 'completed' }] },
+      { kind: 'agent', text: 'after.' },
+      { kind: 'agent', text: 'More.' }
+    ])
+  })
+
+  it('writes nothing for a plan of a session that is gone', () => {
+    const { store, events, transcript } = setup()
+    transcript.forget('s1')
+    transcript.addPlan('s1', plan(['One', 'pending']))
+    expect(events).toEqual([])
+    expect(store.entriesOf('s1')).toEqual([])
   })
 
   it('continues the positions after the saved entries, also in a new Transcript after a restart', () => {

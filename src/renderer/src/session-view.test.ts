@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { LOG_MARKER } from '../../shared/log-marker'
 import {
   applyChange,
   emptyWindowState,
+  isAtBottom,
+  latestPlan,
+  markedPlanIds,
+  planCount,
   reduceSessionWindow,
+  shownModel,
+  splitFailedTurn,
   type SessionEvent,
   type SessionSnapshot,
   type SessionWindowAction,
@@ -154,5 +161,89 @@ describe('reduceSessionWindow', () => {
       { type: 'event', event: event(2, { type: 'entry-text', id: 'a', text: 'from the agent.' }) }
     ])
     expect(state.view?.entries).toEqual([{ id: 'a', entry: { kind: 'agent', text: 'Hello from the agent.' } }])
+  })
+})
+
+const step = (text: string, status: 'pending' | 'in_progress' | 'completed') => ({ text, status })
+const plan = (id: string, ...steps: ReturnType<typeof step>[]) => ({ id, entry: { kind: 'plan' as const, steps } })
+
+describe('latestPlan and planCount', () => {
+  it('finds the latest plan entry, and no plan when the session has none or the latest has no steps', () => {
+    expect(latestPlan([user])).toBeNull()
+    expect(latestPlan([plan('a', step('One', 'pending')), user, plan('b', step('Two', 'pending'))])).toEqual([step('Two', 'pending')])
+    // A plan with no steps clears the plan: the widget does not show.
+    expect(latestPlan([plan('a', step('One', 'pending')), plan('b')])).toBeNull()
+  })
+
+  it('counts the completed steps and all steps for the header "Plan N of M"', () => {
+    expect(planCount([step('One', 'completed'), step('Two', 'in_progress'), step('Three', 'pending')])).toEqual({ done: 1, total: 3 })
+    expect(planCount([step('One', 'pending')])).toEqual({ done: 0, total: 1 })
+    expect(planCount([step('One', 'completed'), step('Two', 'completed')])).toEqual({ done: 2, total: 2 })
+  })
+})
+
+describe('markedPlanIds', () => {
+  const text = { id: 't', entry: { kind: 'agent', text: 'hi' } } as const
+
+  it('marks each plan entry except the first plan entry of the session', () => {
+    const entries = [plan('a', step('One', 'pending')), text, plan('b', step('Two', 'pending')), plan('c')]
+    expect([...markedPlanIds(entries)]).toEqual(['b', 'c'])
+  })
+
+  it('marks nothing for one plan entry, or for a session with no plan', () => {
+    expect(markedPlanIds([text, plan('a', step('One', 'pending'))]).size).toBe(0)
+    expect(markedPlanIds([text]).size).toBe(0)
+  })
+
+  it('marks an empty plan that follows the first plan, and does not mark an empty first plan', () => {
+    expect([...markedPlanIds([plan('a'), plan('b', step('One', 'pending'))])]).toEqual(['b'])
+    expect([...markedPlanIds([plan('a', step('One', 'pending')), plan('b')])]).toEqual(['b'])
+  })
+})
+
+describe('isAtBottom', () => {
+  it('is true at the end of the content, within two pixels, and false above it', () => {
+    expect(isAtBottom({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })).toBe(true)
+    expect(isAtBottom({ scrollTop: 598.5, scrollHeight: 1000, clientHeight: 400 })).toBe(true)
+    expect(isAtBottom({ scrollTop: 590, scrollHeight: 1000, clientHeight: 400 })).toBe(false)
+    expect(isAtBottom({ scrollTop: 0, scrollHeight: 300, clientHeight: 400 })).toBe(true)
+  })
+})
+
+describe('splitFailedTurn', () => {
+  it('splits a failed turn at the marker line: the line, then the last log lines', () => {
+    expect(splitFailedTurn({ text: `Claude Code stopped (exit code 7).\n${LOG_MARKER}\nline one\nline two` })).toEqual({
+      line: 'Claude Code stopped (exit code 7).',
+      log: 'line one\nline two'
+    })
+  })
+
+  it('splits a failed start with log lines too, also when its message has many lines', () => {
+    expect(splitFailedTurn({ text: `Claude Code did not start. A\nB\n${LOG_MARKER}\nsimulated agent: no config` })).toEqual({
+      line: 'Claude Code did not start. A\nB',
+      log: 'simulated agent: no config'
+    })
+  })
+
+  it('gives no log when the agent wrote none', () => {
+    expect(splitFailedTurn({ text: 'Claude Code stopped (exit code 1).' })).toEqual({ line: 'Claude Code stopped (exit code 1).', log: null })
+  })
+
+  it('keeps the text without the marker whole: the sign-in steps stay visible', () => {
+    const text = 'Claude Code is not signed in.\n1. Open a terminal.\n2. Run claude.'
+    expect(splitFailedTurn({ text })).toEqual({ line: text, log: null })
+  })
+})
+
+describe('shownModel', () => {
+  it('shows the chosen model of a draft, also after Send makes the session no draft', () => {
+    // The user picks Opus in a draft. The snapshot of the window still holds the model Default.
+    expect(shownModel('claude-opus-5-5', 'default')).toBe('claude-opus-5-5')
+    // Send starts the session. The window keeps its old snapshot, and the button keeps the chosen model.
+    const afterSend = applyChange(snapshot({ draft: true }), { type: 'entry-added', entry: user })
+    expect(afterSend?.draft).toBe(false)
+    expect(shownModel('claude-opus-5-5', afterSend?.session.model ?? '')).toBe('claude-opus-5-5')
+    // With no choice in this window, the button shows the saved model.
+    expect(shownModel(null, 'claude-opus-5-5')).toBe('claude-opus-5-5')
   })
 })
