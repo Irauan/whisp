@@ -12,7 +12,8 @@ import { MIGRATIONS, orderMigrations } from './migrations'
  */
 const HASHES: Record<number, string> = {
   1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708',
-  2: 'bacb2a45fb0a1f4d5f0acf8e4ea0adbffd92344c26d266c935cf74e1e8b643ce'
+  2: 'bacb2a45fb0a1f4d5f0acf8e4ea0adbffd92344c26d266c935cf74e1e8b643ce',
+  3: 'a283f8e1ea5bd771eae404bc687f4d0c7338d99a38eb812d70d66955d4101e15'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -175,7 +176,7 @@ describe('the migrations of the product', () => {
       insertSession.run('s2', 'p1', null)
       old.close()
 
-      const second = openDatabase(path, MIGRATIONS)
+      const second = openDatabase(path, MIGRATIONS.slice(0, 2))
       if (!second.ok) throw new Error(second.error.message)
       const { database } = second.value
       // No row is lost. Each account keeps its values, gets an empty label, and is the current one of its profile.
@@ -192,6 +193,33 @@ describe('the migrations of the product', () => {
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([])
       expect(() => database.prepare("DELETE FROM providers WHERE id = 'v1'").run()).toThrow()
       expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+      database.close()
+    } finally {
+      await rm(folder, { recursive: true, force: true })
+    }
+  })
+  it('version 3 adds the trust answers and the allowed directories of a profile, and removes them with the profile', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'aether-migration-'))
+    try {
+      const path = join(folder, 'aether.db')
+      const first = openDatabase(path, MIGRATIONS.slice(0, 2))
+      if (!first.ok) throw new Error(first.error.message)
+      first.value.database.prepare("INSERT INTO profiles (id, name, created_at) VALUES ('p1', 'Personal', '2026-01-01')").run()
+      first.value.database.close()
+
+      const second = openDatabase(path, MIGRATIONS)
+      if (!second.ok) throw new Error(second.error.message)
+      const { database } = second.value
+      expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
+      for (const table of ['trusted_repositories', 'allowed_directories']) {
+        database.prepare(`INSERT INTO ${table} (profile_id, path, created_at) VALUES ('p1', 'c:/workspace/repo-b', '2026-01-02')`).run()
+        // One answer for one folder and profile, and a profile that exists.
+        expect(() => database.prepare(`INSERT INTO ${table} (profile_id, path, created_at) VALUES ('p1', 'c:/workspace/repo-b', '2026-01-03')`).run()).toThrow()
+        expect(() => database.prepare(`INSERT INTO ${table} (profile_id, path, created_at) VALUES ('nobody', 'c:/x', '2026-01-03')`).run()).toThrow()
+      }
+      database.prepare("DELETE FROM profiles WHERE id = 'p1'").run()
+      expect(database.prepare('SELECT count(*) AS total FROM trusted_repositories').get()).toEqual({ total: 0 })
+      expect(database.prepare('SELECT count(*) AS total FROM allowed_directories').get()).toEqual({ total: 0 })
       database.close()
     } finally {
       await rm(folder, { recursive: true, force: true })

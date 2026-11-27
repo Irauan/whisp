@@ -25,10 +25,26 @@ export interface SendMessageDeps {
   starting: AccountsInStart
   /** Passes an update of the agent to the slice `record-agent-update`. The composition root connects them. */
   record(sessionId: string, update: AgentUpdate): void
+  /**
+   * The gate before an agent process starts (decision 0007). The composition root connects it to the
+   * directory and trust questions of the feature `repositories`. An error is a refusal: its code and
+   * message make the notice. It takes values only: the main process reads them from the saved session.
+   */
+  guard: StartGuard
   clock: Clock
   ids: Ids
   log(message: string, cause?: unknown): void
 }
+
+/** What the gate needs to know about a start. A resume is a start too. */
+export interface StartRequest {
+  sessionId: string
+  profileId: string
+  /** The folder that the process starts in. */
+  folder: string
+}
+
+export type StartGuard = (request: StartRequest) => Promise<Result<unknown, string>>
 
 export interface SendMessage {
   /** Whether Aether accepted the message. It does not wait for the reply. */
@@ -106,6 +122,14 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   const id = session.id
   const existing = processes.get(id)
   if (existing) return existing
+
+  // No process, no account and no token exist before the answer. This holds for a resume too.
+  const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder: session.sourcePath })
+  if (!permission.ok) {
+    // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
+    deps.transcript.addEntry(id, turn.stopped ? notice('info', 'Stopped.', 'stopped') : notice('info', permission.error.message, permission.error.code))
+    return null
+  }
 
   const prepared = await prepareStart(deps, session)
   try {

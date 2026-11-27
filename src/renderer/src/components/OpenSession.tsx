@@ -10,11 +10,14 @@ import { SessionPage } from './SessionPage'
 export function OpenSession({
   id,
   profileNameOf,
+  asking,
   onModeSaved,
   onDelete
 }: {
   id: string
   profileNameOf(profileId: string): string | null
+  /** True while a question of the main process waits for the user, for example the trust question. */
+  asking: boolean
   onModeSaved(): void
   onDelete(): void
 }) {
@@ -28,6 +31,7 @@ export function OpenSession({
         <SessionPage
           view={opened.view}
           profileName={profileNameOf(opened.view.session.profileId)}
+          asking={asking}
           onModeSaved={onModeSaved}
           onDelete={onDelete}
         />

@@ -6,7 +6,9 @@ import { openDatabase, type OpenError } from '../../building-blocks/database'
 import { randomIds, type Ids } from '../../building-blocks/ids'
 import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.port'
 import { MIGRATIONS } from '../../building-blocks/migrations'
+import type { ProjectScanner } from '../../building-blocks/project-scanner.port'
 import { ok, type Result } from '../../building-blocks/result'
+import { ClaudeProjectScanner } from '../../providers/claude-code/project-scanner'
 import { addProfile } from '../../features/profiles/add/add.contract'
 import { addProfileController } from '../../features/profiles/add/add.controller'
 import { chooseDirectories } from '../../features/profiles/choose-directories/choose-directories.contract'
@@ -25,6 +27,14 @@ import { switchProfile } from '../../features/profiles/switch/switch.contract'
 import { switchProfileController } from '../../features/profiles/switch/switch.controller'
 import type { Notice } from '../../features/profiles/profile'
 import { ProfileStore } from '../../features/profiles/profile.store'
+import { answerQuestion } from '../../features/repositories/answer-question/answer-question.contract'
+import { answerQuestionController } from '../../features/repositories/answer-question/answer-question.controller'
+import { checkDirectoryHandler } from '../../features/repositories/check-directory/check-directory.handler'
+import { listQuestions } from '../../features/repositories/list-questions/list-questions.contract'
+import { listQuestionsController } from '../../features/repositories/list-questions/list-questions.controller'
+import { QUESTIONS_CHANGED } from '../../features/repositories/question'
+import { Questions } from '../../features/repositories/questions.store'
+import { TrustStore } from '../../features/repositories/trust.store'
 import { SESSIONS_CHANGED } from '../../features/sessions/entry'
 import { Processes } from '../../features/sessions/processes.store'
 import { recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
@@ -73,6 +83,8 @@ export interface CompositionDeps {
   github: GithubPort & GithubTokenPort
   /** The agent port. The entry point of the app passes the ACP port with the recipe of Claude Code. */
   agents: AgentPort
+  /** Finds the hooks and MCP servers that the agent runs in a folder. The default reads the files of Claude Code. */
+  scanner?: ProjectScanner
   /** Sends an event to the subscribers of its name. */
   publish(name: string, payload: unknown): void
   clock?: Clock
@@ -90,6 +102,7 @@ export function composeMain({
   dataDir,
   github,
   agents,
+  scanner = new ClaudeProjectScanner(),
   publish,
   clock = systemClock,
   ids = randomIds,
@@ -126,10 +139,21 @@ export function composeMain({
   // session reports its progress to `record-agent-update`.
   const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
     recordAgentUpdateHandler({ transcript }, { sessionId, update })
+  // The questions of the main process (decision 0007): the trust question and the directory questions.
+  const questions = new Questions((event) => publish(QUESTIONS_CHANGED, event), ids)
+  const trust = new TrustStore(database)
+  // The gate that `send-message` calls before it starts a process. The slices never call each other,
+  // so the composition root passes the gate as a function.
+  const guard = (request: { sessionId: string; profileId: string; folder: string }) =>
+    checkDirectoryHandler({ store: trust, questions, scanner, clock }, request)
   const release = async (sessionId: string) => {
+    // An open question would hold its turn, so a release answers it first.
+    questions.cancelSession(sessionId)
+    trust.forgetSession(sessionId)
     transcript.forget(sessionId)
     await processes.release(sessionId)
   }
+  const stop = stopSessionController({ store: sessionStore, transcript, processes })
   const removeProfile = removeProfileController(database)
 
   return ok({
@@ -148,13 +172,24 @@ export function composeMain({
       [listSessions.name]: listSessionsController(database),
       [createSession.name]: createSessionController(database, clock, ids),
       [openSession.name]: openSessionController(database, transcript),
-      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, clock, ids, log }),
-      [stopSession.name]: stopSessionController({ store: sessionStore, transcript, processes }),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, guard, clock, ids, log }),
+      // Stop also answers "cancel" for the open question of the session. The turn then ends with "Stopped.".
+      [stopSession.name]: async (input: { id: string }) => {
+        const result = await stop(input)
+        questions.cancelSession(input.id)
+        return result
+      },
+      [listQuestions.name]: listQuestionsController(questions),
+      [answerQuestion.name]: answerQuestionController({ questions }),
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
       [deleteSession.name]: deleteSessionController(database, release)
     },
     notices,
-    shutdown: () => processes.releaseAll(),
+    shutdown: () => {
+      // A turn that waits for an answer never ends by itself. Answer "cancel" first, or the quit waits for ever.
+      questions.cancelAll()
+      return processes.releaseAll()
+    },
     close: () => database.close()
   })
 }

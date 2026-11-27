@@ -16,11 +16,13 @@ import { OpenSession } from './components/OpenSession'
 import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
+import { QuestionDialog } from './components/QuestionDialog'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import type { SessionSettings } from '../../shared/model'
 import { invokeContract } from './invoke'
 import { useNavigation, type View } from './navigation'
 import { useProfiles } from './useProfiles'
+import { useQuestions } from './useQuestions'
 
 type OpenDialog =
   | { kind: 'search' }
@@ -32,6 +34,8 @@ type OpenDialog =
 export function App() {
   const { state, error, reload, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
+  // The questions of the main process (trust and directory). The window shows the oldest one.
+  const { questions, answer: answerQuestion } = useQuestions()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
   // View state: the user closed the dialog of the directories for now. It shows again at the next start.
@@ -152,6 +156,7 @@ export function App() {
             key={view.sessionId}
             id={view.sessionId}
             profileNameOf={(profileId) => profiles.find((profile) => profile.id === profileId)?.name ?? null}
+            asking={questions.some((question) => question.sessionId === view.sessionId)}
             onModeSaved={() => void reload()}
             onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
           />
@@ -292,6 +297,9 @@ export function App() {
         <div className="content">{renderPage()}</div>
       </main>
       {renderDialog()}
+      {questions[0] && (
+        <QuestionDialog key={questions[0].id} question={questions[0]} onAnswer={(answer) => answerQuestion(questions[0]!, answer)} />
+      )}
       {withoutDirectory.length > 0 && !directoriesPostponed && (
         <DirectoriesDialog
           profiles={withoutDirectory}

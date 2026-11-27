@@ -9,6 +9,7 @@ import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.p
 import { ControlServer } from '../../../tests/simulated-agent/control'
 import { AcpAgents } from '../../providers/acp/acp-agents'
 import { claudeCodeRecipe } from '../../providers/claude-code/claude-code'
+import type { ProjectScanner } from '../../building-blocks/project-scanner.port'
 import { contracts } from '../contracts'
 import { composeMain, DATABASE_FILE, type Composition } from './composition'
 import { createInvoke } from './ipc'
@@ -63,12 +64,13 @@ interface Event {
 const events = () => published.map((entry) => entry.payload as Event)
 const isIdle = (event: Event) => event.change.type === 'status' && event.change.status === 'idle'
 
-function start(agents: AgentPort = noAgents) {
+function start(agents: AgentPort = noAgents, scanner?: ProjectScanner) {
   published = []
   const composed = composeMain({
     dataDir,
     github,
     agents,
+    scanner,
     publish: (name, payload) => {
       published.push({ name, payload })
       wake?.()
@@ -396,5 +398,192 @@ describe('composeMain', () => {
     expect(composeMain({ dataDir, github, agents: noAgents, publish: () => undefined })).toMatchObject({ ok: false, error: { code: 'database-newer' } })
     expect((await readFile(join(dataDir, DATABASE_FILE))).equals(before)).toBe(true)
     expect(await readdir(dataDir)).toEqual([DATABASE_FILE])
+  })
+  describe('the trust and directory questions (decision 0007)', () => {
+    /** A port that counts its starts. Each process is ready at once and ends its turn at once. */
+    function countingAgents() {
+      const starts: Parameters<AgentPort['start']>[0][] = []
+      const port: AgentPort = {
+        start: (input) => {
+          starts.push(input)
+          return {
+            ready: Promise.resolve(ok({ agentSessionId: `agent-${starts.length}`, resumed: false, resumeError: null })),
+            prompt: async () => ok('end_turn' as const),
+            cancel: async () => undefined,
+            close: async () => undefined
+          }
+        }
+      }
+      return { starts, port }
+    }
+
+    type Listed = { ok: true; value: { revision: number; questions: { id: string; sessionId: string; kind: string }[] } }
+
+    async function setupRepository(scanner?: ProjectScanner) {
+      const { starts, port } = countingAgents()
+      const repository = join(rootDir, 'repo-b')
+      await mkdir(join(repository, '.git'), { recursive: true })
+      const composed = start(port, scanner)
+      await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
+      const [profile] = (await snapshotOf(composed.call)).profiles
+      const create = async (prompt: string) => {
+        const created = (await composed.call('sessions.create', { profileId: profile!.id, prompt, mode: 'ask', model: 'default', sourcePath: repository, attachments: [] })) as { ok: true; value: { id: string } }
+        return created.value.id
+      }
+      const list = async () => (await composed.call('repositories.list-questions', {})) as Listed
+      const questionOf = async () => {
+        while ((await list()).value.questions.length === 0) await new Promise<void>((resolve) => setImmediate(resolve))
+        return (await list()).value.questions[0]!
+      }
+      return { ...composed, starts, create, list, questionOf }
+    }
+
+    it('asks before any agent process starts, and starts the session after "Trust"', async () => {
+      const { call, starts, create, list, questionOf } = await setupRepository()
+      const id = await create('Fix the login page')
+      expect(await call('sessions.send-message', { id, text: 'Fix the login page' })).toEqual({ ok: true, value: {} })
+      const question = await questionOf()
+      expect(question).toMatchObject({ kind: 'trust', sessionId: id })
+      expect(starts).toHaveLength(0)
+      // The event carries the change and its revision, and the snapshot has the same revision.
+      const opened = published.filter((entry) => entry.name === 'repositories.questions-changed').map((entry) => entry.payload)
+      expect(opened).toMatchObject([{ revision: 1, change: { type: 'opened', question: { id: question.id } } }])
+      expect((await list()).value.revision).toBe(1)
+
+      expect(await call('repositories.answer-question', { sessionId: id, questionId: question.id, answer: 'allow-once' })).toMatchObject({ ok: false, error: { code: 'answer-not-offered' } })
+      expect(await call('repositories.answer-question', { sessionId: id, questionId: question.id, answer: 'trust' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect(starts).toHaveLength(1)
+      expect((await list()).value.questions).toEqual([])
+
+      // The answer is stored: a second session in the repository asks nothing.
+      const second = await create('List the open issues')
+      published = []
+      expect(await call('sessions.send-message', { id: second, text: 'List the open issues' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect(starts).toHaveLength(2)
+      expect(published.some((entry) => entry.name === 'repositories.questions-changed')).toBe(false)
+    })
+
+    it('ends the turn with the notice of the state Trust refused after "Cancel", and starts nothing', async () => {
+      const { call, starts, create, questionOf } = await setupRepository()
+      const id = await create('Fix the login page')
+      await call('sessions.send-message', { id, text: 'Fix the login page' })
+      const question = await questionOf()
+      await call('repositories.answer-question', { sessionId: id, questionId: question.id, answer: 'cancel' })
+      await until(() => events().some(isIdle))
+      expect(starts).toHaveLength(0)
+      expect(await call('sessions.open', { id })).toMatchObject({
+        ok: true,
+        value: { entries: [{ entry: { kind: 'user' } }, { entry: { kind: 'notice', tone: 'info', text: 'Aether did not start the agent in this repository.' } }], status: 'idle' }
+      })
+    })
+
+    it('answers "cancel" for the open question when the user stops the session', async () => {
+      const { call, starts, create, list, questionOf } = await setupRepository()
+      const id = await create('Fix the login page')
+      await call('sessions.send-message', { id, text: 'Fix the login page' })
+      await questionOf()
+      expect(await call('sessions.stop', { id })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+      expect((await list()).value.questions).toEqual([])
+      expect(starts).toHaveLength(0)
+      expect(await call('sessions.open', { id })).toMatchObject({ ok: true, value: { entries: [{ entry: { kind: 'user' } }, { entry: { text: 'Stopped.' } }] } })
+    })
+
+    it('answers "cancel" for an open question when the session is deleted, and when Aether shuts down', async () => {
+      const { call, composition, starts, create, list, questionOf } = await setupRepository()
+      const first = await create('Fix the login page')
+      await call('sessions.send-message', { id: first, text: 'Fix the login page' })
+      await questionOf()
+      expect(await call('sessions.delete', { id: first })).toEqual({ ok: true, value: {} })
+      expect((await list()).value.questions).toEqual([])
+
+      const second = await create('Review the login page')
+      await call('sessions.send-message', { id: second, text: 'Review the login page' })
+      await questionOf()
+      // Without the wake-up, the shutdown would wait for ever for the turn that waits for the answer.
+      await composition.shutdown()
+      expect((await list()).value.questions).toEqual([])
+      expect(starts).toHaveLength(0)
+    })
+    it('asks for trust in a plain folder with an empty .claude/settings.local.json, through the scanner of Claude Code, and starts nothing (F1, F2)', async () => {
+      const { starts, port } = countingAgents()
+      const plain = join(rootDir, 'notes-tool')
+      await mkdir(join(plain, '.claude'), { recursive: true })
+      await writeFile(join(plain, '.claude', 'settings.local.json'), '{}')
+      // No scanner is passed: the composition uses the default one, as the app does.
+      const { call, composition } = start(port)
+      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
+      const [profile] = (await snapshotOf(call)).profiles
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Sort the notes', mode: 'ask', model: 'default', sourcePath: plain, attachments: [] })) as { ok: true; value: { id: string } }
+      await call('sessions.send-message', { id: created.value.id, text: 'Sort the notes' })
+      let listed: Listed
+      do {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        listed = (await call('repositories.list-questions', {})) as Listed
+      } while (listed.value.questions.length === 0)
+      expect(listed.value.questions[0]).toMatchObject({
+        kind: 'trust',
+        sessionId: created.value.id,
+        repository: 'notes-tool',
+        files: [{ name: join('.claude', 'settings.local.json'), keys: [] }]
+      })
+      expect(starts).toHaveLength(0)
+      await composition.shutdown()
+    })
+
+    describe('a stop, a delete or a quit during the scan of the folder (F3)', () => {
+      /** The reproduction of the reviewer: the scan waits for the test, and the user cancels in that time. */
+      async function duringScan(cancel: (ctx: Awaited<ReturnType<typeof setupRepository>>, id: string) => Promise<void>) {
+        let release: () => void = () => undefined
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const scanner: ProjectScanner = {
+          scan: async () => {
+            await gate
+            return { hooks: [], mcpServers: [], files: [], unreadable: [] }
+          }
+        }
+        const ctx = await setupRepository(scanner)
+        const id = await ctx.create('Fix the login page')
+        await ctx.call('sessions.send-message', { id, text: 'Fix the login page' })
+        for (let wait = 0; wait < 30; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        await cancel(ctx, id)
+        release()
+        for (let wait = 0; wait < 30; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        return { ...ctx, id }
+      }
+
+      it('opens no question after Stop, and the turn ends with "Stopped."', async () => {
+        const ctx = await duringScan(async ({ call }, id) => void (await call('sessions.stop', { id })))
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        expect(await ctx.call('sessions.open', { id: ctx.id })).toMatchObject({
+          ok: true,
+          value: { status: 'idle', entries: [{ entry: { kind: 'user' } }, { entry: { text: 'Stopped.' } }] }
+        })
+      })
+
+      it('opens no question after a delete of the session', async () => {
+        const ctx = await duringScan(async ({ call }, id) => void (await call('sessions.delete', { id })))
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+      })
+
+      it('opens no question after a shutdown, and the shutdown ends', async () => {
+        let ended = false
+        const ctx = await duringScan(async ({ composition }) => {
+          void composition.shutdown().then(() => {
+            ended = true
+          })
+        })
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        for (let wait = 0; wait < 30 && !ended; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(ended).toBe(true)
+      })
+    })
   })
 })
