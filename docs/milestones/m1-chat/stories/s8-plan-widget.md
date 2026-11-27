@@ -58,6 +58,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   - Later item, out of m1: the user can edit the title of a session.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again. This is decided by the user (2026-11-27).
+- The dock has no line above it. User decision, 2026-11-27.
 - The dock itself never scrolls. The composer is always fully in view.
   - Only the list of the plan widget can scroll inside, in its own area.
   - The dock has no scroll offset when the locked place check of `s8/fixture.ts` (128-134) runs.
