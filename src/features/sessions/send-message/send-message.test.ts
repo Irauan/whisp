@@ -20,7 +20,7 @@ import { Processes } from '../processes.store'
 import { SessionStore } from '../session.store'
 import { Transcript } from '../transcript.store'
 import { sendMessage } from './send-message.contract'
-import { sendMessageHandler, type SendMessageDeps } from './send-message.handler'
+import { sendMessageHandler, type SendMessageDeps, type StartGuard, type StartRequest } from './send-message.handler'
 
 /** One deferred value, so that a test decides when an agent answers. */
 function deferred<Value>() {
@@ -87,7 +87,9 @@ class FakeAgents implements AgentPort {
   }
 }
 
-function setup(options: { login?: string | null; token?: Result<string, 'github-cli-missing' | 'github-token-missing'> } = {}) {
+function setup(
+  options: { login?: string | null; token?: Result<string, 'github-cli-missing' | 'github-token-missing'>; guard?: StartGuard } = {}
+) {
   const opened = openDatabase(':memory:', MIGRATIONS)
   if (!opened.ok) throw new Error(opened.error.message)
   const { database } = opened.value
@@ -110,6 +112,13 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
   const starting = new AccountsInStart()
   const logged: string[] = []
   const tokens: string[] = []
+  const requests: StartRequest[] = []
+  const guard: StartGuard =
+    options.guard ??
+    ((request) => {
+      requests.push(request)
+      return Promise.resolve(ok({}))
+    })
   const github: GithubTokenPort = {
     tokenOf: (name) => {
       tokens.push(name)
@@ -123,6 +132,7 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
     agents,
     github,
     starting,
+    guard,
     // The slice `record-agent-update` does this in the app. A slice never imports another slice, so the test
     // connects the two kinds of update that it needs by hand.
     record: (sessionId, update) => {
@@ -141,7 +151,7 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
     if (!found) throw new Error(`The agent process ${index} does not exist.`)
     return found
   }
-  return { database, store, transcript, processes, agents, events, logged, tokens, starting, deps, send, processOf }
+  return { database, store, transcript, processes, agents, events, logged, tokens, requests, starting, deps, send, processOf }
 }
 
 const entriesOf = (store: SessionStore, id = 's1') => store.entriesOf(id).map((view) => view.entry)
@@ -332,12 +342,17 @@ describe('sessions.send-message', () => {
 
   it('holds the account of a first start in `starting` from the choice of the account until the start ends, also when the start fails', async () => {
     const { database, starting, send, processOf } = setup()
+    const held = async (providerId: string) => {
+      for (let wait = 0; wait < 50 && !starting.has(providerId); wait += 1) await Promise.resolve()
+      expect(starting.has(providerId)).toBe(true)
+    }
     database
       .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{}', 1, '2026-01-01')")
       .run()
     const first = send('s1', 'Say hello')
-    // The account is read and held before the GitHub token arrives, so no edit can come between.
-    expect(starting.has('v1')).toBe(true)
+    // The gate answers first, so that no account is read before the answer. The account is then read and
+    // held in one step, with no wait between, so no edit can come between.
+    await held('v1')
     const one = await processOf(0)
     expect(starting.has('v1')).toBe(true)
     one.becomeReady('a1')
@@ -346,7 +361,7 @@ describe('sessions.send-message', () => {
     expect(starting.has('v1')).toBe(false)
 
     const failing = send('s2', 'Start fresh')
-    expect(starting.has('v1')).toBe(true)
+    await held('v1')
     const two = await processOf(1)
     two.start.resolve(err('failed', 'Claude Code did not start.'))
     await failing.finished
@@ -663,5 +678,91 @@ describe('sessions.send-message', () => {
     agent.turn.resolve(ok('cancelled'))
     await finished
     expect(entriesOf(store).map((entry) => entry.kind)).toEqual(['user', 'agent', 'notice'])
+  })
+  describe('the gate before a start (decision 0007)', () => {
+    const refusal = (): StartGuard => () => Promise.resolve(err('trust-refused', 'Aether did not start the agent in this repository.'))
+
+    it('asks the gate with the session, the profile and the folder of the saved row, before anything else', async () => {
+      const { requests, send, processOf } = setup()
+      const { finished } = send('s1', 'Say hello')
+      const agent = await processOf(0)
+      expect(requests).toEqual([{ sessionId: 's1', profileId: 'p1', folder: process.cwd() }])
+      agent.becomeReady('a1')
+      agent.turn.resolve(ok('end_turn'))
+      await finished
+    })
+
+    it('starts nothing before the answer: no process, no account, no token query', async () => {
+      let answer: (value: Result<unknown, string>) => void = () => undefined
+      const waiting = new Promise<Result<unknown, string>>((resolve) => {
+        answer = resolve
+      })
+      const { database, agents, tokens, transcript, send, processOf } = setup({ guard: () => waiting })
+      const { finished } = send('s1', 'Say hello')
+      for (let wait = 0; wait < 20; wait += 1) await Promise.resolve()
+      expect(agents.processes).toHaveLength(0)
+      expect(tokens).toEqual([])
+      expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
+      expect(transcript.statusOf('s1')).toBe('starting')
+      answer(ok({}))
+      const agent = await processOf(0)
+      agent.becomeReady('a1')
+      agent.turn.resolve(ok('end_turn'))
+      await finished
+    })
+
+    it('shows the refusal as an info notice, starts nothing and leaves the session idle', async () => {
+      const { database, store, agents, tokens, transcript, send } = setup({ guard: refusal() })
+      const { result, finished } = send('s1', 'Say hello')
+      expect(result.ok).toBe(true)
+      await finished
+      expect(entriesOf(store)).toEqual([
+        { kind: 'user', text: 'Say hello' },
+        { kind: 'notice', tone: 'info', text: 'Aether did not start the agent in this repository.', code: 'trust-refused' }
+      ])
+      expect(agents.processes).toHaveLength(0)
+      expect(tokens).toEqual([])
+      expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
+      expect(transcript.statusOf('s1')).toBe('idle')
+    })
+
+    it('shows "Stopped." and not the refusal when the user stopped the turn', async () => {
+      let answer: (value: Result<unknown, string>) => void = () => undefined
+      const waiting = new Promise<Result<unknown, string>>((resolve) => {
+        answer = resolve
+      })
+      const { store, processes, send } = setup({ guard: () => waiting })
+      const { finished } = send('s1', 'Say hello')
+      const turn = processes.turnOf('s1')
+      if (turn) turn.stopped = true
+      answer(err('trust-refused', 'Aether did not start the agent in this repository.'))
+      await finished
+      expect(entriesOf(store).at(-1)).toEqual({ kind: 'notice', tone: 'info', text: 'Stopped.', code: 'stopped' })
+    })
+
+    it('asks again for a resume, because a start without a process is a start, and not for a process that runs', async () => {
+      const { requests, processes, send, processOf } = setup()
+      const first = send('s1', 'Say hello')
+      const agent = await processOf(0)
+      agent.becomeReady('a1')
+      agent.turn.resolve(ok('end_turn'))
+      await first.finished
+      expect(requests).toHaveLength(1)
+      // The process is still alive: the next message does not ask.
+      const second = send('s1', 'Again')
+      for (let wait = 0; wait < 20; wait += 1) await Promise.resolve()
+      expect(requests).toHaveLength(1)
+      agent.turn.resolve(ok('end_turn'))
+      await second.finished
+      // The process is gone, for example after a release: the next message resumes, and asks.
+      await processes.release('s1')
+      const third = send('s1', 'After a release')
+      const resumed = await processOf(1)
+      expect(requests).toHaveLength(2)
+      expect(resumed.input.resume).toBe('a1')
+      resumed.becomeReady('a1')
+      resumed.turn.resolve(ok('end_turn'))
+      await third.finished
+    })
   })
 })

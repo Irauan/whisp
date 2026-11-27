@@ -7,6 +7,9 @@ import { openSession } from '../features/sessions/open/open.contract'
 import { sendMessage } from '../features/sessions/send-message/send-message.contract'
 import { setMode } from '../features/sessions/set-mode/set-mode.contract'
 import { stopSession } from '../features/sessions/stop/stop.contract'
+import { answerQuestion } from '../features/repositories/answer-question/answer-question.contract'
+import { listQuestions } from '../features/repositories/list-questions/list-questions.contract'
+import { QUESTIONS_CHANGED } from '../features/repositories/question'
 import { addProfile } from '../features/profiles/add/add.contract'
 import { chooseDirectories } from '../features/profiles/choose-directories/choose-directories.contract'
 import { editProfile } from '../features/profiles/edit/edit.contract'
@@ -30,11 +33,14 @@ export const contracts: readonly Contract[] = [
   sendMessage,
   stopSession,
   setMode,
-  deleteSession
+  deleteSession,
+  listQuestions,
+  answerQuestion
 ]
 
 /**
  * The registry of events. `subscribe` accepts only these names.
  * `sessions.changed` carries one change of a session and its revision (decision 0002).
+ * `repositories.questions-changed` carries one change of the open questions and its revision.
  */
-export const events: readonly string[] = [SESSIONS_CHANGED]
+export const events: readonly string[] = [SESSIONS_CHANGED, QUESTIONS_CHANGED]

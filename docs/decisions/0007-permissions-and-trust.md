@@ -25,3 +25,16 @@ Claude in SDK mode shows no trust question. A test showed that a repository runs
 
 - Trust for the whole root. A cloned repository under the root could run its hooks without a question.
 - Refusal of directories outside the root. The native Claude apps ask instead.
+
+## Note of 2026-11-27
+
+Decided by the user, during story S6 of milestone m1-chat. The text above stays as it was. This note refines it.
+
+- Trust answers belong to one profile. Trust of a repository in one profile does not trust it in another. Migration `003` stores them.
+- A plain folder asks for trust when it has any `.claude/settings*.json` file or any `.mcp.json` file. This includes `settings.local.json`, any hook event and any key. A plain folder without them starts at once.
+- A Git repository always asks. The question lists the hooks by event and command, the MCP servers and the other keys by name. It reads the repository root and the session directory.
+- The most specific workspace directory wins. With profile A at `X` and profile B at `X\client`, a session of A in `X\client` gets the question for another profile.
+- Aether walks up from the session directory, also past the workspace directory, to find `.git`. Trust covers that repository.
+- "Allow once" covers one session. "Always allow for this profile" covers that folder for that profile, also after a restart.
+- The question for another profile offers "Allow once", "Always allow for this profile" and "Cancel".
+- Known limit: trust stays after the files change. A hook that a later commit adds runs without a new question.
