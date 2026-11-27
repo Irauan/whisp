@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AccountsInStart } from '../../building-blocks/accounts-in-start'
 import { openDatabase } from '../../building-blocks/database'
 import { MIGRATIONS } from '../../building-blocks/migrations'
 import { ProfileStore } from './profile.store'
@@ -168,5 +169,34 @@ describe('ProfileStore.saveProvider: used accounts (decision 0014)', () => {
       { profile_id: 'p1', is_current: 1 },
       { profile_id: 'p2', is_current: 1 }
     ])
+  })
+
+  it('counts an account in a first start as used: an edit makes a new current account and leaves the account that the process started with (R2-1)', () => {
+    const { database, ids } = setup()
+    const starting = new AccountsInStart()
+    const store = new ProfileStore(database, starting)
+    store.saveClaude('p1', { configFolder: 'C:/f1', profileName: null }, ids, '2026-01-01')
+    // The process starts with F1. No agent run names the account yet.
+    starting.begin('v1')
+    store.saveClaude('p1', { configFolder: 'C:/f3', profileName: null }, ids, '2026-01-02')
+    expect(accounts(database)).toEqual([
+      { id: 'v1', settings: '{"configFolder":"C:/f1"}', is_current: 0 },
+      { id: 'v2', settings: '{"configFolder":"C:/f3"}', is_current: 1 }
+    ])
+    // The start ends and the agent run names v1. It still holds F1, and the trigger locks it.
+    starting.end('v1')
+    useAccount(database, 'v1', 'r1')
+    expect(() => database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f3"}' WHERE id = 'v1'`).run()).toThrow(/cannot change/)
+  })
+
+  it('changes an account in place again when its first start has ended without an agent run', () => {
+    const { database, ids } = setup()
+    const starting = new AccountsInStart()
+    const store = new ProfileStore(database, starting)
+    store.saveClaude('p1', { configFolder: 'C:/f1', profileName: null }, ids, '2026-01-01')
+    starting.begin('v1')
+    starting.end('v1')
+    store.saveClaude('p1', { configFolder: 'C:/f2', profileName: null }, ids, '2026-01-02')
+    expect(accounts(database)).toEqual([{ id: 'v1', settings: '{"configFolder":"C:/f2"}', is_current: 1 }])
   })
 })

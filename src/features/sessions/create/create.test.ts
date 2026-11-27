@@ -63,15 +63,13 @@ describe('sessions.create', () => {
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
   })
 
-  it('gives the session the current Claude account of its profile, not an older account (decision 0014)', async () => {
+  it('leaves the account of the session unset, so that the first start reads the current account of the profile (decision 0014)', async () => {
     const { create, store, database } = setup()
-    const insert = database.prepare(
-      "INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, 'w1', 'claude-code', 'Claude', '{}', ?, '2026-01-01')"
-    )
-    insert.run('old', 0)
-    insert.run('new', 1)
+    database
+      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'w1', 'claude-code', 'Claude', '{}', 1, '2026-01-01')")
+      .run()
     await create(input(folder))
-    expect(store.find('s1')?.providerId).toBe('new')
+    expect(store.find('s1')?.providerId).toBeNull()
   })
 
   it('saves Approve all as the user chose it', async () => {

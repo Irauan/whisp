@@ -134,12 +134,6 @@ export class SessionStore {
     }
   }
 
-  /** The account with this ID, or null. */
-  providerById(id: string): ProviderAccount | null {
-    const row = this.database.prepare('SELECT id, settings FROM providers WHERE id = ?').get(id)
-    return row ? { id: String(row.id), settings: settingsSchema.parse(JSON.parse(String(row.settings))) } : null
-  }
-
   /** The current account of the profile for this kind, or null (decision 0014). */
   currentProvider(profileId: string, kind: string): ProviderAccount | null {
     const row = this.database.prepare('SELECT id, settings FROM providers WHERE profile_id = ? AND kind = ? AND is_current = 1').get(profileId, kind)
@@ -164,14 +158,14 @@ export class SessionStore {
 
   /**
    * Saves the first agent run of the session in one transaction: its row in `agent_sessions`, and the
-   * account of the session when the session had none. A later start resumes with the account of the run.
+   * account of the session (`sessions.provider_id`). A later start resumes with the account of the run.
    */
   saveFirstRun(sessionId: string, run: { id: string; providerId: string; externalId: string; createdAt: string }): void {
     this.database.transaction(() => {
       this.database
         .prepare('INSERT INTO agent_sessions (id, session_id, provider_id, external_id, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(run.id, sessionId, run.providerId, run.externalId, run.createdAt)
-      this.database.prepare('UPDATE sessions SET provider_id = ? WHERE id = ? AND provider_id IS NULL').run(run.providerId, sessionId)
+      this.database.prepare('UPDATE sessions SET provider_id = ? WHERE id = ?').run(run.providerId, sessionId)
     })
   }
 

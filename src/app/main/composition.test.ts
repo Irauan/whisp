@@ -283,6 +283,85 @@ describe('composeMain', () => {
     }
   })
 
+  it('keeps the settings that a process started with: an edit of the account during the first start makes a new account, and the resume uses the old one (R2-1)', async () => {
+    // A port whose processes wait for the test.
+    interface Fake {
+      input: Parameters<AgentPort['start']>[0]
+      ready(id: string): void
+      end(): void
+    }
+    const fakes: Fake[] = []
+    let announce: () => void = () => undefined
+    const agents: AgentPort = {
+      start: (input, listener) => {
+        let resolveReady: (value: ReturnType<typeof ok<{ agentSessionId: string; resumed: boolean; resumeError: string | null }>>) => void = () => undefined
+        const readyPromise = new Promise<ReturnType<typeof ok<{ agentSessionId: string; resumed: boolean; resumeError: string | null }>>>((resolve) => {
+          resolveReady = resolve
+        })
+        fakes.push({
+          input,
+          ready: (agentSessionId) => resolveReady(ok({ agentSessionId, resumed: input.resume !== null, resumeError: null })),
+          end: () => listener.exited({ code: 0, logTail: '' })
+        })
+        announce()
+        return {
+          ready: readyPromise,
+          prompt: async () => ok('end_turn' as const),
+          cancel: async () => undefined,
+          close: async () => undefined
+        }
+      }
+    }
+    const started = async (count: number) => {
+      while (fakes.length < count) {
+        await new Promise<void>((resolve) => {
+          announce = resolve
+        })
+      }
+    }
+
+    const { composition, call } = start(agents)
+    const folders = { f1: join(rootDir, 'claude-f1'), f3: join(rootDir, 'claude-f3') }
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f1, claudeProfileName: null })
+    const [profile] = (await snapshotOf(call)).profiles
+    const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+    const id = created.value.id
+
+    // The process starts with F1. It is not ready, so no agent run names the account yet.
+    expect(await call('sessions.send-message', { id, text: 'Say hello' })).toEqual({ ok: true, value: {} })
+    await started(1)
+    expect(fakes[0]!.input.settings).toEqual({ configFolder: folders.f1 })
+    // The user edits the Claude folder of the profile in this time.
+    expect(await call('profiles.edit', { id: profile!.id, name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: folders.f3, claudeProfileName: null })).toMatchObject({ ok: true })
+    fakes[0]!.ready('agent-1')
+    await until(() => events().some(isIdle))
+
+    // The account that the agent run names holds F1, and F3 is a new current account.
+    const readDatabase = () => new DatabaseSync(join(dataDir, DATABASE_FILE), { readOnly: true })
+    const database = readDatabase()
+    try {
+      const accounts = database.prepare('SELECT id, settings, is_current FROM providers ORDER BY created_at, rowid').all()
+      expect(accounts.map((row) => [row.settings, row.is_current])).toEqual([
+        [JSON.stringify({ configFolder: folders.f1 }), 0],
+        [JSON.stringify({ configFolder: folders.f3 }), 1]
+      ])
+      expect(database.prepare('SELECT provider_id, external_id FROM agent_sessions').all()).toEqual([{ provider_id: accounts[0]!.id, external_id: 'agent-1' }])
+    } finally {
+      database.close()
+    }
+
+    // The process ends. The resume uses the settings that the first process started with.
+    published = []
+    fakes[0]!.end()
+    expect(await call('sessions.send-message', { id, text: 'Are you still there?' })).toEqual({ ok: true, value: {} })
+    await started(2)
+    expect(fakes[1]!.input.settings).toEqual({ configFolder: folders.f1 })
+    expect(fakes[1]!.input.resume).toBe('agent-1')
+    fakes[1]!.ready('agent-1')
+    await until(() => events().some(isIdle))
+    await composition.shutdown()
+  })
+
   it('keeps an unreadable workspace.json in place, shows a notice and imports nothing', async () => {
     const unreadable = Buffer.from('{"version":4,"accounts":[{"id":"personal","label":"Personal"\r\n')
     await writeFile(join(dataDir, 'workspace.json'), unreadable)

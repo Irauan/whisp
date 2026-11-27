@@ -35,8 +35,6 @@ describe('SessionStore: the agent runs of a session', () => {
     insertProvider(database, 'old', 'p1', '{"configFolder":"C:/f1"}', 0)
     insertProvider(database, 'new', 'p1', '{"configFolder":"C:/f2"}', 1)
     expect(store.currentProvider('p1', 'claude-code')).toEqual({ id: 'new', settings: { configFolder: 'C:/f2' } })
-    expect(store.providerById('old')).toEqual({ id: 'old', settings: { configFolder: 'C:/f1' } })
-    expect(store.providerById('missing')).toBeNull()
   })
 
   it('creates the current account of a profile once, and gives the same account to the next call', () => {
@@ -54,18 +52,18 @@ describe('SessionStore: the agent runs of a session', () => {
     expect(store.ensureCurrentProvider('p1', 'claude-code', 'v2', '2026-01-03')).toEqual({ id: 'v1', settings: { configFolder: 'C:/claude' } })
   })
 
-  it('saves the first run with its account, and gives the account to a session that had none', () => {
+  it('saves the first run with its account, and sets the account of the session', () => {
     const { database, store } = setup()
     insertProvider(database, 'v1', 'p1', '{"configFolder":"C:/claude"}', 1)
     store.saveFirstRun('s1', { id: 'r1', providerId: 'v1', externalId: 'a1', createdAt: '2026-01-02' })
     expect(store.agentRunOf('s1')).toEqual({ id: 'r1', providerId: 'v1', settings: { configFolder: 'C:/claude' }, externalId: 'a1' })
     expect(store.find('s1')?.providerId).toBe('v1')
     expect(store.agentRunOf('s2')).toBeNull()
-    // A session that has an account keeps it.
+    // The account of the run is the account of the session.
     insertProvider(database, 'v2', 'p1', '{}', 0)
     database.prepare("UPDATE sessions SET provider_id = 'v2' WHERE id = 's2'").run()
     store.saveFirstRun('s2', { id: 'r2', providerId: 'v1', externalId: 'a2', createdAt: '2026-01-02' })
-    expect(store.find('s2')?.providerId).toBe('v2')
+    expect(store.find('s2')?.providerId).toBe('v1')
   })
 
   it('reads the newest run, and saves a new agent session in the run', () => {
@@ -85,7 +83,7 @@ describe('SessionStore: the agent runs of a session', () => {
     expect(() => database.prepare(`UPDATE providers SET settings = '{}' WHERE id = 'v1'`).run()).toThrow(/cannot change/)
     database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f1","profileName":"work"}' WHERE id = 'v1'`).run()
     database.prepare(`UPDATE providers SET label = 'Work' WHERE id = 'v1'`).run()
-    expect(store.providerById('v1')?.settings).toEqual({ configFolder: 'C:/f1', profileName: 'work' })
+    expect(database.prepare("SELECT settings FROM providers WHERE id = 'v1'").get()).toEqual({ settings: '{"configFolder":"C:/f1","profileName":"work"}' })
     // An account that no run used can change its folder.
     insertProvider(database, 'v2', 'p1', '{"configFolder":"C:/f1"}', 0)
     database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f2"}' WHERE id = 'v2'`).run()

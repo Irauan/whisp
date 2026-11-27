@@ -10,6 +10,7 @@ import type {
   Started,
   StopReason
 } from '../../../building-blocks/agent.port'
+import { AccountsInStart } from '../../../building-blocks/accounts-in-start'
 import { openDatabase } from '../../../building-blocks/database'
 import type { GithubTokenPort } from '../../../building-blocks/github.port'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
@@ -106,6 +107,7 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
   const transcript = new Transcript(store, (event) => events.push(event), clock, ids)
   const agents = new FakeAgents()
   const processes = new Processes()
+  const starting = new AccountsInStart()
   const logged: string[] = []
   const tokens: string[] = []
   const github: GithubTokenPort = {
@@ -120,6 +122,7 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
     processes,
     agents,
     github,
+    starting,
     // The slice `record-agent-update` does this in the app. A slice never imports another slice, so the test
     // connects the two kinds of update that it needs by hand.
     record: (sessionId, update) => {
@@ -138,7 +141,7 @@ function setup(options: { login?: string | null; token?: Result<string, 'github-
     if (!found) throw new Error(`The agent process ${index} does not exist.`)
     return found
   }
-  return { database, store, transcript, processes, agents, events, logged, tokens, deps, send, processOf }
+  return { database, store, transcript, processes, agents, events, logged, tokens, starting, deps, send, processOf }
 }
 
 const entriesOf = (store: SessionStore, id = 's1') => store.entriesOf(id).map((view) => view.entry)
@@ -255,13 +258,12 @@ describe('sessions.send-message', () => {
     expect(store.agentRunOf('s1')).toBeNull()
   })
 
-  it('starts a session with the account of the session, and resumes with the account of its run, also after the current account changed (decision 0014)', async () => {
+  it('starts a session with the current account of its profile, and resumes with the account of its run, also after the current account changed (decision 0014)', async () => {
     const { database, store, processes, send, processOf } = setup()
     const insert = database.prepare(
       "INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, 'p1', 'claude-code', 'Claude', ?, ?, ?)"
     )
     insert.run('v1', '{"configFolder":"C:/f1"}', 1, '2026-01-01')
-    database.prepare("UPDATE sessions SET provider_id = 'v1' WHERE id = 's1'").run()
     const first = send('s1', 'Say hello')
     const one = await processOf(0)
     expect(one.input.settings).toEqual({ configFolder: 'C:/f1' })
@@ -282,8 +284,7 @@ describe('sessions.send-message', () => {
     expect(two.input.settings).toEqual({ configFolder: 'C:/f1' })
     expect(two.input.resume).toBe('a1')
 
-    // A session that was created with the new account starts with it.
-    database.prepare("UPDATE sessions SET provider_id = 'v2' WHERE id = 's2'").run()
+    // A session that starts now starts with the new current account.
     send('s2', 'Start fresh')
     const three = await processOf(2)
     expect(three.input.settings).toEqual({ configFolder: 'C:/f2' })
@@ -304,6 +305,70 @@ describe('sessions.send-message', () => {
     await finished
     expect(store.find('s1')?.providerId).toBe('v1')
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 1 })
+  })
+
+  it('uses the account that the user fixed when the first start failed: the retry reads the current account again (decision 0014)', async () => {
+    const { database, store, send, processOf } = setup()
+    database
+      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{\"configFolder\":\"C:/f1\"}', 1, '2026-01-01')")
+      .run()
+    const failing = send('s1', 'Say hello')
+    const one = await processOf(0)
+    expect(one.input.settings).toEqual({ configFolder: 'C:/f1' })
+    one.start.resolve(err('not-signed-in', 'Claude Code is not signed in. Open a terminal.'))
+    await failing.finished
+    expect(store.agentRunOf('s1')).toBeNull()
+
+    // No run used the account, so the edit of the profile changes it in place.
+    database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f2"}' WHERE id = 'v1'`).run()
+    const retry = send('s1', 'Say hello again')
+    const two = await processOf(1)
+    expect(two.input.settings).toEqual({ configFolder: 'C:/f2' })
+    two.becomeReady('a1')
+    two.turn.resolve(ok('end_turn'))
+    await retry.finished
+    expect(store.agentRunOf('s1')).toMatchObject({ providerId: 'v1', settings: { configFolder: 'C:/f2' } })
+  })
+
+  it('holds the account of a first start in `starting` from the choice of the account until the start ends, also when the start fails', async () => {
+    const { database, starting, send, processOf } = setup()
+    database
+      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{}', 1, '2026-01-01')")
+      .run()
+    const first = send('s1', 'Say hello')
+    // The account is read and held before the GitHub token arrives, so no edit can come between.
+    expect(starting.has('v1')).toBe(true)
+    const one = await processOf(0)
+    expect(starting.has('v1')).toBe(true)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    expect(starting.has('v1')).toBe(false)
+
+    const failing = send('s2', 'Start fresh')
+    expect(starting.has('v1')).toBe(true)
+    const two = await processOf(1)
+    two.start.resolve(err('failed', 'Claude Code did not start.'))
+    await failing.finished
+    expect(starting.has('v1')).toBe(false)
+  })
+
+  it('does not hold the account for a resume: the run names it', async () => {
+    const { database, starting, processes, send, processOf } = setup()
+    const first = send('s1', 'Say hello')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    one.turn.resolve(ok('end_turn'))
+    await first.finished
+    one.listener.exited({ code: 0, logTail: '' })
+    expect(processes.get('s1')).toBeUndefined()
+    const providerId = String(database.prepare('SELECT id FROM providers').get()?.id)
+    const again = send('s1', 'Are you still there?')
+    expect(starting.has(providerId)).toBe(false)
+    const two = await processOf(1)
+    two.becomeReady('a1', { resumed: true })
+    two.turn.resolve(ok('end_turn'))
+    await again.finished
   })
 
   it('sends the next message to the same process and the same agent session (A2)', async () => {

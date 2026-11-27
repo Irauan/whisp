@@ -1,3 +1,4 @@
+import type { AccountsInStart } from '../../../building-blocks/accounts-in-start'
 import type { AgentPort, AgentProcess, AgentStartInput, AgentUpdate } from '../../../building-blocks/agent.port'
 import type { Clock } from '../../../building-blocks/clock.port'
 import { isExistingFolder } from '../../../building-blocks/folder'
@@ -17,6 +18,11 @@ export interface SendMessageDeps {
   processes: Processes
   agents: AgentPort
   github: GithubTokenPort
+  /**
+   * The accounts that a first start uses now. An edit of such an account makes a new current account,
+   * so the account that the agent run names always holds the settings that its process started with.
+   */
+  starting: AccountsInStart
   /** Passes an update of the agent to the slice `record-agent-update`. The composition root connects them. */
   record(sessionId: string, update: AgentUpdate): void
   clock: Clock
@@ -96,12 +102,24 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
 
 /** The process of the session. It is the process of an earlier turn, or a new one. Null means that the turn ended already. */
 async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn): Promise<AgentProcess | null> {
-  const { store, transcript, processes } = deps
+  const { processes } = deps
   const id = session.id
   const existing = processes.get(id)
   if (existing) return existing
 
   const prepared = await prepareStart(deps, session)
+  try {
+    return await startProcess(deps, session, turn, prepared)
+  } finally {
+    // The agent run names the account now, or the start failed. The account no longer counts as in a start.
+    if (prepared.run === null) deps.starting.end(prepared.providerId)
+  }
+}
+
+/** Starts the process of the session, waits until it is ready, and saves the agent run. */
+async function startProcess(deps: SendMessageDeps, session: Session, turn: Turn, prepared: Prepared): Promise<AgentProcess | null> {
+  const { store, transcript, processes } = deps
+  const id = session.id
   if (turn.stopped) {
     transcript.addEntry(id, notice('info', 'Stopped.', 'stopped'))
     return null
@@ -150,34 +168,41 @@ interface Prepared {
   input: AgentStartInput
   /** The agent run of an earlier start. Null before the first start. */
   run: AgentRun | null
-  /** The account that the process starts with. A resume uses the account of its run. */
+  /** The account that the process starts with. A resume uses the account of its run. A first start holds it in `starting`. */
   providerId: string
 }
 
 /**
  * Reads what the process needs from the saved session, never from the renderer: the folder, the
  * mode and the model of the row, and the GitHub token of the profile. The account comes from the
- * agent run when the session has one: a resume uses the account of its run. Before the first start
- * it is the account of the session (decision 0014), or the current account of the profile when the
- * session has none. The first start creates an empty account when the profile has none.
+ * agent run when the session has one: a resume uses the account of its run. Without a run, the
+ * first start reads the current account of the profile at that moment (decision 0014), so a retry
+ * after a failed first start uses the account that the user fixed. It creates an empty account when
+ * the profile has none. The account stays in `starting` until the start ends.
  */
 async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Prepared> {
-  const { store, transcript, github, ids, clock } = deps
+  const { store, transcript, github, ids, clock, starting } = deps
   const run = store.agentRunOf(session.id)
   const account: ProviderAccount =
     run !== null
       ? { id: run.providerId, settings: run.settings }
-      : ((session.providerId === null ? null : store.providerById(session.providerId)) ??
-        store.ensureCurrentProvider(session.profileId, PROVIDER_KIND, ids.next(), clock.now().toISOString()))
+      : store.ensureCurrentProvider(session.profileId, PROVIDER_KIND, ids.next(), clock.now().toISOString())
+  // No code between the read of the account and this call can wait: an edit cannot change the account first.
+  if (run === null) starting.begin(account.id)
 
   const environment: Record<string, string> = {}
-  const login = store.githubLoginOf(session.profileId)
-  if (login !== null) {
-    const token = await github.tokenOf(login)
-    if (token.ok) environment.GH_TOKEN = token.value
-    else {
-      transcript.addEntry(session.id, notice('info', `Aether could not read the GitHub token of @${login}. The agent starts without it.`, 'github-token'))
+  try {
+    const login = store.githubLoginOf(session.profileId)
+    if (login !== null) {
+      const token = await github.tokenOf(login)
+      if (token.ok) environment.GH_TOKEN = token.value
+      else {
+        transcript.addEntry(session.id, notice('info', `Aether could not read the GitHub token of @${login}. The agent starts without it.`, 'github-token'))
+      }
     }
+  } catch (cause) {
+    if (run === null) starting.end(account.id)
+    throw cause
   }
 
   return {

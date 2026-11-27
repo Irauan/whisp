@@ -1,3 +1,4 @@
+import { AccountsInStart } from '../../building-blocks/accounts-in-start'
 import type { Database } from '../../building-blocks/database'
 import type { Ids } from '../../building-blocks/ids'
 import type { Profile } from './profile'
@@ -38,7 +39,14 @@ const SELECT = `SELECT p.*, v.settings AS claude_settings
 
 /** The profiles, their current Claude accounts and the current profile, in the database. */
 export class ProfileStore {
-  constructor(private readonly database: Database) {}
+  /**
+   * @param starting The accounts that a first start uses now. An account in it counts as used, so
+   *   an edit makes a new current account (decision 0014). Without it, no account is in a start.
+   */
+  constructor(
+    private readonly database: Database,
+    private readonly starting: AccountsInStart = new AccountsInStart()
+  ) {}
 
   /** Runs the work as one transaction. */
   transaction<Value>(work: () => Value): Value {
@@ -105,7 +113,8 @@ export class ProfileStore {
    * - No account and no setting: no row is made.
    * - No account: the settings make the current account.
    * - An account that no agent session used: the settings change it in place.
-   * - An account that an agent session used: it keeps its settings, because a resume reads them.
+   * - An account that an agent session used, or that a first start uses now (it has no agent
+   *   session row before its process is ready): it keeps its settings, because a resume reads them.
    *   The settings make the current account instead. An account of the profile that already has
    *   these settings becomes the current one. Otherwise a new account is made. The old account stays.
    */
@@ -121,7 +130,9 @@ export class ProfileStore {
         return
       }
       if (canonical(parseSettings(kind, JSON.parse(String(current.settings)))) === json) return
-      const used = this.database.prepare('SELECT 1 FROM agent_sessions WHERE provider_id = ?').get(String(current.id)) !== undefined
+      const used =
+        this.starting.has(String(current.id)) ||
+        this.database.prepare('SELECT 1 FROM agent_sessions WHERE provider_id = ?').get(String(current.id)) !== undefined
       if (!used) {
         this.database.prepare('UPDATE providers SET settings = ? WHERE id = ?').run(json, String(current.id))
         return

@@ -3,7 +3,7 @@ import { isExistingFolder } from '../../../building-blocks/folder'
 import type { Ids } from '../../../building-blocks/ids'
 import type { Mode } from '../../../building-blocks/mode'
 import { err, ok, type Result } from '../../../building-blocks/result'
-import { MESSAGES, PROVIDER_KIND, titleOf, type Attachment } from '../session'
+import { MESSAGES, titleOf, type Attachment } from '../session'
 import type { SessionStore } from '../session.store'
 import type { CreateSessionError } from './create.contract'
 
@@ -36,8 +36,8 @@ export function createSessionHandler(
     prompt: input.prompt,
     // The mode is saved as the user chose it. Only a new session never copies Approve all.
     mode: input.mode,
-    // The account that the next agent of this session uses: the current account of the profile (decision 0014).
-    providerId: store.currentProvider(input.profileId, PROVIDER_KIND)?.id ?? null,
+    // The first start sets the account: the current account of the profile at that moment (decision 0014).
+    providerId: null,
     sourcePath: input.sourcePath,
     model: input.model,
     attachments: input.attachments,

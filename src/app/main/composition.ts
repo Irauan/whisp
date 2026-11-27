@@ -1,5 +1,6 @@
 import { basename, join } from 'node:path'
 import { systemClock, type Clock } from '../../building-blocks/clock.port'
+import { AccountsInStart } from '../../building-blocks/accounts-in-start'
 import type { AgentPort } from '../../building-blocks/agent.port'
 import { openDatabase, type OpenError } from '../../building-blocks/database'
 import { randomIds, type Ids } from '../../building-blocks/ids'
@@ -119,6 +120,8 @@ export function composeMain({
   const sessionStore = new SessionStore(database)
   const transcript = new Transcript(sessionStore, (event) => publish(SESSIONS_CHANGED, event), clock, ids)
   const processes = new Processes()
+  // The edit of an account and the first start of a session share this set (decision 0014).
+  const startingAccounts = new AccountsInStart()
   // The slices never call each other, so the composition root connects them: the agent process of a
   // session reports its progress to `record-agent-update`.
   const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
@@ -135,7 +138,7 @@ export function composeMain({
       [listProfiles.name]: listProfilesController(database, () => notices),
       [chooseDirectories.name]: chooseDirectoriesController(database),
       [addProfile.name]: addProfileController(database, clock, ids),
-      [editProfile.name]: editProfileController(database, clock, ids),
+      [editProfile.name]: editProfileController(database, clock, ids, startingAccounts),
       [switchProfile.name]: switchProfileController(database),
       // Removing a profile removes its sessions. Their agent processes end first.
       [removeProfileContract.name]: async (input: { id: string }) => {
@@ -145,7 +148,7 @@ export function composeMain({
       [listSessions.name]: listSessionsController(database),
       [createSession.name]: createSessionController(database, clock, ids),
       [openSession.name]: openSessionController(database, transcript),
-      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, record, clock, ids, log }),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, clock, ids, log }),
       [stopSession.name]: stopSessionController({ store: sessionStore, transcript, processes }),
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
       [deleteSession.name]: deleteSessionController(database, release)
