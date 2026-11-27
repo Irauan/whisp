@@ -41,23 +41,25 @@ Status: draft for the design review. Not approved.
 The user decided on 2026-11-27: "the text input for questions and chat should be anchored in the bottom of the feed." S8 builds the frame, because S8 owns "pinned" and runs before S5.
 
 - The session window is a fixed frame with three parts:
-  1. the header (title and facts) at the top
+  1. the header (the title and "Delete session") at the top
   2. the transcript, the only scroll area
   3. the bottom dock, always in view
 - The bottom dock holds, from the top:
-  1. the status line ("Starting Claude Code", "Working")
+  1. the status line ("Starting Claude Code", "Working", and "Waiting for your answer" from S5)
   2. the plan widget (S8)
-  3. the permission queue (S5 adds it)
-  4. the composer
+  3. the composer
+- The dock holds no card. The permission cards and the question cards of S5 show inside the log, at its end (user decision, 2026-11-27).
 - The trust and directory questions of S6 stay an app-level dialog (`QuestionDialog` in `App.tsx`). They are not cards in the dock.
 - The status line keeps the S6 condition: no "Starting Claude Code" while `asking` is true.
-- The header shows the title, the facts and the button "Delete session" (`s3/sessions.spec.ts` 117).
-  - Today the page shows the facts profile, folder and model. The mode shows only in the Mode control.
-  - The brief (Session window) lists title, profile, folder, model and mode in the header. S8 adds the mode as a fact. The fact "Mode" shows the same value as the Mode control: `liveMode ?? session.mode` (S5). The fact "Model" shows the same value as the model button.
+- The header shows only the title and the button "Delete session" (`s3/sessions.spec.ts` 117).
+  - User decision, 2026-11-27. The user said: "I don't think we need this header for sessions, at least this part detailing mode, folder, profile, and so on! The session name we can keep it and make it editable (not necessarily in this milestone)."
+  - S8 removes the facts row: Profile, Folder, Model and Mode. Mode and model stay visible as the controls of the composer.
+  - A grep of the locked tests of S2, S3, S4 and S6 (milestone branch), S7 (`story/m1-s7-settings`) and S8 (`story/m1-s8-plan-widget`) found no read of the header facts. This was a grep, not a run.
+  - Later item, out of m1: the user can edit the title of a session.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again. This is decided by the user (2026-11-27).
 - The dock itself never scrolls. The composer is always fully in view.
-  - Only the parts above the composer can scroll inside, each in its own area: the list of the plan widget and the permission queue.
+  - Only the list of the plan widget can scroll inside, in its own area.
   - The dock has no scroll offset when the locked place check of `s8/fixture.ts` (128-134) runs.
 - A draft session uses the same frame. Its dock holds only the composer.
 
@@ -67,7 +69,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - `.content` (`styles.css` 127-131) stops scrolling for the session page. Otherwise the page scrolls, and the frame fails.
 - The log always has a height above zero, also with no entries and with a tall dock.
   - The log has a minimum height, for example 120px.
-  - The parts of the dock that can grow have a cap: the list of the plan widget, the permission queue, and the text area with `COMPOSER_MAX_LINES`.
+  - The parts of the dock that can grow have a cap: the list of the plan widget, and the text area with `COMPOSER_MAX_LINES`.
 - "Prompt" stays a `<textarea>`. The tests use `toHaveValue`.
 - The visible text of the Mode button is exactly the mode label, for example "Ask". The arrow is an icon with `aria-hidden`. The S3 check `expectMode` uses `toHaveText`.
 
@@ -166,22 +168,22 @@ Each state of the mockup shows the fixed frame.
 Changes against the current screen:
 
 - Changed: the session window is a fixed frame. The header stays at the top. Only the transcript scrolls. Today the whole page scrolls, with the composer.
+- Changed: the header holds only the title and "Delete session". The facts row (Profile, Folder, Model) goes away.
 - New: the bottom dock, always in view.
 - Changed: the composer like the GitHub app. The text area is 2 to 8 lines high. The "+", Mode and model controls and the Send button sit in a row inside the box, at its bottom.
 - Changed: a failed turn shows as one muted line with an info icon. It keeps the role `alert`.
-- New: the plan widget in the dock, between the status line and the permission queue (S5).
+- New: the plan widget in the dock, between the status line and the composer.
 - Changed: the transcript shows no "Updated the plan" for the first plan of a session. Today S4 shows it for each plan update.
 - Changed: a progress update no longer adds a line "Updated the plan".
 
 Order in the session window, from the top. The S5 mockup uses the same order.
 
-1. Header and facts (fixed)
-2. Transcript (the only scroll area)
+1. Header: the title and "Delete session" (fixed)
+2. Transcript (the only scroll area): the entries, then the open cards of S5
 3. Bottom dock:
    1. Status line
    2. Plan widget (S8)
-   3. Permission queue (S5)
-   4. Composer
+   3. Composer
 
 ### UI contract of the locked tests
 
@@ -228,10 +230,6 @@ The advisor answered on the shape: mirror `sessions.set-mode`. Not hard to rever
 - A new session takes the model of the last session (`SessionComposer.tsx` 74-77). So after a save, the window tells the app to load a new snapshot of the sessions, as `onModeSaved` does.
 - The start reads the model from the session row, so the draft change reaches the agent (S7 maps the model to the agent).
 
-### Header facts before S5
-
-- S8 merges before S5. Until S5 merges, the header facts "Mode" and "Model" read `session.mode` and `session.model`.
-- S5 then changes the source to `liveMode ?? session.mode`, and adds the model update of the refusal fallback.
 - `Transcript.addPlan` (main) needs one store query: the latest plan entry of a session. `SessionStore` gets a method such as `latestPlan(sessionId)`.
 - A pure function decides "same plan": `isSamePlan(previous, next)`, in `src/features/sessions/entry.ts`.
 - A pure renderer function finds the latest plan and counts the completed steps, for example in `src/renderer/src/session-view.ts`.
@@ -285,7 +283,7 @@ The advisor answered on the shape: mirror `sessions.set-mode`. Not hard to rever
 
 - Needs: S4 (merged).
 - No dependency on S5, S6, S7 or S9. S8 does not touch the agent process code.
-- S8 builds the frame and the bottom dock. S5 needs S8 merged, and then adds its queue to the dock. This changes the plan: S5 depended on S4 only.
+- S8 builds the frame, the follow rule and the bottom dock. S5 needs S8 merged: it puts its cards at the end of the log, and its jump button in the status line. This changes the plan: S5 depended on S4 only.
 - S5 and S8 both change `SessionPage.tsx`, `transcript.store.ts` and `styles.css`. They merge one at a time, S8 first.
 - S6 is merged (`50bd85a`). Its questions stay an app-level dialog. S8 keeps its `asking` condition on the status line.
 
@@ -329,7 +327,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 ### 3. "Pinned": placement or a sticky dock
 
 - **Decided by the user on 2026-11-27: option B.** The user said: "the text input for questions and chat should be anchored in the bottom of the feed."
-- S8 builds the frame. S5 adds its queue to the dock. See "The session window frame".
+- S8 builds the frame. S5 puts its cards inline in the log (user decision, 2026-11-27), not in the dock. See "The session window frame".
 - User column: no, until the user decided it. It is now an approved hot item. A change of it goes to the user.
 - Hard to revert: no. A later change is in the layout only.
 - Options as they were offered:

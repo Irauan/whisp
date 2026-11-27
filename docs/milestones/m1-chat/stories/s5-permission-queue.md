@@ -6,7 +6,7 @@ Status: draft for the design review. Not approved.
 - Checks: A4, A5.
 - Defect fixed: "Aether cancels each permission request, so a tool that needs a question fails" (`docs/architecture.md`, Known defects).
 - Mockup: [s5-permission-queue.mockup.html](s5-permission-queue.mockup.html).
-- Depends on: S4 (merged) and S8 (the fixed frame and the bottom dock). Shares files with S6, S7, S8 and S9. See "Files and dependencies".
+- Depends on: S4 (merged), S7 (the port update `mode`) and S8 (the scroll element, the follow rule and the status line). Shares files with S6, S7, S8 and S9. See "Files and dependencies".
 
 ## Behavior
 
@@ -54,7 +54,7 @@ Status: draft for the design review. Not approved.
 | State | What the user sees |
 |---|---|
 | Working, queue empty | Today's screen: the transcript and "Working". |
-| Waiting for permission | One card for each open request, above the composer. The status line says "Waiting for your answer". Stop is available. This holds with any status, also outside a turn. |
+| Waiting for permission | One card for each open request, at the end of the transcript. The status line says "Waiting for your answer". Stop is available. This holds with any status, also outside a turn. |
 | Answer sent | The buttons of that card are disabled until the card closes. |
 | Answer refused by the main process | The card stays. It shows the reason under its buttons. The buttons work again. |
 | After Stop | No card. The transcript shows "Stopped." The open tool calls show "Failed". The composer is ready. |
@@ -86,9 +86,13 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-13 | A session folder under R, in a Git repository whose root holds R, and a second case where the root equals R. The trust question shows the facts "Repository" and "Repository root", and the warning that names R and the profile. | Acceptance |
 | S5-15 | The refusal fallback dialog shows "Keep the refusal" first and primary. "Retry with <fallback>" sends `accept`. The agent reports the new model. The model button shows it, and after a restart the session starts with it. | Acceptance |
 | S5-16 | The agent reports `acceptEdits` with the S7 notice for the fallback of Auto. The Mode control shows "Accept edits". The saved mode stays `auto`, and the notice shows again at the next start. | Slice |
+| S5-17 | Two open cards show inside the log "Transcript", after the last entry, in the order of arrival. A later entry comes before them. The dock holds no card. | Acceptance |
+| S5-18 | The user scrolled up. A new card comes. The log does not move. The status line shows "Waiting for your answer" and "Show request". A click brings the oldest open card into view and focuses it. | Acceptance |
+| S5-19 | A new card does not take the focus: a key typed in "Prompt" goes to the composer. | Acceptance |
+| S5-20 | An answered card disappears. No entry is saved for it. | Acceptance |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-16 are not in the brief. They cover the rules above.
+S5-1 to S5-20 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -106,7 +110,7 @@ The references to lines of the adapter (`v1/acp-agent.js` and others) in this sp
 
 ### Questions of the agent (user decision, open choice 8)
 
-Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `AskUserQuestion` then works, and its questions show as cards in the same queue of the dock.
+Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `AskUserQuestion` then works, and its questions show as cards inline in the transcript, like the permission cards.
 
 #### Protocol facts for the builder
 
@@ -147,7 +151,7 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
   - The adapter sends `config_option_update` from other places too. S7 does not translate it (checked on `story/m1-s7-settings`).
   - `providers/acp` keeps the value of the option `model` from the response of `session/new` or `session/resume` as the base, after `ready`.
   - It reports the port update `{ type: "model", model }` only when a later `config_option_update` carries another value of the option `model`. So a session saved as `default` is not overwritten by the concrete ID of the default model.
-  - Aether shows the new model in the model button and in the header fact "Model", and saves it in `sessions.model`. A restart or a release then keeps it.
+  - Aether shows the new model in the model button, and saves it in `sessions.model`. A restart or a release then keeps it.
   - This is the one case where the model changes after the first message.
   - A new process can refuse the saved fallback model. Then the start fails with the S4 notice of `settings-refused`, as for any refused model. The model button stays disabled, because the session is not a draft. The user can start a new session.
 
@@ -196,46 +200,69 @@ S5 also changes the trust question of S6 (`QuestionDialog`, kind `trust`).
 See the mockup. It shows these states:
 
 - the current screen, for comparison
-- empty queue, during a turn
-- two cards at once, oldest first
-- a card with the "always" options of real Claude
+- no open card, during a turn
+- two cards at once, oldest first, at the end of the transcript
+- cards with the "always" options of real Claude, and a safety ask
 - answer sent, and answer refused
+- the screen after the first answer
 - the screen after Stop
 - a request with no title and no options
-- a question card of Claude: a single select, and a multi select with "Other"
+- question cards of Claude: a single select, a form with several questions, and the refusal fallback
 - the live mode in the Mode control after a plan exit
+- a card that came while the user scrolled up, with the jump button
 - the S6 trust question with the repository root and the warning
 
-Each state shows the fixed frame of S8.
+Each state shows the fixed frame of S8, with no facts row in the header (user decision, 2026-11-27).
 
-### The frame and the bottom dock
+### Cards inline in the chat (user decision, 2026-11-27)
 
-The user decided on 2026-11-27: "the text input for questions and chat should be anchored in the bottom of the feed."
+The user said: "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window."
 
-- S8 builds the fixed frame: the header at the top, the transcript as the only scroll area, and a bottom dock that stays in view. See the S8 spec, "The session window frame".
-- S5 adds the permission queue to the dock. S5 does not build the frame.
-- The transcript scrolls under the dock. It stays at the bottom while new entries arrive.
-- With many cards, the queue scrolls inside its own area. The dock itself never scrolls, so the composer and the Stop button stay in view. See the S8 spec, "The session window frame".
-- The composer is the composer of S8, like the GitHub app: a text area of 2 to 8 lines, and a control row inside the box with "+", Mode, the model and the round Send or Stop button. S5 does not change the composer. See the S8 spec, "The composer".
+- Permission cards and the question cards of Claude show inside the log "Transcript", at its end. They scroll with the chat, as in Claude Code.
+- An open card always comes after the last entry, also when a later entry arrives. So it sits after the tool call or the message that it belongs to.
+- Several open cards show in the order of arrival, oldest first, at the end of the log.
+- The cards are view only: the renderer draws them after the entries from the open requests of the snapshot. They are not entries.
+- They are not in the bottom dock. The dock of S8 holds only the status line, the plan widget and the composer.
+- The rules for the order, the recommended and primary option, the safety ask, Stop and requests outside a turn do not change.
+- The S6 trust question stays the app-level dialog for now. The locked S6 tests find it as a `dialog`. Open point for the user: show it inline too, in a later story.
+
+### Scroll and the jump button
+
+The advisor answered on the shape. Not hard to revert. The user likely agrees.
+
+- At the bottom of the log, a new card comes into view by the follow rule of S8.
+- When the user scrolled up, the log never moves.
+- The status line then says "Waiting for your answer" and shows one compact button: "Show request".
+  - It shows while a card is open and the log is not at the bottom. It reuses the state "at the bottom" of the S8 follow rule.
+  - A click brings the oldest open card into view, and moves the focus to the card.
+- A new card never takes the keyboard focus. A key meant for the composer must not answer a card.
+
+### An answered card
+
+The advisor answered. Not hard to revert.
+
+- An answered card disappears. It leaves no saved entry (open choice 4 stays A).
+- Reason: an open card can stay last in the log, but a folded line needs a fixed place among later entries, and only an entry has one. After a revision gap, the window rebuilds its view from a new snapshot, so a line in view only would be lost.
+- For a permission card, the tool entry shows the result. The advisor predicts that the user agrees.
+- For a question card, nothing then shows what the user answered. The advisor predicts that the user may disagree. This is a hot item. A trace needs a saved entry, which reopens choice 4 for questions only.
 
 Changes against the current screen:
 
-- Changed (S8): the session window is a fixed frame with a bottom dock.
-- New: the permission queue, a region in the dock, below the plan widget and above the composer.
-- New: one permission card for each open request.
-- Changed: the status line says "Waiting for your answer" while the queue has a card.
+- Changed (S8): the session window is a fixed frame with a bottom dock. The header holds only the title and "Delete session".
+- New: one permission card for each open request, at the end of the transcript.
+- New: one question card for each open question of Claude, at the end of the transcript.
+- Changed: the status line says "Waiting for your answer" while a card is open, with "Show request" when the log is not at the bottom.
 
 Order in the session window, from the top. The S8 mockup uses the same order.
 
-1. Header and facts (fixed)
-2. Transcript (the only scroll area)
+1. Header: the title and "Delete session" (fixed)
+2. Transcript (the only scroll area): the entries, then the open cards
 3. Bottom dock:
    1. Status line
    2. Plan widget (S8)
-   3. Permission queue (S5)
-   4. Composer
+   3. Composer
 
-The trust and directory questions of S6 are an app-level dialog (`QuestionDialog` in `App.tsx`), not cards in the dock. The status line keeps the S6 condition: it shows no "Starting Claude Code" while `asking` is true.
+The status line keeps the S6 condition: it shows no "Starting Claude Code" while `asking` is true.
 
 ### Card content
 
@@ -255,13 +282,14 @@ The trust and directory questions of S6 are an app-level dialog (`QuestionDialog
 - For the plan exit over ACP version 1, the title is "Approve Plan" (`tool-calls/reporters/interaction.js` 21).
 - The validator confirms the title of a shell request in the live run of A4 (step 7).
 
-### Accessibility
+### Accessibility and marking
 
-- The queue is a region with the name "Permission requests".
-- Each card is a group with the name of its tool title.
+- A permission card is an element with the role `article` and the fixed name "Permission request". The tool title stays as text inside it.
+- A question card has the role `article` and the fixed name "Claude asks". The message stays as text inside it.
+- Reason: `toolCall` in `s4/fixture.ts` 344 finds a `group` in the log by a substring of its name. A card that is a `group` named by the tool title would give two matches. No locked test reads the role `article`.
 - Each option is a button with its label as its name.
-- The region "Permission requests" holds both kinds of cards: permission requests and questions of Claude.
-- A question card is a group with the name of its message. A toggle of a multi select has `aria-pressed`. The free text field has the name "Other".
+- A toggle of a multi select has `aria-pressed`. A single select in a form with several questions is a `radiogroup` with `radio` items. The free text field has the name "Other".
+- The cards inside the log keep the S4 checks of the log text: A2 and A6 use `toHaveText` with a pattern that allows text between the turns (`s4/chat.spec.ts` 119, `s4/restart.spec.ts` 78 and 85). A3 and A5 check the log after Stop, when no card is open.
 
 ## Data
 
@@ -357,7 +385,7 @@ export type ElicitationAnswer =
   - Input: `{ id: string, elicitationId: string, answer: ElicitationAnswer }`.
   - Errors: `unknown-session`, `unknown-request` ("This question of Claude is closed."), `invalid-answer` ("Aether cannot send this answer.").
   - The main process checks each value against the fields of the request.
-- Snapshot and events: `elicitations: ElicitationView[]` in the snapshot, in the order of arrival, and the changes `elicitation-added` and `elicitation-removed`. One queue order holds both kinds of cards: the dock shows them oldest first, mixed.
+- Snapshot and events: `elicitations: ElicitationView[]` in the snapshot, in the order of arrival, and the changes `elicitation-added` and `elicitation-removed`. One order of arrival holds both kinds of cards: the log shows them at its end, oldest first, mixed.
 
 ### Live mode (events and store)
 
@@ -365,7 +393,7 @@ export type ElicitationAnswer =
   1. It decides the S7 notice for the fallback of Auto against the saved mode.
   2. It saves the new mode in `sessions.mode`, unless the new mode is `approve-all`, or the update comes with the notice for the fallback of Auto (then `auto` stays saved).
   3. It sends the change `{ type: 'mode', mode }` of `sessions.changed`.
-- The snapshot gets `liveMode: Mode | null`, in memory. The Mode control and the header fact "Mode" both show `liveMode ?? session.mode`.
+- The snapshot gets `liveMode: Mode | null`, in memory. The Mode control shows `liveMode ?? session.mode`.
 - `record-agent-update` also handles the port update `model`: it saves `sessions.model` and sends the change `{ type: "model", model }`.
 - `SessionStore` gets a method to save the mode of a session that is not a draft.
 
@@ -385,7 +413,9 @@ export type ElicitationAnswer =
 | Thing | UI | Code | Database |
 |---|---|---|---|
 | One request of the agent | Permission request (card heading) | `PermissionRequest`, `PermissionView` | none |
-| The list of open requests | Permission requests (region name) | queue, `permissions` | none |
+| The open requests | the cards at the end of the transcript | queue, `permissions` | none |
+| A permission card | role `article`, name "Permission request" | `PermissionCard` | none |
+| The jump to the oldest open card | "Show request" (status line) | none | none |
 | A choice on a card | the label of the agent, for example "Yes" or "Allow" | `PermissionOption` | none |
 | The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
 | A question of Claude | "Claude asks" (card heading) | `Elicitation`, `ElicitationView` | none |
@@ -399,7 +429,7 @@ export type ElicitationAnswer =
 
 | Case | Behavior |
 |---|---|
-| No open request | The queue region does not show. |
+| No open request | No card shows. The status line does not say "Waiting for your answer". |
 | The answer fails with `unknown-request` | The card closed already, so the event removes it. The window shows nothing more. |
 | The answer fails with `unknown-option` or another error | The card stays. It shows the message under its buttons. The buttons work again. |
 | A request with no options | The card shows one button, "Cancel request". It answers `cancelled`. The adapter treats `cancelled` as "Tool use aborted", so the tool does not run. |
@@ -439,8 +469,9 @@ export type ElicitationAnswer =
 - `src/features/sessions/processes.store.ts`: only if the queue needs the process of a session. Shared with S9.
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the new contract. Shared with S6, S7 and S9.
 - `src/renderer/src/session-view.ts`: the new changes.
-- `src/renderer/src/components/SessionPage.tsx`: the queue in the bottom dock of S8, and the status line. Shared with S6 and S8.
-- New `src/renderer/src/components/PermissionQueue.tsx`.
+- `src/renderer/src/components/SessionPage.tsx`: the status line with "Waiting for your answer" and "Show request". Shared with S6 and S8.
+- `src/renderer/src/components/Transcript.tsx`: the open cards after the entries, inside the log. Shared with S8.
+- New `src/renderer/src/components/PermissionCard.tsx`.
 - `src/renderer/src/styles.css`: reuse `.question` and `.question-actions`. Add a compact button variant for the cards. Shared with S8.
 - `tests/simulated-agent/agent.mjs`, `scenarios.mjs`, `control.ts`: the new steps. Shared with S7 and S9.
 - `docs/architecture.md`: remove the sentence "Until the permission queue exists, Aether answers each permission request with cancelled." Remove the S5 row from "Known defects".
@@ -448,7 +479,7 @@ export type ElicitationAnswer =
 ### Dependencies
 
 - Needs: S4 (merged).
-- Needs: S8 merged first. S8 builds the fixed frame and the bottom dock, and S5 adds its queue to the dock. This changes the plan: S5 depended on S4 only. The S5 test author can still run before S8 merges, if its tests check the place of the queue only (below the transcript, above the text field "Prompt").
+- Needs: S8 merged first. S8 makes the log the scroll element, and builds the follow rule and the status line in the dock. S5 puts its cards in that log, and the jump button in that status line. This changes the plan: S5 depended on S4 only.
 - Needs: S7 merged first. The live mode uses the port update `mode` and the `mode` case of `record-agent-update` from S7.
 - S5, S7 and S9 touch `acp-agents.ts`. S5, S6, S7 and S9 touch `send-message.handler.ts`. The coordinator merges them one at a time. The later story updates its branch.
 - New scope from the user decisions of 2026-11-27: the live mode, and the cards for the questions of Claude (form elicitation). S5 grows by one slice, one card type, the capability and three port methods.
@@ -560,7 +591,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 8. `AskUserQuestion` without elicitation
 
-- **Decided by the user on 2026-11-27: option B, inside S5.** The coordinator relayed the decision: Aether declares the ACP form elicitation capability, and shows Claude's questions as cards in the same dock queue, with compact buttons, the recommended option first and primary, a free text "Other" when the question allows it, and multi select when asked.
+- **Decided by the user on 2026-11-27: option B, inside S5.** The coordinator relayed the decision: Aether declares the ACP form elicitation capability, and shows Claude's questions as cards (now inline in the transcript, user decision of 2026-11-27), with compact buttons, the recommended option first and primary, a free text "Other" when the question allows it, and multi select when asked.
 - See "Questions of the agent" for the protocol facts, the scope and the rules. Checks S5-9 to S5-12 cover it. It is an approved hot item.
 - MCP elicitations: a form that uses only the three supported field types renders on the same path at no extra cost. Each other MCP form gets -32602, so the MCP server receives `cancel`. URL elicitations stay off.
 - The text below is the record of the options as they were offered.

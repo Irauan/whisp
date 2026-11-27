@@ -137,7 +137,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
   <p class="muted">Frame (user decision, 2026-11-27, open choice 3 option B): the header stays at the top. The transcript is the only scroll area. It scrolls under the bottom dock and stays at the bottom while new entries arrive. S8 builds the frame. S5 adds its queue to the dock.</p>
-  <p class="muted">Bottom dock, from the top: status line, plan widget, permission queue (S5, not shown here), composer.</p>
+  <p class="muted">Bottom dock, from the top: status line, plan widget, composer. The cards of S5 show inline at the end of the transcript, not in the dock (user decision, 2026-11-27). The header holds only the title and "Delete session": the facts row goes away (user decision, 2026-11-27).</p>
   <p class="muted">Composer (user decision, 2026-11-27): like the GitHub app. The text area is at least 2 lines high and grows up to 8 lines, then scrolls. A control row sits inside the box, at its bottom: "+" (disabled, "Add context", coming soon), then the Mode control and the model as small text-only buttons at the left, and the small round Send or Stop at the right. No mic. No row below the box in the session window. The accessible names Prompt, Send, Stop, Mode and Add context stay.</p>
 </header>
 
@@ -162,9 +162,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <h2>1. Empty: no plan</h2>
   <p class="muted">The session has no plan entry, or the latest plan has no steps. No widget shows. The frame still applies: the dock holds only the composer.</p>
   <div class="window frame" style="height:380px">
-    <div class="frame-head mark"><span class="mark-label">Changed: fixed header</span>
+    <div class="frame-head mark"><span class="mark-label">Changed: fixed header, title and Delete session only, no facts row</span>
       <div class="page-head head-row"><h1>Say hello</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
     </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Say hello.</p></div>
@@ -185,7 +184,6 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <div class="window frame">
     <div class="frame-head">
       <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
     </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Look at the module and tell me what it does.</p></div>
@@ -224,8 +222,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">The widget stays after the turn ends, and after a restart. The header is the one button with aria-expanded. Folded, the count stays, the list hides, and the transcript gets the space.</p>
   <div class="window frame" style="height:420px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="msg"><p>I made a plan.</p></div>
@@ -250,8 +247,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted" style="margin:14px 0 6px;font-size:13px">Folded:</p>
   <div class="window frame" style="height:340px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="msg"><p>I made a plan.</p></div>
@@ -275,8 +271,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">In a later turn the agent sends other steps. The widget shows only the new plan. The transcript shows "Updated the plan" at that point, and stays at the bottom.</p>
   <div class="window frame" style="height:460px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Use another approach.</p></div>
       <div class="msg"><p>I change the approach.</p></div>
@@ -307,8 +302,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">The widget stays with "Plan 5 of 5". A long plan scrolls inside the widget, so the composer stays in view. A long step text wraps.</p>
   <div class="window frame" style="height:480px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg"><p>All steps are done.</p></div>
     </div>
@@ -337,8 +331,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">The agent sent a plan with no steps. The widget does not show, also after a restart. The transcript shows the marker at that point, because a plan existed before.</p>
   <div class="window frame" style="height:380px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <p class="notice">Updated the plan</p>
       <div class="msg"><p>I cleared the plan.</p></div>
@@ -358,8 +351,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">A turn fails. The transcript shows one muted line with an info icon, at the point of the failure. The style follows the reference "Execution failed: Model … is not available". The line keeps the role "alert" and the texts of S4 and S7, so their error tests still find it. The composer is ready for the next message.</p>
   <div class="window frame" style="height:380px">
     <div class="frame-head">
-      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl></div>
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: failed turn as one muted line</span>
@@ -388,7 +380,6 @@ write failed: ENOSPC</pre></details></div></div>
   <div class="window frame" style="height:360px">
     <div class="frame-head">
       <div class="page-head head-row"><h1>Fix the login page</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Opus 5.5</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
     </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <p class="muted" style="font-size:13px">This session has not started. Send starts it with the prompt below.</p>

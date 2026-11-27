@@ -31,7 +31,7 @@ The user chats with Claude in an Aether session. The session runs in a profile, 
 
 | Part | Content |
 |---|---|
-| Header | Title, profile, folder, model, mode |
+| Header | Title, and the button "Delete session". User decision, 2026-11-27: "I don't think we need this header for sessions, at least this part detailing mode, folder, profile, and so on! The session name we can keep it and make it editable (not necessarily in this milestone)." Mode and model show as the controls of the composer. An editable title is a later item. |
 | Transcript | User text, agent text, thoughts (folded), tool calls with status, notices |
 | Plan widget | The latest plan of the agent, pinned above the composer |
 | Permission queue | One card per open request, oldest first, above the composer |
