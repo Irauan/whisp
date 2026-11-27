@@ -55,6 +55,27 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again.
 - The dock has a maximum height. A tall dock scrolls inside, and the composer stays in view.
 - A draft session uses the same frame. Its dock holds only the composer.
+
+### The slim composer
+
+The user decided on 2026-11-27: make the composer of the session window slim, like the composer of the Claude Code desktop app. S8 builds it with the frame.
+
+- The composer stays at the bottom of the dock.
+- It has one rounded box, one text line high, with the placeholder "Reply to Claude" inside.
+- The text field grows with its content, up to `COMPOSER_MAX_LINES` lines. Above that, it scrolls inside.
+  - Define `COMPOSER_MAX_LINES = 8` in one place in the renderer.
+- Inside the box, from the left:
+  1. A small round "+" button. Its accessible name is "Add context". It is disabled and shows "Coming soon", because a running session takes no new attachment in m1.
+  2. The text field "Prompt".
+  3. The small round button "Send", or "Stop" during a turn.
+- Below the box, outside it, is one thin row of compact controls:
+  - At the left: the Mode control. It keeps the accessible name "Mode". It has the height of the compact buttons of S5.
+  - At the right: the model of the session, as a muted label.
+- The status line stays in the dock, above the plan widget. The thin row does not repeat it.
+- No mic button. Voice input stays "coming soon" (brief, Non-goals).
+- The accessible names stay: "Prompt", "Send", "Stop", "Mode". The locked tests of S3, S4 and S8 find the controls by these names.
+- Enter sends, and Shift+Enter adds a line, as today.
+- This applies to the composer of the session window only. The composer of a new session does not change in S8.
 - Aether ignores the priority of a step.
 - The spinner stops when the system asks for reduced motion, like the other spinners of the app.
 
@@ -100,6 +121,7 @@ Changes against the current screen:
 
 - Changed: the session window is a fixed frame. The header stays at the top. Only the transcript scrolls. Today the whole page scrolls, with the composer.
 - New: the bottom dock, always in view.
+- Changed: the slim composer. One line high, grows up to 8 lines. The Mode control moves to a thin row below the box.
 - New: the plan widget in the dock, between the status line and the permission queue (S5).
 - Changed: the transcript shows no "Updated the plan" for the first plan of a session. Today S4 shows it for each plan update.
 - Changed: a progress update no longer adds a line "Updated the plan".
@@ -181,7 +203,9 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - `src/features/sessions/transcript.store.test.ts`, `entry.test.ts`: unit tests.
 - `src/renderer/src/components/Transcript.tsx`: the marker rule. The log element becomes the scroll area, and it keeps its scroll at the bottom.
 - New `src/renderer/src/components/PlanWidget.tsx`.
-- `src/renderer/src/components/SessionPage.tsx`: the fixed frame (header, transcript, bottom dock) and the place of the widget in the dock. Shared with S5 and S6.
+- `src/renderer/src/components/SessionPage.tsx`: the fixed frame (header, transcript, bottom dock), the place of the widget in the dock, and the slim composer with its thin row. Shared with S5 and S6.
+- `src/renderer/src/components/ModeMenu.tsx`: the compact look in the thin row, if its style needs a variant. Its accessible name stays "Mode".
+- `COMPOSER_MAX_LINES` in the renderer, for example in `SessionPage.tsx` or a small composer module.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
 - `src/renderer/src/styles.css`: the frame, the dock and the widget styles. The old `.plan` rules can go. The `.page` rules of the session window change. Shared with S5.
 - The layout around the page (the main area of `App.tsx`) may need a fixed height for the frame. Shared with S6.

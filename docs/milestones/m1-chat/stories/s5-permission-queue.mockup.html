@@ -104,6 +104,19 @@ button:disabled { cursor: default; opacity: .5; }
 /* S8 plan widget, folded, to show the order of the dock. */
 .plan-widget { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
 .plan-widget .chev { color: var(--muted); font-weight: 400; }
+/* Changed (S8 builds it, user decision 2026-11-27): the slim composer, like the Claude Code desktop app.
+   One rounded box, one text line high, that grows up to COMPOSER_MAX_LINES (8) lines, then scrolls.
+   The thin row of compact controls sits below the box, outside it. */
+.composer.slim { margin-top: 0; }
+.composer.slim .composer-box { display: flex; align-items: flex-end; gap: 6px; padding: 5px 6px 5px 8px; border-radius: 18px; }
+.composer.slim textarea { flex: 1; min-width: 0; padding: 5px 2px; font-size: 14px; line-height: 20px; max-height: calc(20px * 8 + 10px); overflow-y: auto; field-sizing: content; }
+.composer.slim textarea::placeholder { color: var(--muted); }
+.composer.slim .plus { flex: none; display: grid; place-items: center; width: 26px; height: 26px; color: var(--muted); border-radius: 50%; font-size: 18px; line-height: 1; }
+.composer.slim .send { flex: none; width: 28px; height: 28px; font-size: 14px; }
+.composer-row { display: flex; align-items: center; gap: 4px; min-height: 26px; padding: 4px 6px 0; font-size: 12px; color: var(--muted); }
+.row-button { display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border-radius: 6px; color: var(--muted); cursor: pointer; }
+.row-button:hover { color: var(--text); background: var(--hover); }
+.row-label { padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -115,6 +128,7 @@ button:disabled { cursor: default; opacity: .5; }
   <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.</p>
   <p class="muted">Frame (user decision, 2026-11-27): the header stays at the top. The transcript is the only scroll area. It scrolls under the bottom dock and stays at the bottom while new entries arrive. S8 builds the frame. S5 adds its queue to the dock.</p>
   <p class="muted">Bottom dock, from the top: status line, plan widget (S8), permission queue (S5), composer. The trust and directory questions of S6 use the same dock.</p>
+  <p class="muted">Composer (user decision, 2026-11-27): one rounded box, one line high, that grows up to 8 lines, then scrolls. A disabled "+" ("Add context", coming soon) sits at the left, the round Send or Stop button at the right. A thin row below the box holds the Mode control at the left and the model at the right. The accessible names "Prompt", "Send", "Stop" and "Mode" stay.</p>
 </header>
 
 <section class="state">
@@ -161,8 +175,9 @@ button:disabled { cursor: default; opacity: .5; }
     <div class="dock dock-label">
       <span class="mark-label" style="width:auto;justify-self:start">New: bottom dock, always in view</span>
       <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <span class="mark-label" style="justify-self:start;width:auto">Changed: slim composer, Mode in the row below</span>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -206,8 +221,8 @@ button:disabled { cursor: default; opacity: .5; }
           </div>
         </div>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -249,8 +264,8 @@ button:disabled { cursor: default; opacity: .5; }
           </div>
         </div>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Plan ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Plan ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -289,8 +304,8 @@ button:disabled { cursor: default; opacity: .5; }
           </div>
         </div>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -320,8 +335,8 @@ button:disabled { cursor: default; opacity: .5; }
           </div>
         </div>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -344,8 +359,8 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="mark"><span class="mark-label">Changed: no card after Stop</span>
         <p class="muted" style="font-size:13px">The permission queue region does not show. No status line: the session is idle.</p>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send off" type="button" aria-label="Send">↑</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
@@ -370,8 +385,8 @@ button:disabled { cursor: default; opacity: .5; }
           </div>
         </div>
       </div>
-      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
-        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      <form class="composer slim"><div class="composer-box"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><textarea rows="1" aria-label="Prompt" placeholder="Reply to Claude"></textarea><button class="send" type="button" aria-label="Stop">■</button></div>
+        <div class="composer-row"><span class="row-button">Ask ▾</span><span class="spacer"></span><span class="row-label">Default</span></div></form>
     </div>
   </div>
 </section>
