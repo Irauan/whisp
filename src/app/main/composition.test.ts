@@ -409,6 +409,43 @@ describe('composeMain', () => {
     }
   })
 
+  it('closes the processes of a removed profile together, not one by one (M1)', async () => {
+    let started = 0
+    let ended = 0
+    const finish: (() => void)[] = []
+    const agents: AgentPort = {
+      start: () => ({
+        ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
+        prompt: async () => ok('end_turn' as const),
+        cancel: async () => undefined,
+        close: () =>
+          new Promise<void>((resolve) => {
+            started += 1
+            finish.push(() => {
+              ended += 1
+              resolve()
+            })
+          })
+      })
+    }
+    const { call } = start(agents)
+    await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+    const [profile] = (await snapshotOf(call)).profiles
+    for (let n = 1; n <= 3; n += 1) {
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: `s${n}`, mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+      published = []
+      expect(await call('sessions.send-message', { id: created.value.id, text: `s${n}` })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+    }
+
+    const removing = call('profiles.remove', { id: profile!.id })
+    // Every close has started, and none has ended: the closes run together.
+    for (let turn = 0; turn < 100 && started < 3; turn += 1) await Promise.resolve()
+    expect({ started, ended }).toEqual({ started: 3, ended: 0 })
+    for (const end of finish.splice(0)) end()
+    expect(await removing).toEqual({ ok: true, value: {} })
+  }, 30_000)
+
   it('keeps an unreadable workspace.json in place, shows a notice and imports nothing', async () => {
     const unreadable = Buffer.from('{"version":4,"accounts":[{"id":"personal","label":"Personal"\r\n')
     await writeFile(join(dataDir, 'workspace.json'), unreadable)

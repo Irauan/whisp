@@ -183,7 +183,8 @@ export function composeMain({
       [switchProfile.name]: switchProfileController(database),
       // Removing a profile removes its sessions. Their agent processes end first.
       [removeProfileContract.name]: async (input: { id: string }) => {
-        for (const sessionId of sessionStore.idsByProfile(input.id)) await release(sessionId)
+        // The closes run together: each one lists its process tree, so one by one the wait would add up.
+        await Promise.all(sessionStore.idsByProfile(input.id).map(release))
         return removeProfile(input)
       },
       [listSessions.name]: listSessionsController(database),

@@ -28,7 +28,7 @@ import type {
 } from '../../building-blocks/agent.port'
 import type { Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
-import { endSurvivors, processTree } from './process-tree'
+import { endSurvivors, processTree, system32, TOOL_LIMIT_MS, type Log, type Powershell, type ProcessRow } from './process-tree'
 import type { AcpRecipe } from './recipe'
 
 /** The ACP error code for "nobody is signed in". */
@@ -52,6 +52,10 @@ export interface AcpOptions {
   environment?: () => Readonly<Record<string, string | undefined>>
   /** The time that a process gets to end after its stdin closes. */
   closeLimitMs?: number
+  /** Where Aether tells a failure that no notice shows, for example a failed list of the child processes. `console.error` by default. */
+  log?: Log
+  /** Runs the PowerShell scripts of the process tree. A test passes a runner that it controls. */
+  powershell?: Powershell
 }
 
 /** The port to agents that speak ACP. It starts one process for each call. */
@@ -133,7 +137,7 @@ async function within(promise: Promise<unknown>, limitMs: number): Promise<boole
   }
 }
 
-/** Kills the process and all its children. On Windows `child.kill` ends only the parent. */
+/** Kills the process and all its children. On Windows `child.kill` ends only the parent. The call has a time limit. */
 function killTree(child: ChildProcess): Promise<void> {
   return new Promise((resolve) => {
     const { pid } = child
@@ -142,7 +146,7 @@ function killTree(child: ChildProcess): Promise<void> {
       resolve()
       return
     }
-    execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => resolve())
+    execFile(system32('taskkill.exe'), ['/pid', String(pid), '/T', '/F'], { windowsHide: true, timeout: TOOL_LIMIT_MS }, () => resolve())
   })
 }
 
@@ -157,6 +161,9 @@ class AcpProcess implements AgentProcess {
   private turnActive = false
   private stderr = ''
   private closing: Promise<void> | null = null
+  /** The Unix times, in ms, of the call of `spawn` and of its `spawn` event. The process of the agent started between them. */
+  private spawnCalled = 0
+  private spawnedAt = 0
   private readonly ended: Promise<void>
   private markEnded: () => void = () => undefined
 
@@ -254,6 +261,7 @@ class AcpProcess implements AgentProcess {
 
   private spawn(command: string, args: string[], env: Record<string, string>): Promise<Result<true, StartErrorCode>> {
     return new Promise((resolve) => {
+      this.spawnCalled = Date.now()
       const child = spawn(command, args, { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       this.child = child
       child.stderr.setEncoding('utf8')
@@ -269,6 +277,7 @@ class AcpProcess implements AgentProcess {
         this.listener.exited({ code, logTail: this.logTail().trim() })
       })
       child.once('spawn', () => {
+        this.spawnedAt = Date.now()
         this.connection = client({ name: 'Aether' })
           .onNotification(methods.client.session.update, ({ params }) => {
             if (params.sessionId !== this.sessionId) return
@@ -398,8 +407,14 @@ class AcpProcess implements AgentProcess {
   }
 
   /**
-   * Cancel the turn, close the session, close stdin, then kill the whole process tree after a limit.
-   * At the end, end each process of the tree that still runs.
+   * Spec rule 9, with the tree of S9-4: cancel the turn, close the session, close stdin, then kill the
+   * whole process tree after a limit. The cancel and the list of the tree start in one step, and the
+   * list comes before the close of the session and of stdin: a child of an agent that ended has no
+   * parent to find. At the end, end each process of the tree that still runs.
+   *
+   * Each step has a limit, so the quit limit of the app covers the worst case: the list 5 s, the close
+   * of the session 3 s, the end of the agent after stdin 3 s, `taskkill` 5 s, the end after the kill 3 s,
+   * the kill of the survivors 5 s. That is 24 s. The turn that waits for the exit adds 2 s.
    */
   private async shutdown(): Promise<void> {
     this.aborted = true
@@ -407,15 +422,17 @@ class AcpProcess implements AgentProcess {
     if (!child) return
     if (child.exitCode === null && child.signalCode === null) {
       const limit = this.options.closeLimitMs ?? CLOSE_LIMIT_MS
-      // List the tree while the agent runs: a child that outlives it has no parent to find later (spec S9, S9-4).
-      const tree = child.pid === undefined ? [] : await processTree(child.pid)
+      const tools = { log: this.options.log ?? ((message: string, cause?: unknown) => console.error(message, cause ?? '')), run: this.options.powershell }
       const sessionId = this.sessionId
-      if (this.connection && sessionId !== null && this.isReady) {
-        const { agent } = this.connection
-        if (this.turnActive) await agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
-        if (this.capabilities?.agentCapabilities?.sessionCapabilities?.close) {
-          await within(agent.request(methods.agent.session.close, { sessionId }), limit)
-        }
+      const live = this.connection && sessionId !== null && this.isReady ? { agent: this.connection.agent, sessionId } : null
+      // Step 1: the cancel and the list start together, so the list overlaps the end of the turn.
+      const cancelled = live && this.turnActive ? within(live.agent.notify(methods.agent.session.cancel, { sessionId: live.sessionId }), limit) : Promise.resolve(true)
+      const listing: Promise<ProcessRow[]> =
+        child.pid === undefined ? Promise.resolve([]) : processTree(child.pid, { from: this.spawnCalled, to: this.spawnedAt }, tools)
+      const [, tree] = await Promise.all([cancelled, listing])
+      // Step 2: close the session. Step 3: close stdin.
+      if (live && this.capabilities?.agentCapabilities?.sessionCapabilities?.close) {
+        await within(live.agent.request(methods.agent.session.close, { sessionId: live.sessionId }), limit)
       }
       child.stdin?.end()
       if (!(await within(this.ended, limit))) {
@@ -423,7 +440,7 @@ class AcpProcess implements AgentProcess {
         await within(this.ended, limit)
       }
       // A child of the agent never outlives the close. This also ends a child that `taskkill` cannot find any more.
-      await endSurvivors(tree)
+      await endSurvivors(tree, tools)
     }
     this.connection?.close()
   }
