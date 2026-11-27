@@ -44,6 +44,15 @@
 //   - Not signed in: "Claude Code is not signed in.", followed by the sign-in steps of the profile.
 //   - Agent stopped: the exit code as "exit code <n>", and the last log lines of the agent.
 // - Ready composer: no "Stop", the text field "Prompt" can take text, and "Send" is then enabled.
+// - Mode: Aether sends `session/set_mode` with the Claude mode of the session (Ask gives `default`)
+//   on the agent session, before the first `session/prompt` (plan, S4 defect "no permission mode").
+// - Profile settings (the S2 dialog): the profile menu (the first button whose name starts with the
+//   profile name) opens the `group` "Profiles". Its button "Profile settings" opens the `dialog`
+//   "Profile settings". The dialog has the text field "Claude folder" with the Claude folder of the
+//   profile, and the button "Save", which saves and closes it.
+// - Provider snapshot (decision 0013): the agent process of a session gets `CLAUDE_CONFIG_DIR` from
+//   the Claude settings of its first start, also after a later change of the profile and a restart.
+//   A new session gets the current Claude folder of the profile.
 // - GH_TOKEN: Aether reads the token of the GitHub account of the profile with
 //   `gh auth token --hostname github.com --user <login>`, as `src/providers/github-cli` does.
 import { copyFile, mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
@@ -399,4 +408,19 @@ export const samePath = (a: unknown, b: string) => {
 export function variable(env: Record<string, string>, name: string): string | undefined {
   const key = Object.keys(env).find((key) => key.toUpperCase() === name.toUpperCase())
   return key === undefined ? undefined : env[key]
+}
+
+/** Opens "Profile settings" of the profile "Personal", sets its Claude folder, and saves. */
+export async function setClaudeFolder(page: Page, folder: string, check: string): Promise<void> {
+  await page.getByRole('button', { name: new RegExp(`^${PROFILE}`) }).first().click()
+  const menu = page.getByRole('group', { name: 'Profiles' })
+  await expect(menu, `${check}: the profile menu "Profiles" does not open.`).toBeVisible()
+  await menu.getByRole('button', { name: 'Profile settings', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Profile settings' })
+  await expect(dialog, `${check}: the dialog "Profile settings" does not open.`).toBeVisible()
+  const field = dialog.getByRole('textbox', { name: 'Claude folder', exact: true })
+  await expect(field, `${check}: the dialog "Profile settings" has no text field "Claude folder".`).toBeEditable()
+  await field.fill(folder)
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog, `${check}: the dialog "Profile settings" stays open after "Save".`).toBeHidden()
 }

@@ -60,11 +60,19 @@
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/fixture.ts": {
-    "sha256": "934bab340549e8f83f3a30d39552afad1a9294a1d9094e5d233886fba87ad81b",
+    "sha256": "2a89a40214acf50015b1843a803ebece361202c158de702022dd41abd8e9ae0e",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/mode.spec.ts": {
+    "sha256": "2acff407e2e194d10cae0d9eb9530f8594299d07e4415cf0a1a2bad87d191eb3",
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/processes.spec.ts": {
     "sha256": "7b22ee2fc1c9b51686009c1b076a51139dc426f42ffe59360b6984b5bdf2c32b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/provider-snapshot.spec.ts": {
+    "sha256": "9b5d2bfd90b3f71a0e42237eace674c4643b421f350e0e6d3f0a3e1fadd7b75b",
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/restart.spec.ts": {
