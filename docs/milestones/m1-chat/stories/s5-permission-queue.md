@@ -75,15 +75,86 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-3 | An answer with an unknown request ID, or with an option that the request did not offer, fails. The agent gets nothing. | Slice |
 | S5-4 | The agent process exits while two requests are open. Both cards close. | Slice |
 | S5-5 | A request comes when no turn runs. A card shows. Stop cancels it, and the agent receives `cancelled`. | Slice |
+| S5-6 | A safety ask with "No" first. "No" is the first and the primary button. In another request, the first `allow-once` option is first and primary. | Acceptance |
+| S5-7 | The agent reports the mode `accept-edits` after a plan exit. The Mode control shows "Accept edits". After a restart, the session starts in `accept-edits`. | Acceptance |
+| S5-8 | The agent reports `bypassPermissions`. The Mode control shows "Approve all". The saved mode stays the last saved mode. A new process starts in that mode. | Slice |
+| S5-9 | `initialize` declares form elicitation. The agent sends a single select question. The card shows the options with the recommended one first and primary. A click sends `accept` with that `const`. | Acceptance |
+| S5-10 | A multi select question with "Other": the user toggles two options, types a text and submits. The agent receives the array and the custom text. | Acceptance |
+| S5-11 | "Skip" sends `decline`. Stop sends `cancel` for an open question card. | Slice |
+| S5-12 | A form with a number field gets the error -32602, and no card shows. | Slice |
 
-S5-1 to S5-5 are not in the brief. They cover the rules above.
+S5-1 to S5-12 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
+### Live mode (user decision, open choice 5)
+
+- An option can change the mode of the agent: a plan exit approval, or the file edit option "Yes, allow all edits during this session".
+- The agent then sends `current_mode_update`. S7 translates it into the port update `mode`.
+- The Mode control shows this live mode at once.
+- Aether saves the live mode in `sessions.mode`, so a new process starts in it. A release (S9) and a restart keep the mode that the user chose.
+- Approve all (`approve-all`, Claude `bypassPermissions`) shows in the Mode control, but Aether never saves it. The session keeps its last saved mode. A new process then falls back to that mode. This follows the rule of decision 0012 for Approve all.
+- The S7 notice for the fallback of Auto compares the reported mode with the asked mode. `record-agent-update` decides the notice first, then saves the new mode.
+- A new session copies the mode of the newest session (decision 0012). A saved live mode counts. Approve all is never copied, as before.
+- After the first message, the user still cannot change the Mode control. Only the agent changes the mode.
+
+### Questions of the agent (user decision, open choice 8)
+
+Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `AskUserQuestion` then works, and its questions show as cards in the same queue of the dock.
+
+#### Protocol facts for the builder
+
+- Capability: `initialize` sends `clientCapabilities.elicitation = { form: {} }`. Do not declare `url`.
+- With `form`, the Claude adapter (0.112.0) turns on these paths:
+  - `AskUserQuestion` (`v1/acp-agent.js` 7886-7893)
+  - MCP server elicitations of the mode form (`onElicitation`, 8040-8041)
+  - the refusal fallback dialog: "<model> declined this request. Retry with <fallback>?" (8049-8053)
+- Request: the agent sends `elicitation/create` (`methods.client.elicitation.create`) with:
+  - `mode: "form"`, `sessionId`, an optional `toolCallId`, and `message` (the question text for one question)
+  - `requestedSchema`: `{ type: "object", properties }`
+- The schema of `AskUserQuestion` (`elicitation.js` 122-175):
+  - `question_<n>`: one question. A single select is `{ type: "string", title, description, oneOf: [{ const, title, description }] }`. A multi select is `{ type: "array", title, description, items: { anyOf: [...] } }`.
+  - `question_<n>_custom`: `{ type: "string", title: "Other", description }`, the free text of that question. It is always there and optional.
+  - No field is required.
+- Answer (`CreateElicitationResponse`):
+  - Submit: `{ action: "accept", content: { question_0: "<option const>", question_0_custom: "<text>" } }`. A multi select sends an array of `const` values.
+  - Skip: `{ action: "decline" }`. Claude gets empty answers and continues. It is told that the user skipped.
+  - Stop, the end of the process, or the cancel of the agent: `{ action: "cancel" }`. The tool call aborts.
+- The agent can withdraw the request with `$/cancel_request`, as for a permission request. Then the card closes.
+- A form that Aether cannot render gets the JSON-RPC error -32602. The adapter then answers an MCP server with `cancel` and denies `AskUserQuestion` with "Could not present the question to the user." (`answerMcpElicitation` and `answerAskUserQuestion` in `elicitation.js`).
+
+#### What Aether renders
+
+- Aether renders these field types only:
+  - a string with `oneOf`: a single select
+  - an array with `items.anyOf`: a multi select
+  - a plain string: a text field, for example "Other"
+- Any other field (number, integer, boolean, a string with `format` or `enum`) makes the whole form unsupported. Aether answers -32602.
+- MCP elicitations: a form of an MCP server that uses only the three field types renders on the same path, at no extra cost. Each other MCP form gets -32602, so the MCP server receives `cancel`. URL elicitations stay off.
+- The refusal fallback dialog is one single select, so it renders on the same path. Its options are "Retry with <fallback>" and "Keep the refusal".
+
+#### The question card
+
+- Heading: "Claude asks". The card is a group with the name of the message.
+- The message, then each question with its `title` as a small label.
+- Single select, one question: one compact button for each option. A click sends the answer at once.
+- The recommended option comes first and is primary:
+  - the option whose label ends with "(Recommended)", as Claude marks it
+  - else the `default` of the field
+  - else the first option
+  - The other options keep the order of the agent.
+- Multi select: one compact toggle button for each option, with `aria-pressed`. A compact primary "Submit" sends the answer.
+- Several questions in one form: each question shows its options as toggles, and one "Submit" sends all answers.
+- "Other": a one-line text field under the options. Typing in it, then Enter or "Submit", sends the text as `question_<n>_custom`.
+- "Skip": a compact plain button. It sends `decline`.
+- Stop closes the card and sends `cancel`.
+- The card follows the rules of a permission card: oldest first, one answer only, the buttons disabled after a click, and the error line under the buttons.
+- An option `description` shows as muted text under the option, or as its `title` attribute when the card is narrow.
+
 ### Not in this story
 
-- `AskUserQuestion` of Claude goes through ACP elicitation, not through a permission request. Aether does not declare the form elicitation capability. Without it, the adapter disables `AskUserQuestion` completely (`v1/acp-agent.js` 7893). Claude then cannot ask the user a question with that tool. See open choice 8.
-- The mode that an option can set. See open choice 5.
+- Elicitations of the mode url.
+- The `preview` of an option (`_meta`), which the adapter sends for mockups and code snippets.
 
 ## Screens
 
@@ -96,6 +167,8 @@ See the mockup. It shows these states:
 - answer sent, and answer refused
 - the screen after Stop
 - a request with no title and no options
+- a question card of Claude: a single select, and a multi select with "Other"
+- the live mode in the Mode control after a plan exit
 
 Each state shows the fixed frame of S8.
 
@@ -136,10 +209,10 @@ The trust and directory questions of S6 are an app-level dialog (`QuestionDialog
 - The locations of the request (file paths), when the request has them.
 - One button for each option.
 - Rule (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.
-  - The recommended option is the first `allow-once` option of the request. Example: "Yes, manually approve edits" at the plan exit.
+  - Safety ask (user decision, open choice 7): when the first option of the agent is a refuse option, that option is the recommended one. It stays first and is primary. This is the `defaultToNo` order of Claude Code, where "No" is the default choice.
+  - In every other case, the recommended option is the first `allow-once` option of the request. It comes first and is primary. Example: "Yes, manually approve edits" at the plan exit.
   - The other options follow in the order of the agent.
-  - A request with no `allow-once` option has no primary button. Its options keep the order of the agent.
-  - A request whose first option is a refuse option is a safety ask of the agent. See open choice 7.
+  - A request with no refuse option first and no `allow-once` option has no primary button. Its options keep the order of the agent.
   - Compact means like the buttons of the Claude desktop app: less height and padding, and smaller text than `.button`.
 - The request of the Claude adapter carries `toolCallId`, `title` and `rawInput` (`permissions/presentation.js`, version 0.112.0).
 - For a shell tool, the title is the command itself (`tool-calls/reporters/bash.js`). So the card shows the command without extra fields.
@@ -151,14 +224,16 @@ The trust and directory questions of S6 are an app-level dialog (`QuestionDialog
 - The queue is a region with the name "Permission requests".
 - Each card is a group with the name of its tool title.
 - Each option is a button with its label as its name.
+- The region "Permission requests" holds both kinds of cards: permission requests and questions of Claude.
+- A question card is a group with the name of its message. A toggle of a multi select has `aria-pressed`. The free text field has the name "Other".
 
 ## Data
 
-No saved data changes.
-
-- The queue lives in main memory. `docs/architecture.md` says that open questions live in memory only.
+- No migration. No new column.
+- The queue of permission requests and elicitations lives in main memory. `docs/architecture.md` says that open questions live in memory only.
 - The answer adds no entry to the transcript. The tool call entry shows the result: "Completed" after an allowed tool, and "Failed" after a refused one. See open choice 4.
-- No migration.
+- Changed use of a saved column: `sessions.mode` now also changes after the first message, when the agent reports a live mode. Aether never saves `approve-all` this way. The values of the column do not change. Today only `sessions.set-mode` of a draft writes it.
+- The live Approve all lives in memory only, for the session view.
 
 ## Interfaces
 
@@ -220,7 +295,47 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
   - `{ type: 'permission-removed', id: string }`
 - The `Transcript` class sends them, so the queue and the entries share one revision sequence.
 
+### Elicitations (port, provider, contract)
+
+- Port types, neutral:
+
+```ts
+export type ElicitationField =
+  | { key: string; kind: 'choice'; title: string | null; options: ElicitationChoice[]; recommended: string | null }
+  | { key: string; kind: 'choices'; title: string | null; options: ElicitationChoice[]; recommended: string | null }
+  | { key: string; kind: 'text'; title: string | null; description: string | null }
+export interface ElicitationChoice { value: string; label: string; description: string | null }
+export interface Elicitation { id: string; toolId: string | null; message: string; fields: ElicitationField[] }
+export type ElicitationAnswer =
+  | { action: 'submit'; values: Record<string, string | string[]> }
+  | { action: 'skip' }
+```
+
+- `AgentListener.elicitation(request: Elicitation): void` and `AgentListener.elicitationClosed(id: string): void`.
+- `AgentProcess.answerElicitation(id, answer): Result<true, 'unknown-request' | 'invalid-answer'>`.
+- `cancel()` and `close()` answer each open elicitation with `{ action: "cancel" }`.
+- `providers/acp` declares `elicitation: { form: {} }` in `initialize`. It maps `oneOf` to `choice`, `items.anyOf` to `choices`, and a plain string to `text`. It answers -32602 for any other field, and shows no card. It maps `submit` to `accept`, and `skip` to `decline`.
+- `providers/acp` finds the recommended option: the label that ends with "(Recommended)", else the `default`, else the first option.
+- Contract `sessions.answer-elicitation`, slice `src/features/sessions/answer-elicitation/`:
+  - Input: `{ id: string, elicitationId: string, answer: ElicitationAnswer }`.
+  - Errors: `unknown-session`, `unknown-request` ("This question of Claude is closed."), `invalid-answer` ("Aether cannot send this answer.").
+  - The main process checks each value against the fields of the request.
+- Snapshot and events: `elicitations: ElicitationView[]` in the snapshot, in the order of arrival, and the changes `elicitation-added` and `elicitation-removed`. One queue order holds both kinds of cards: the dock shows them oldest first, mixed.
+
+### Live mode (events and store)
+
+- `record-agent-update` handles the port update `mode` of S7:
+  1. It decides the S7 notice for the fallback of Auto against the saved mode.
+  2. It saves the new mode in `sessions.mode`, unless the new mode is `approve-all`.
+  3. It sends the change `{ type: 'mode', mode }` of `sessions.changed`.
+- The snapshot gets `liveMode: Mode | null`, in memory. The Mode control shows `liveMode ?? session.mode`.
+- `SessionStore` gets a method to save the mode of a session that is not a draft.
+
 ### Simulated agent (`tests/simulated-agent/`)
+
+- Add a step that reports a mode change (`current_mode_update`).
+- Add a step that sends `elicitation/create` with a given schema, and reports the answer to the test control.
+- Declare nothing new in the simulated agent: it reads the client capability from `initialize` and reports it.
 
 - Today the step `tool` uses the fixed tool ID `t1` and waits for its answer. It cannot send two requests at once.
 - Add a step that sends several requests at the same time, each with its own tool ID. It reports each answer to the test control.
@@ -235,8 +350,11 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 | The list of open requests | Permission requests (region name) | queue, `permissions` | none |
 | A choice on a card | the label of the agent, for example "Yes" or "Allow" | `PermissionOption` | none |
 | The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
+| A question of Claude | "Claude asks" (card heading) | `Elicitation`, `ElicitationView` | none |
+| The free text of a question | "Other" | `question_<n>_custom` (ACP key) | none |
+| The mode that the agent reports | the Mode control | live mode, `liveMode` | `sessions.mode`, except Approve all |
 
-- S6 uses "question" for the trust question and the directory question. S5 does not use "question", so the two stay apart.
+- S6 uses "question" for the trust question and the directory question. S5 calls the questions of Claude "elicitations" in the code, so the two stay apart.
 - The brief says "allow or refuse". Real Claude labels its options "Yes" and "No". See open choice 1.
 
 ## Error and empty states
@@ -254,6 +372,9 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 | A request with an unknown session ID | See open choice 6. |
 | The process exits with open requests | The cards close. The turn writes the error notice of S4. |
 | A double click on a button | The first click disables the buttons of the card. Only one answer goes out. |
+| A form with an unsupported field | The provider answers -32602. No card shows. |
+| A question card when the process exits | The card closes. The agent gets nothing more. |
+| "Submit" with nothing chosen and no text | It sends `accept` with empty content. Claude reads it as skipped. |
 
 ## Files and dependencies
 
@@ -263,6 +384,11 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 - `src/providers/acp/acp-agents.ts`: the request handler, `answer`, and the cancel of open requests. Shared with S7 and S9. S6 does not touch it.
 - `src/providers/acp/acp-agents.test.ts`
 - `src/features/sessions/answer-permission/`: new slice with contract, controller, handler and test.
+- `src/features/sessions/answer-elicitation/`: new slice with contract, controller, handler and test.
+- `src/features/sessions/record-agent-update/record-agent-update.handler.ts`: the live mode. S7 adds its `mode` case. Shared with S7 and S8.
+- `src/features/sessions/session.store.ts`: save the mode of a started session. Shared with S8 and S9.
+- `src/renderer/src/components/ModeMenu.tsx`: show `liveMode ?? session.mode`. Shared with S8.
+- New `src/renderer/src/components/ElicitationCard.tsx`.
 - `src/features/sessions/entry.ts`: the new changes. Shared with S7 and S8.
 - `src/features/sessions/transcript.store.ts`: the queue in memory and its events. Shared with S8.
 - `src/features/sessions/open/open.contract.ts` and `open.handler.ts`: the snapshot.
@@ -281,7 +407,9 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 
 - Needs: S4 (merged).
 - Needs: S8 merged first. S8 builds the fixed frame and the bottom dock, and S5 adds its queue to the dock. This changes the plan: S5 depended on S4 only. The S5 test author can still run before S8 merges, if its tests check the place of the queue only (below the transcript, above the text field "Prompt").
+- Needs: S7 merged first. The live mode uses the port update `mode` and the `mode` case of `record-agent-update` from S7.
 - S5, S7 and S9 touch `acp-agents.ts`. S5, S6, S7 and S9 touch `send-message.handler.ts`. The coordinator merges them one at a time. The later story updates its branch.
+- New scope from the user decisions of 2026-11-27: the live mode, and the cards for the questions of Claude (form elicitation). S5 grows by one slice, one card type, the capability and three port methods.
 - S9 reads the queue in its idle rule. A request can come outside a turn, so S9 counts an open request as busy. See the S9 spec.
 
 ## Open choices
@@ -337,6 +465,9 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 5. Plan exit options that change the mode
 
+- **Decided by the user on 2026-11-27: show and save.** The coordinator relayed the decision: the Mode control shows the live mode from `current_mode_update`, and Aether saves it on the session. This also covers the file edit "always" that switches to Accept edits. Approve all shows, but is never saved: the session keeps its last saved mode, so a new process falls back to that mode, as decision 0012 rules for Approve all. A release then keeps the mode that the user chose.
+- This is option C, extended with the save. See "Live mode". It is an approved hot item. A change of it goes to the user.
+- The text below is the record of the options as they were offered.
 - User column: yes (permissions; bypass needs a user choice, decision 0007).
 - Hard to revert: no.
 - Facts:
@@ -369,6 +500,11 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 7. A safety ask with a refuse option first
 
+- **Decided by the user on 2026-11-27.** The user said: "The recommend choice is always primary and first, if the safety choices put no as first is it the primary choice? If yes we follow if no we do our way."
+- Reading: Claude Code's `defaultToNo` makes "No" the default choice of a safety ask. So "No" is the recommended option there.
+- Rule: the recommended option is always first and primary. On a safety ask, where the first option of the agent is a refuse option, that refuse option is the recommended one: it stays first and is primary. In every other case, the first `allow-once` option is first and primary.
+- Neither offered option matched this. Option A kept "No" first with no primary button. It is an approved hot item. Check S5-6 covers it.
+- The text below is the record of the options as they were offered.
 - User column: yes. It is a permission prompt, and option A is an exception to the button rule of the user.
 - Hard to revert: no.
 - Facts:
@@ -382,6 +518,10 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 8. `AskUserQuestion` without elicitation
 
+- **Decided by the user on 2026-11-27: option B, inside S5.** The coordinator relayed the decision: Aether declares the ACP form elicitation capability, and shows Claude's questions as cards in the same dock queue, with compact buttons, the recommended option first and primary, a free text "Other" when the question allows it, and multi select when asked.
+- See "Questions of the agent" for the protocol facts, the scope and the rules. Checks S5-9 to S5-12 cover it. It is an approved hot item.
+- MCP elicitations: a form that uses only the three supported field types renders on the same path at no extra cost. Each other MCP form gets -32602, so the MCP server receives `cancel`. URL elicitations stay off.
+- The text below is the record of the options as they were offered.
 - User column: yes (scope).
 - Hard to revert: no.
 - Facts: without the form elicitation capability, the adapter disables `AskUserQuestion` completely (`v1/acp-agent.js` 7893). Claude then asks its questions in plain text, or not at all.

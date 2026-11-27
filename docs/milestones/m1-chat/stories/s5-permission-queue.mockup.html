@@ -89,6 +89,10 @@ button:disabled { cursor: default; opacity: .5; }
 .question-actions .button:not(.primary) { background: transparent; border: 1px solid var(--line); }
 .question-actions .button:not(.primary):hover:not(:disabled) { background: var(--hover); }
 .locations li { font-size: 12px; }
+/* New: the question card of Claude (form elicitation). */
+.question-actions .button.toggle[aria-pressed="true"] { color: var(--text); background: var(--selected); border-color: var(--accent); }
+.question .other { width: 100%; max-width: 420px; height: 28px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
+.question .other:focus { border-color: var(--accent); }
 
 /* New (S8 builds it, user decision 2026-11-27): the session window is a fixed frame.
    The header stays at the top, the transcript is the only scroll area, and the bottom dock stays in view. */
@@ -275,9 +279,9 @@ button:disabled { cursor: default; opacity: .5; }
           <div class="question" role="group" aria-label="rm -rf build">
             <h3>Permission request</h3>
             <div class="question-tool"><span class="mono">rm -rf build</span><span class="muted">execute</span></div>
-            <p class="muted" style="font-size:13px">A safety ask. Claude puts "No" first. Open choice 7, option A: keep the order of the agent and make no button primary.</p>
+            <p class="muted" style="font-size:13px">A safety ask. Claude puts "No" first (defaultToNo), so "No" is the recommended option: first and primary (user decision, open choice 7).</p>
             <div class="question-actions">
-              <button class="button" type="button">No</button>
+              <button class="button primary" type="button">No</button>
               <button class="button" type="button">Yes</button>
             </div>
           </div>
@@ -410,6 +414,80 @@ button:disabled { cursor: default; opacity: .5; }
       </div>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
         <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>8. Questions of Claude (form elicitation)</h2>
+  <p class="muted">User decision, open choice 8. Aether declares form elicitation, so Claude's AskUserQuestion shows as a card in the same queue. First card: a single select. The recommended option ("(Recommended)" in its label) comes first and is primary. A click sends the answer at once. Second card: a multi select with "Other". Toggles have aria-pressed. "Submit" sends the picks and the text. "Skip" sends decline. Stop sends cancel.</p>
+  <div class="window frame" style="height:640px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Set up the test runner.</p></div>
+      <div class="msg"><p>I have two questions first.</p></div>
+      <div class="tool"><span>◌</span><span class="tool-title">AskUserQuestion</span><span>Pending</span></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <div class="mark"><span class="mark-label">New: question cards of Claude, in the same queue</span>
+        <div class="permission-queue" role="region" aria-label="Permission requests">
+          <div class="question" role="group" aria-label="Which test runner do you want?">
+            <h3>Claude asks</h3>
+            <p>Which test runner do you want?</p>
+            <div class="question-actions">
+              <button class="button primary" type="button" title="Fast, and the project already uses Vite">Vitest (Recommended)</button>
+              <button class="button" type="button">Jest</button>
+              <button class="button" type="button">Node test runner</button>
+            </div>
+            <div class="question-tool"><input class="other" type="text" aria-label="Other" placeholder="Other: type your own answer"></div>
+            <div class="question-actions"><button class="button" type="button">Skip</button></div>
+          </div>
+          <div class="question" role="group" aria-label="Please answer the following questions.">
+            <h3>Claude asks</h3>
+            <p>Please answer the following questions.</p>
+            <p class="muted" style="font-size:12px">Reports</p>
+            <p style="font-size:13px">Which reports do you want?</p>
+            <div class="question-actions">
+              <button class="button toggle" type="button" aria-pressed="true">Coverage</button>
+              <button class="button toggle" type="button" aria-pressed="true">JUnit XML</button>
+              <button class="button toggle" type="button" aria-pressed="false">HTML</button>
+            </div>
+            <div class="question-tool"><input class="other" type="text" aria-label="Other" value="A summary in the console"></div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Submit</button>
+              <button class="button" type="button">Skip</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>9. Live mode after a plan exit</h2>
+  <p class="muted">User decision, open choice 5. The user chose "Yes, auto-accept edits" at the plan exit. The agent reports the new mode. The Mode control shows "Accept edits" at once, and Aether saves it. After a release or a restart, the session starts in Accept edits. Approve all would show the same way, but is never saved.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Default</dd></div><div><dt>Mode</dt><dd>Accept edits</dd></div></dl>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>✓</span><span class="tool-title">Approve Plan</span><span>Completed</span></div>
+      <div class="msg"><p>I start with the first step.</p></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
+      <div class="mark"><span class="mark-label">Changed: the Mode control shows the live mode</span>
+        <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+          <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Accept edits<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      </div>
     </div>
   </div>
 </section>

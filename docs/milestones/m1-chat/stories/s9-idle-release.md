@@ -32,7 +32,7 @@ Status: draft for the design review. Not approved.
    3. the start of the new process
 9. The close follows the shutdown of `docs/architecture.md`: cancel, close the session, close stdin, then kill the whole process tree after a limit.
 10. A child process of the agent never outlives the release. See open choice 6.
-11. A release silently puts the session back in its saved mode. `applySettings` sets the saved mode at each start. A mode that a plan exit option set during the session is lost (see S5, open choice 5).
+11. A release keeps the mode that the user chose. S5 saves the live mode of the agent in `sessions.mode` (user decision, S5 open choice 5), and `applySettings` sets that saved mode at each start. Approve all is never saved: after a release, a session that ran in Approve all starts in its last saved mode.
 12. After a release, the S7 notice for the fallback of the mode Auto can show again at the next start. See open choice 7.
 
 ### Busy state outside a turn
@@ -181,6 +181,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 1. Save who started a session now
 
+- **Decided by the user on 2026-11-27: option A (migration 004 adds `sessions.started_by`).** The user accepted all recommendations of S9. It is an approved hot item. A change of it goes to the user.
 - User column: yes (saved data format).
 - Hard to revert: yes. Its undo needs a migration of saved user data.
 - Options:
@@ -191,6 +192,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 2. The release times as a setting
 
+- **Decided by the user on 2026-11-27: option A (constants in one module).** The user accepted all recommendations of S9. It is an approved hot item. A change of it goes to the user.
 - User column: yes. Decision 0006 says "Both are settings". This choice narrows an approved decision.
 - Hard to revert: no.
 - Options:
@@ -202,6 +204,8 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 3. The background task in the idle rule
 
+- **Decided by the user on 2026-11-27: option A (background shells do not count; an accepted gap against decision 0006).** The user accepted all recommendations of S9. It is an approved hot item. A change of it goes to the user.
+- Option D stays as the base rule of the advisor. It is not decided by the user.
 - User column: yes (a change of an approved decision).
 - Hard to revert: no.
 - Facts:
@@ -219,6 +223,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 4. The test level of A21
 
+- **Decided by the user on 2026-11-27: option A (A21 as a slice test).** The user accepted all recommendations of S9. It is an approved hot item. A change of it goes to the user.
 - User column: yes, if the user sees it as a weaker gate.
 - Hard to revert: no.
 - Facts: the built app has no test hook (`docs/architecture.md`, Tests). The tests never sleep. A 30-minute wait cannot run in CI.
@@ -240,6 +245,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 6. A child process that outlives the agent
 
+- **Decided by the user on 2026-11-27: option A (S9 adds the scenario, the check S9-4 and the fix).** The user accepted all recommendations of S9. It is an approved hot item. A change of it goes to the user.
 - User column: yes (scope and security).
 - Hard to revert: no.
 - Facts:
