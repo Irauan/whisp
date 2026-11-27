@@ -27,19 +27,30 @@ describe('AgentRegistry', () => {
 
   it('gives the program and the arguments of an entry `claude-code` as the replacement of the Claude launch recipe', async () => {
     await write([{ id: 'claude-code', name: 'Claude Code', command: process.execPath, args: ['agent.mjs', 'pipe'] }])
-    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({ command: process.execPath, args: ['agent.mjs', 'pipe'] })
+    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({
+      ok: true,
+      value: { command: process.execPath, args: ['agent.mjs', 'pipe'] }
+    })
   })
 
-  it('gives no replacement without an entry `claude-code`, or when its program does not exist', async () => {
+  it('gives no replacement without an entry `claude-code`, and no file gives none', async () => {
+    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({ ok: true, value: null })
     await write([{ id: 'gemini', name: 'Gemini CLI', command: process.execPath, args: ['--acp'] }])
-    expect(await new AgentRegistry(file).claudeCodeOverride()).toBeNull()
-    await write([{ id: 'claude-code', name: 'Claude Code', command: join(folder, 'does-not-exist.exe') }])
-    expect(await new AgentRegistry(file).claudeCodeOverride()).toBeNull()
+    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({ ok: true, value: null })
+  })
+
+  it('gives an error that names the entry when its program does not exist, and never a silent fall back', async () => {
+    const missing = join(folder, 'does-not-exist.exe')
+    await write([{ id: 'claude-code', name: 'Claude Code', command: missing }])
+    const result = await new AgentRegistry(file).claudeCodeOverride()
+    expect(result).toMatchObject({ ok: false, error: { code: 'override-unavailable' } })
+    expect(!result.ok && result.error.message).toContain('"claude-code" in agents.json')
+    expect(!result.ok && result.error.message).toContain(missing)
   })
 
   it('ignores the environment of an entry: the replacement holds the program and the arguments only', async () => {
     await write([{ id: 'claude-code', name: 'Claude Code', command: process.execPath, env: { ANTHROPIC_API_KEY: 'x' } }])
-    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({ command: process.execPath, args: [] })
+    expect(await new AgentRegistry(file).claudeCodeOverride()).toEqual({ ok: true, value: { command: process.execPath, args: [] } })
   })
 
   it('skips an invalid entry, and keeps the first entry of an id', async () => {

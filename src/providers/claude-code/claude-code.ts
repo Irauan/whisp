@@ -34,9 +34,11 @@ export interface LaunchOverride {
 export interface ClaudeCodeOptions {
   /**
    * An entry of `agents.json` with the id `claude-code` replaces only the program and the arguments.
-   * Everything else stays with this recipe. Null means that no entry exists.
+   * Everything else stays with this recipe. Null means that no entry exists. An error means that the
+   * entry exists and cannot be used: the start fails with that message, and never falls back to the
+   * built-in program.
    */
-  override?: () => Promise<LaunchOverride | null>
+  override?: () => Promise<Result<LaunchOverride | null>>
 }
 
 const require = createRequire(__filename)
@@ -93,7 +95,9 @@ export function claudeCodeRecipe(options: ClaudeCodeOptions = {}): AcpRecipe {
     async launch(settings) {
       const parsed = parseSettings(settings)
       if (!parsed.ok) return parsed
-      const override = (await options.override?.()) ?? null
+      const found = (await options.override?.()) ?? ok(null)
+      if (!found.ok) return found
+      const override = found.value
       const program = override === null ? builtIn() : ok(override)
       if (!program.ok) return program
       return ok({

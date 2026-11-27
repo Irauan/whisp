@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { delimiter, isAbsolute, join } from 'node:path'
+import { err, ok, type Result } from '../../building-blocks/result'
 
 /** How to start an ACP agent: a program that speaks ACP on stdin and stdout. */
 export interface AgentDefinition {
@@ -97,10 +98,21 @@ export class AgentRegistry {
     return (await this.list()).find((agent) => agent.id === id)
   }
 
-  /** The replacement of the launch recipe of Claude Code, or null when no usable entry exists. */
-  async claudeCodeOverride(): Promise<{ command: string; args: string[] } | null> {
+  /**
+   * The replacement of the launch recipe of Claude Code: null when the file has no entry
+   * `claude-code`. An entry whose program does not exist is an error, never a silent fall back to the
+   * built-in Claude. The message names the entry, so the notice of the session says what to fix.
+   */
+  async claudeCodeOverride(): Promise<Result<{ command: string; args: string[] } | null>> {
     const entry = await this.get(CLAUDE_CODE_ID)
-    return entry?.available ? { command: entry.command, args: entry.args } : null
+    if (!entry) return ok(null)
+    if (!entry.available) {
+      return err(
+        'override-unavailable',
+        `The entry "${CLAUDE_CODE_ID}" in agents.json names a program that Aether cannot find: ${entry.command}. Fix the entry or remove it.`
+      )
+    }
+    return ok({ command: entry.command, args: entry.args })
   }
 
   private async readCustom(): Promise<AgentDefinition[]> {

@@ -377,6 +377,65 @@ describe('sessions.send-message', () => {
     expect(entriesOf(store).at(-1)).toMatchObject({ kind: 'notice', text: 'Stopped.' })
   })
 
+  it.each(['failed', 'not-signed-in'] as const)(
+    'closes the live process when Stop is followed by the error "%s", so the next message starts one process and the first one does not stay',
+    async (code) => {
+      const { store, transcript, processes, agents, send, processOf } = setup()
+      const { finished } = send('s1', 'Write a long answer')
+      const one = await processOf(0)
+      one.becomeReady('a1')
+      await one.ready
+      await Promise.resolve()
+      // What the slice `stop` does: it marks the turn and sends a cancel. The process stays alive.
+      const turn = processes.turnOf('s1')
+      if (turn) turn.stopped = true
+      one.turn.resolve(err(code, 'The agent answered the cancel with an error.'))
+      await finished
+      expect(one.closed).toBe(1)
+      expect(processes.get('s1')).toBeUndefined()
+      expect(entriesOf(store).at(-1)).toEqual({ kind: 'notice', tone: 'info', text: 'Stopped.', code: 'stopped' })
+      expect(transcript.statusOf('s1')).toBe('idle')
+
+      const next = send('s1', 'Again')
+      const two = await processOf(1)
+      expect(agents.processes).toHaveLength(2)
+      two.becomeReady('a1', { resumed: true })
+      two.turn.resolve(ok('end_turn'))
+      await next.finished
+      // Exactly one process is alive for the session: the second. The first one was closed.
+      expect(processes.get('s1')).toBe(two)
+      expect([one.closed, two.closed]).toEqual([1, 0])
+    }
+  )
+
+  it('drops without a close the process that stopped by itself after Stop', async () => {
+    const { processes, send, processOf } = setup()
+    const { finished } = send('s1', 'Write a long answer')
+    const one = await processOf(0)
+    one.becomeReady('a1')
+    await one.ready
+    await Promise.resolve()
+    const turn = processes.turnOf('s1')
+    if (turn) turn.stopped = true
+    one.turn.resolve(err('agent-stopped', 'Claude Code stopped (exit code 1).'))
+    await finished
+    expect(one.closed).toBe(0)
+    expect(processes.get('s1')).toBeUndefined()
+  })
+
+  it('shows the message that names the agents.json entry when the program of the entry is missing, and keeps nothing alive', async () => {
+    const { store, processes, send, processOf } = setup()
+    const { finished } = send('s1', 'Say hello')
+    const agent = await processOf(0)
+    const message = 'The entry "claude-code" in agents.json names a program that Aether cannot find: C:\\gone.exe. Fix the entry or remove it.'
+    agent.start.resolve(err('unavailable', message))
+    await finished
+    expect(entriesOf(store).at(-1)).toEqual({ kind: 'notice', tone: 'error', text: message, code: 'start-failed' })
+    expect(processes.get('s1')).toBeUndefined()
+    expect(agent.prompts).toEqual([])
+    expect(agent.closed).toBe(1)
+  })
+
   it('shows "not signed in" with the sign-in steps, keeps the process, and goes on (A8)', async () => {
     const { store, transcript, agents, send, processOf } = setup()
     const first = send('s1', 'Say hello')

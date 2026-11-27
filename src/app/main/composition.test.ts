@@ -233,7 +233,7 @@ describe('composeMain', () => {
     const control = await ControlServer.start()
     try {
       await control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
-      const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => control.agent }), environment: () => ({ ...process.env, ANTHROPIC_API_KEY: 'x' }) })
+      const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => ({ ...process.env, ANTHROPIC_API_KEY: 'x' }) })
       const first = start(agents)
       const added = (await first.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: { login: 'example-user', name: null, avatar: null }, claudeFolder: null, claudeProfileName: null })) as { ok: true }
       expect(added.ok).toBe(true)

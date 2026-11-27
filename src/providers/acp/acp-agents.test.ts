@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ControlServer } from '../../../tests/simulated-agent/control'
+import { err, ok } from '../../building-blocks/result'
 import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate } from '../../building-blocks/agent.port'
 import { claudeCodeRecipe } from '../claude-code/claude-code'
 import { AcpAgents, translateUpdate } from './acp-agents'
@@ -25,7 +26,7 @@ afterEach(async () => {
   await rm(folder, { recursive: true, force: true })
 })
 
-const agents = () => new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => control.agent }), environment: () => aether, closeLimitMs: 2000 })
+const agents = () => new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => ok(control.agent) }), environment: () => aether, closeLimitMs: 2000 })
 
 const input = (part: Partial<AgentStartInput> = {}): AgentStartInput => ({
   mainDirectory: folder,
@@ -236,6 +237,33 @@ describe('AcpAgents', () => {
     const result = await process.prompt('go')
     expect(!result.ok && result.error.message).toContain('token is [removed] here')
     expect(!result.ok && result.error.message).not.toContain('fake-token-of-two')
+  })
+
+  it('removes the values that Aether gave the agent from the message of a failed prompt and of a failed start', async () => {
+    const token = 'fake-token-of-two'
+    await control.scenario('steps', { prompt: [{ do: 'fail', code: -32603, message: `The call used ${token} and failed` }] })
+    const prompting = start({ environment: { GH_TOKEN: token } })
+    await prompting.ready
+    const answer = await prompting.prompt('go')
+    expect(answer).toMatchObject({ ok: false, error: { code: 'failed' } })
+    expect(!answer.ok && answer.error.message).toContain('The call used [removed] and failed')
+    expect(!answer.ok && answer.error.message).not.toContain(token)
+
+    await control.scenario('steps', { initialize: [{ do: 'fail', code: -32603, message: `Start with ${token} failed` }] })
+    const starting = start({ environment: { GH_TOKEN: token } })
+    const ready = await starting.ready
+    expect(ready).toMatchObject({ ok: false, error: { code: 'failed' } })
+    expect(!ready.ok && ready.error.message).toContain('Start with [removed] failed')
+    expect(!ready.ok && ready.error.message).not.toContain(token)
+  })
+
+  it('refuses the start with "unavailable" and starts no process when the recipe cannot launch', async () => {
+    const message = 'The entry "claude-code" in agents.json names a program that Aether cannot find: C:\\gone.exe. Fix the entry or remove it.'
+    const refusing = new AcpAgents({ recipe: claudeCodeRecipe({ override: async () => err('override-unavailable', message) }), environment: () => aether })
+    const process = refusing.start(input(), listen().listener)
+    opened.push(process)
+    expect(await process.ready).toEqual({ ok: false, error: { code: 'unavailable', message } })
+    expect(control.pids).toHaveLength(0)
   })
 
   it('builds the environment from the allow list, the Claude settings and the input', async () => {

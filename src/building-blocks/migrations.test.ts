@@ -9,7 +9,7 @@ import { MIGRATIONS, orderMigrations } from './migrations'
  */
 const HASHES: Record<number, string> = {
   1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708',
-  2: '5529b8a94e6395cf696ce17d525a5eba372719527f355d91eed13db144869bc0'
+  2: '25f2a0fd504d69d86208a2b86d2a53283cb0f22345f1b1d959f88ee367bbcc71'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -103,7 +103,11 @@ describe('the migrations of the product', () => {
     expect(() => insertEntry.run('e2', 's1', 0, '{}')).toThrow() // The position is unique in a session.
     expect(() => insertEntry.run('e3', 's1', 1, 'not json')).toThrow()
     expect(() => insertEntry.run('e4', 's1', 1, '[]')).toThrow()
-    expect(() => insertEntry.run('e5', 'missing', 0, '{}')).toThrow()
+    expect(() => insertEntry.run('e5', 'missing', 0, '{"kind":"user"}')).toThrow()
+    // The column `kind` equals the key `kind` of the JSON.
+    expect(() => insertEntry.run('e6', 's1', 2, '{"kind":"agent","text":"x"}')).toThrow()
+    expect(() => insertEntry.run('e7', 's1', 3, '{"text":"x"}')).toThrow()
+    expect(() => database.prepare("UPDATE entries SET data = '{\"kind\":\"agent\"}' WHERE id = 'e1'").run()).toThrow()
 
     // Removing a session removes its entries.
     database.prepare("DELETE FROM sessions WHERE id = 's1'").run()

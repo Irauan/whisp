@@ -88,7 +88,7 @@ describe('SessionStore: the entries of a session', () => {
     const { database, store } = setup()
     expect(() => store.insertEntry('s1', { id: 'e1', entry: { kind: 'user' } as never }, 0, '2026-01-02')).toThrow()
     database
-      .prepare("INSERT INTO entries (id, session_id, position, kind, data, created_at) VALUES ('bad', 's1', 0, 'user', '{}', '2026-01-02')")
+      .prepare(`INSERT INTO entries (id, session_id, position, kind, data, created_at) VALUES ('bad', 's1', 0, 'user', '{"kind":"user"}', '2026-01-02')`)
       .run()
     expect(() => store.entriesOf('s1')).toThrow()
   })

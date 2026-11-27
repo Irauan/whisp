@@ -73,8 +73,11 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
       const stop = noticeOfStop(outcome.value)
       if (stop) transcript.addEntry(id, stop)
     } else if (turn.stopped) {
-      // The user stopped the turn, or Aether is closing the process. The process ended by that.
+      // The user stopped the turn, or Aether is closing the process. Stop only sends a cancel, so the
+      // process can be alive when the prompt fails. Never drop a live process without a close: it
+      // holds GH_TOKEN. Only an agent that stopped by itself needs no close.
       processes.drop(id, agent)
+      if (outcome.error.code !== 'agent-stopped') await agent.close()
       transcript.addEntry(id, notice('info', 'Stopped.', 'stopped'))
     } else {
       if (outcome.error.code === 'agent-stopped') processes.drop(id, agent)
@@ -110,7 +113,9 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   processes.set(id, agent)
   const ready = await agent.ready
   if (!ready.ok) {
+    // The provider ends a process that did not start. The close is idempotent, and no process is dropped alive.
     processes.drop(id, agent)
+    await agent.close()
     transcript.addEntry(
       id,
       ready.error.code === 'cancelled'

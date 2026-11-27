@@ -176,11 +176,22 @@ class AcpProcess implements AgentProcess {
 
   /** The last lines of the log, with the values that Aether gave the agent removed. */
   private logTail(): string {
-    let tail = this.stderr.trim().split('\n').slice(-LOG_LINES).join('\n')
-    for (const value of Object.values(this.input.environment)) {
-      if (value.length >= 4) tail = tail.replaceAll(value, '[removed]')
-    }
+    const tail = this.redact(this.stderr.trim().split('\n').slice(-LOG_LINES).join('\n'))
     return tail ? `\n${tail}` : ''
+  }
+
+  /** The text with the values that Aether gave the agent removed, for example `GH_TOKEN`. */
+  private redact(text: string): string {
+    let result = text
+    for (const value of Object.values(this.input.environment)) {
+      if (value.length >= 4) result = result.replaceAll(value, '[removed]')
+    }
+    return result
+  }
+
+  /** An error whose message passes `redact`. Each message that Aether saves or shows goes through it. */
+  private refuse<Code extends string>(code: Code, message: string): Result<never, Code> {
+    return err(code, this.redact(message))
   }
 
   private cancelled(): Result<never, StartErrorCode> {
@@ -191,7 +202,7 @@ class AcpProcess implements AgentProcess {
     try {
       const { recipe } = this.options
       const launch = await recipe.launch(this.input.settings)
-      if (!launch.ok) return err('unavailable', launch.error.message)
+      if (!launch.ok) return this.refuse('unavailable', launch.error.message)
       if (this.aborted) return this.cancelled()
 
       const environment = {
@@ -229,7 +240,7 @@ class AcpProcess implements AgentProcess {
     if (error instanceof RequestError && error.code === AUTH_REQUIRED) {
       return err('not-signed-in', this.options.recipe.notSignedIn(this.input.settings))
     }
-    return err('failed', `${this.name} did not start. ${describe(error)}${this.logTail()}`)
+    return this.refuse('failed', `${this.name} did not start. ${describe(error)}${this.logTail()}`)
   }
 
   private spawn(command: string, args: string[], env: Record<string, string>): Promise<Result<true, StartErrorCode>> {
@@ -243,7 +254,7 @@ class AcpProcess implements AgentProcess {
       })
       // A write to a closed pipe is not a defect of Aether. The exit reports it.
       child.stdin.on('error', () => undefined)
-      child.once('error', (error) => resolve(err('unavailable', `${this.name} did not start. ${error.message}`)))
+      child.once('error', (error) => resolve(this.refuse('unavailable', `${this.name} did not start. ${error.message}`)))
       child.once('close', (code) => {
         this.markEnded()
         this.listener.exited({ code, logTail: this.logTail().trim() })
@@ -294,7 +305,7 @@ class AcpProcess implements AgentProcess {
         // A missing sign-in is not a reason to start a new session.
         if (error instanceof RequestError && error.code === AUTH_REQUIRED) throw error
         if (this.aborted) throw error
-        resumeError = describe(error)
+        resumeError = this.redact(describe(error))
       }
     }
     const created = await this.context.request(methods.agent.session.new, { mcpServers: [], ...folders })
@@ -312,7 +323,7 @@ class AcpProcess implements AgentProcess {
     } catch (error) {
       if (this.aborted || !(error instanceof RequestError)) throw error
       if (error.code === AUTH_REQUIRED) throw error
-      return err('settings-refused', `${this.name} did not accept the mode "${modeId}". ${error.message}`)
+      return this.refuse('settings-refused', `${this.name} did not accept the mode "${modeId}". ${error.message}`)
     }
     if (this.input.model !== 'default') {
       try {
@@ -324,7 +335,7 @@ class AcpProcess implements AgentProcess {
       } catch (error) {
         if (this.aborted || !(error instanceof RequestError)) throw error
         if (error.code === AUTH_REQUIRED) throw error
-        return err('settings-refused', `${this.name} did not accept the model "${this.input.model}". ${error.message}`)
+        return this.refuse('settings-refused', `${this.name} did not accept the model "${this.input.model}". ${error.message}`)
       }
     }
     return ok(true)
@@ -345,11 +356,11 @@ class AcpProcess implements AgentProcess {
     } catch (error) {
       if (error instanceof RequestError) {
         if (error.code === AUTH_REQUIRED) return err('not-signed-in', this.options.recipe.notSignedIn(this.input.settings))
-        return err('failed', `${this.name} could not answer. ${error.message}`)
+        return this.refuse('failed', `${this.name} could not answer. ${error.message}`)
       }
       // The connection closed: the process ended. Wait for its exit code and its last log lines.
       await within(this.ended, EXIT_WAIT_MS)
-      return err('agent-stopped', `${this.name} stopped (exit code ${this.exitCode ?? 'unknown'}).${this.logTail()}`)
+      return this.refuse('agent-stopped', `${this.name} stopped (exit code ${this.exitCode ?? 'unknown'}).${this.logTail()}`)
     } finally {
       this.turnActive = false
     }

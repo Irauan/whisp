@@ -23,10 +23,11 @@ CREATE TABLE entries (
   id         TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
   position   INTEGER NOT NULL,
-  -- The kind of the entry. It repeats the key `kind` of the JSON, for queries.
+  -- The kind of the entry. It repeats the key `kind` of the JSON, for queries. The CHECK keeps the two equal, also when the JSON has no key kind.
   kind       TEXT NOT NULL,
   -- A JSON object that Aether validates.
   data       TEXT NOT NULL CHECK (json_valid(data) AND json_type(data) = 'object'),
   created_at TEXT NOT NULL,
+  CHECK (kind IS json_extract(data, '$.kind')),
   UNIQUE (session_id, position)
 ) STRICT;

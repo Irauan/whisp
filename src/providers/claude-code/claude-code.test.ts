@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MODES } from '../../building-blocks/mode'
+import { err, ok } from '../../building-blocks/result'
 import { CLAUDE_MODES, claudeCodeRecipe, signInSteps } from './claude-code'
 
 describe('claudeCodeRecipe', () => {
@@ -35,7 +36,7 @@ describe('claudeCodeRecipe', () => {
   })
 
   it('lets an entry of agents.json replace only the program and the arguments', async () => {
-    const recipe = claudeCodeRecipe({ override: async () => ({ command: 'C:\\fake\\agent.exe', args: ['--test'] }) })
+    const recipe = claudeCodeRecipe({ override: async () => ok({ command: 'C:\\fake\\agent.exe', args: ['--test'] }) })
     const launch = await recipe.launch({ configFolder: 'C:\\claude-one' })
     expect(launch).toEqual({
       ok: true,
@@ -49,8 +50,14 @@ describe('claudeCodeRecipe', () => {
     expect(recipe.name).toBe('Claude Code')
   })
 
+  it('refuses the start when the entry of agents.json cannot be used, and never falls back to the built-in program', async () => {
+    const message = 'The entry "claude-code" in agents.json names a program that Aether cannot find: C:\\gone.exe. Fix the entry or remove it.'
+    const launch = await claudeCodeRecipe({ override: async () => err('override-unavailable', message) }).launch({})
+    expect(launch).toEqual({ ok: false, error: { code: 'override-unavailable', message } })
+  })
+
   it('uses the built-in program when agents.json has no entry', async () => {
-    const launch = await claudeCodeRecipe({ override: async () => null }).launch({})
+    const launch = await claudeCodeRecipe({ override: async () => ok(null) }).launch({})
     expect(launch.ok && launch.value.command).toBe(process.execPath)
   })
 
