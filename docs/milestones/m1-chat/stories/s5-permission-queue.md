@@ -86,12 +86,14 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-13 | A session folder under R, in a Git repository whose root holds R, and a second case where the root equals R. The trust question shows the facts "Repository" and "Repository root", and the warning that names R and the profile. | Acceptance |
 | S5-15 | The refusal fallback dialog shows "Keep the refusal" first and primary. "Retry with <fallback>" sends `accept`. The agent reports the new model. The model button shows it, and after a restart the session starts with it. | Acceptance |
 | S5-16 | The agent reports `acceptEdits` with the S7 notice for the fallback of Auto. The Mode control shows "Accept edits". The saved mode stays `auto`, and the notice shows again at the next start. | Slice |
-| S5-17 | Two open cards show inside the log "Transcript", after the last entry, in the order of arrival. A later entry comes before them. The dock holds no card. | Acceptance |
+| S5-17 | Two open cards show inside the log "Transcript", at the place where they arrived, in the order of arrival. A later entry comes after them. The dock holds no card. | Acceptance |
 | S5-18 | The user scrolled up. A new card comes. The log does not move. The status line shows "Waiting for your answer" and "Show request". A click brings the oldest open card into view and focuses it. | Acceptance |
 | S5-19 | A new card does not take the focus: a key typed in "Prompt" goes to the composer. | Acceptance |
 | S5-20 | After the user picks "Allow", the decision card stays in the transcript with no buttons. It shows the question in the secondary color and "Allow" in the primary color. After a restart it shows the same. Stop on an open decision card shows "Not answered: you pressed Stop.". | Acceptance |
 | S5-28 | Each path that closes an open card saves its reason: Stop (`stopped`), `$/cancel_request` (`withdrawn`), the exit or crash of the process (`exited`), the quit of Aether (`quit`), Skip (`skipped`). The card shows the text of its reason after a restart. Delete session saves no entry, and the agent gets `cancelled`. | Slice |
 | S5-29 | Stop on a card makes the adapter also send `$/cancel_request`. The card keeps the reason `stopped`: the first close wins. | Slice |
+| S5-30 | A card opens. Its `answers` entry is saved at once with the outcome `open`, and the renderer shows the live card, not the entry. The answer updates the same entry in place (same ID, same position). | Slice |
+| S5-31 | Crash path: a card is open, and the test kills the main process of Aether. At the next start, before the window loads, the entry has the outcome `interrupted`. The card shows "Not answered: Aether stopped unexpectedly." and no button. | Acceptance |
 | S5-27 | While an answer is being sent, the card shows no disabled button: it shows the answered layout with a spinner. When the main process refuses the answer, the card goes back to its buttons, with the error line. | Acceptance |
 | S5-21 | The user answers a single select and a multi select with "Other". The card turns into the answered card "Claude asked", with one row for each question and the answer below it. After a restart it shows the same. | Acceptance |
 | S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Not answered: you pressed Stop." in each row. | Acceptance |
@@ -101,7 +103,9 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-25 | An MCP form with a text field saves "Answered", not the typed text. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-29 are not in the brief. They cover the rules above.
+S5-1 to S5-31 are not in the brief. They cover the rules above.
+
+S5-31 needs a kill of the main process. No fixture has one today: the S4 fixture only has `chat.stop()`, a normal quit (a grep of `tests/acceptance`). The S5 test author adds a helper, for example `electronApp.process().kill()`, and on Windows also ends the simulated agent that the kill leaves behind.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -196,7 +200,7 @@ The user said: "On Claude desktop the card changes and shows a list with the que
 
 - After Submit, Skip or a cancel, the question card turns into an answered card. It does not disappear.
 - The answered card is an `article` with the fixed name "Claude asked". It does not reuse "Claude asks", so a locator for an open card never matches an answered card.
-- It lists one row for each question: the question text in the primary color, and the answer below it in the secondary color. Separators split the rows.
+- It lists one row for each question: the question text in the secondary color, and the answer or the reason below it in the primary color (user decision, 2026-11-27). Separators split the rows.
 - The answer text:
   - submitted: the picked labels, joined with ", ", then the typed text of "Other"
   - a question with no pick and no text: "Not answered: you skipped it."
@@ -204,7 +208,7 @@ The user said: "On Claude desktop the card changes and shows a list with the que
   - a close without an answer: each row says why. See "Cards that closed without an answer".
 - The refusal fallback card also turns into an answered card, with the one row "Retry with <fallback>?" and the chosen option.
 - The answered card is a saved entry, so it stays after a reload and a restart. See "Data".
-- Main adds the entry with `addEntry` in the same step that removes the open card. The open card was last in the log, so the answered card keeps its place.
+- The entry is saved when the card opens, and updated in place when the card closes. See "Data". So the answered card keeps the place where the card opened.
 - Which closes save an entry: see "Cards that closed without an answer".
 - A form that got -32602 saves nothing, because no card showed.
 - Decision cards (permission cards) also stay after the answer. See "The answered decision card".
@@ -232,6 +236,7 @@ The user said: "we should show a card with the question in secondary and somethi
 | `withdrawn` | Claude withdrew the request (`$/cancel_request`). | "Not answered: Claude withdrew it." |
 | `exited` | Claude Code exited or crashed. | "Not answered: Claude Code exited." |
 | `quit` | Aether quit, and closed the process. | "Not answered: Aether closed." |
+| `interrupted` | Aether stopped unexpectedly (a crash or a kill), set at the next start. | "Not answered: Aether stopped unexpectedly." |
 | `skipped` | The user skipped a question, or left it empty in a submitted form. | "Not answered: you skipped it." |
 
 - No reason `released`: a release (S9) never closes a shown card. S9 releases only an idle session, with no open card, and the idle check and the start of the close are one synchronous step. A request that comes while the process closes gets `cancelled` at once, with no card. See the S9 spec.
@@ -242,13 +247,16 @@ Who names the reason:
 - The slice that starts the close names its reason. Stop gives `stopped`. The quit path gives `quit`.
 - The provider reports only its own two causes, in `permissionClosed(id, reason)` and `elicitationClosed(id, reason)`: `withdrawn` (the signal of the request) and `exited` (the process ended by itself).
 - The first close wins. Stop also makes the adapter send `$/cancel_request`, and a quit makes the process exit. The slice saves its reason before it calls `cancel()` or `close()`. A later close of the same card changes nothing.
-- Quit order: the quit path saves the entries of the open cards first, then calls `processes.releaseAll()`, and only then the database closes (`composition.ts` 191-193 on `milestone/m1-chat`).
-- A crash or a kill of Aether itself saves no entry. No card then shows why. No spec covers it.
+- Quit order: the quit path updates the entries of the open cards to `quit` first, then calls `processes.releaseAll()`, and only then the database closes (`composition.ts` 191-193 on `milestone/m1-chat`).
+- A crash or a kill of Aether (user decision, 2026-11-27). The user chose: "Save the card when it opens; at the next start an open one shows 'Not answered: Aether stopped unexpectedly.'"
+  - The entry of each card is saved when the card opens, with the outcome `open`. See "Data".
+  - At the next start, before any window loads, Aether changes each `open` entry to the outcome `interrupted`.
+  - The card then shows "Not answered: Aether stopped unexpectedly.", with no button.
 - It is an `article` with the fixed name "Permission answered". It does not reuse "Permission request", so a locator for an open card never matches it.
 - It is a saved entry of the approved kind `answers`, with one row. A reload or a restart keeps it. See "Data".
 - While the answer is being sent, the card shows the answered layout at once, with a small spinner after the chosen label. When the main process accepts the answer, the spinner goes and the entry is saved. When it refuses the answer, the card goes back to its buttons and shows the error line.
 - The same rule applies to the question cards: no disabled button while "Submit" or "Skip" is sent. The card shows its answered layout with a spinner.
-- Color order, as the user said each one: a decision card shows the question in the secondary color and the answer in the primary color. A question card shows the question in the primary color and the answer in the secondary color. The coordinator asks the user if both should match.
+- Color order (user decision, 2026-11-27): every answered or not-answered card shows the question in the secondary color and the answer or the reason in the primary color. This holds for decision cards, question cards, and each row of a form.
 
 #### Decision cards (user decision, 2026-11-27)
 
@@ -348,7 +356,8 @@ Each state shows the fixed frame of S8, with no facts row in the header (user de
 The user said: "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window."
 
 - Permission cards and the question cards of Claude show inside the log "Transcript", at its end. They scroll with the chat, as in Claude Code.
-- An open card always comes after the last entry, also when a later entry arrives. So it sits after the tool call or the message that it belongs to.
+- A card sits at the place where it arrived: its entry is saved when it opens, right after the tool call or the message that it belongs to. A later entry comes after it. In a turn, the agent waits for the answer, so the card is almost always last.
+- This replaces the earlier rule "always after the last entry", because the crash path saves the card when it opens (user decision, 2026-11-27).
 - Several open cards show in the order of arrival, oldest first, at the end of the log.
 - The cards are view only: the renderer draws them after the entries from the open requests of the snapshot. They are not entries.
 - They are not in the bottom dock. The dock of S8 holds only the status line, the plan widget and the composer.
@@ -432,7 +441,7 @@ z.strictObject({
   kind: z.literal('answers'),
   card: z.enum(['decision', 'question']),  // added on 2026-11-27 for the answered decision card
   toolId: z.string().nullable(),          // the toolCallId of the elicitation, if any
-  outcome: z.enum(['submitted', 'skipped', 'stopped', 'withdrawn', 'exited', 'quit']),  // changed on 2026-11-27: the reasons replace 'cancelled'
+  outcome: z.enum(['open', 'submitted', 'skipped', 'stopped', 'withdrawn', 'exited', 'quit', 'interrupted']),
   rows: z.array(z.strictObject({
     question: z.string(),                 // the message for one question, else the field description
     answer: z.string().nullable(),        // the picked labels, then the typed text; null when none
@@ -441,8 +450,16 @@ z.strictObject({
 ```
 
   - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to the text of its reason (see "Cards that closed without an answer"). A later change of a text then needs no data change.
-  - Changes of the approved shape, for the user: the field `card` (2026-11-27), and the outcome values `stopped`, `withdrawn`, `exited` and `quit`, which replace `cancelled` (2026-11-27). Hard to revert: yes, because the schema is strict on each read. A later new value is an addition.
-  - Main builds the rows at answer time, and adds the entry with `addEntry` where the open card was: at the end of the entries.
+  - **The format is approved by the user on 2026-11-27**: the entry kind `answers`, the field `card: "decision" | "question"`, and `outcome` with the values `submitted`, `skipped`, `stopped`, `withdrawn`, `exited` and `quit`. The crash decision of the same day adds `open` and `interrupted` to the approved format. Hard to revert: yes, because the schema is strict on each read. A later new value is an addition.
+  - Write path:
+    1. When a card opens, main adds the entry with `addEntry`, with the outcome `open` and each row with `answer: null`.
+    2. When the card closes, main replaces the same entry in place (same ID, same position), with the final outcome and the answers. It reuses the in-place replace of S8 (`Transcript.replace`, `SessionStore.updateEntry`, event `entry-replaced`).
+    3. At app start, before any window loads, one store call changes each `answers` entry with the outcome `open` to `interrupted`. In SQL: `UPDATE entries SET data = json_set(data, '$.outcome', 'interrupted') WHERE kind = 'answers' AND json_extract(data, '$.outcome') = 'open'`. This is a repair at each start, not a migration.
+  - The text of `interrupted`: "Not answered: Aether stopped unexpectedly." (skim list).
+  - How a live card and its entry connect:
+    - `PermissionView` and `ElicitationView` carry `entryId`, the ID of the `answers` entry that the card saved when it opened.
+    - The renderer draws the live card in place of the entry with that `entryId`.
+    - A saved entry with the outcome `open` never shows as a live card by itself. A live card comes only from the open requests of the snapshot. An `open` entry with no live request shows the text of `interrupted`. This covers a race; after the start repair, such an entry cannot exist.
   - A decision card saves one row: `question` is the question text of the card, for example "Run this command?", and `answer` is the label of the chosen option, or null for a cancel. The outcome is `submitted` or `cancelled`. `toolId` names the tool call, which shows the command or the path just above.
   - The only change of the approved shape is the field `card`. No other field changes.
   - No migration. Migration 002 has no CHECK that lists the kinds of entry; its only CHECK keeps the column `kind` equal to the key `kind` of the JSON. zod validates the kinds.
@@ -804,7 +821,7 @@ Small texts and details that the advisor accepted. The user can veto each one.
 - The status text "Waiting for your answer".
 - The button "Cancel request" for a request with no options.
 - The card heading "Permission request".
-- The texts of a card that closed without an answer: "Not answered: you pressed Stop.", "Not answered: Claude withdrew it.", "Not answered: Claude Code exited.", "Not answered: Aether closed.", "Not answered: you skipped it."
+- The texts of a card that closed without an answer: "Not answered: you pressed Stop.", "Not answered: Claude withdrew it.", "Not answered: Claude Code exited.", "Not answered: Aether closed.", "Not answered: you skipped it.", "Not answered: Aether stopped unexpectedly."
 - The fixed card names "Claude asks" (open) and "Claude asked" (answered).
 - The question texts of the decision cards: "Run this command?", "Make this change?", "Read this?", "Fetch this?", "Approve the plan?", "Allow this tool?".
 - The dropdown names "More allow options" and "More refuse options".

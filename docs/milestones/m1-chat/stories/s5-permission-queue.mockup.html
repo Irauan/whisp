@@ -543,7 +543,7 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>8b. Answered question cards</h2>
-  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". One row for each question: the question in the primary color, the answer below it in the secondary color, with separators. A question with no answer says why, for example "Not answered: you skipped it.". A card that closed without an answer shows the question in the secondary color and the reason in the primary color. The card is a saved entry, so it stays after a restart.</p>
+  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". Changed again (user decision, 2026-11-27): every answered or not-answered card shows the question in the secondary color and the answer or the reason in the primary color, also in each row of a form. Separators split the rows. A question with no answer says why, for example "Not answered: you skipped it.". The card is saved when it opens, so it stays after a restart, and after a crash it shows "Not answered: Aether stopped unexpectedly.".</p>
   <div class="window frame" style="height:620px">
     <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -551,20 +551,23 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="mark"><span class="mark-label">Changed: answered card, one question</span>
         <div class="question answered" role="article" aria-label="Claude asked">
           <h3>Claude asked</h3>
-          <div class="answer-row"><p>Which test runner do you want?</p><p class="muted">Vitest (Recommended)</p></div>
+          <div class="answer-row"><p class="muted">Which test runner do you want?</p><p class="chosen">Vitest (Recommended)</p></div>
         </div>
       </div>
       <div class="mark"><span class="mark-label">Changed: answered card, several questions</span>
         <div class="question answered" role="article" aria-label="Claude asked">
           <h3>Claude asked</h3>
-          <div class="answer-row"><p>Which reports do you want?</p><p class="muted">Coverage, JUnit XML, A summary in the console</p></div>
-          <div class="answer-row"><p>Run the tests on each save?</p><p class="muted">Yes (Recommended)</p></div>
-          <div class="answer-row"><p>Which folder holds the tests?</p><p class="muted">Not answered: you skipped it.</p></div>
+          <div class="answer-row"><p class="muted">Which reports do you want?</p><p class="chosen">Coverage, JUnit XML, A summary in the console</p></div>
+          <div class="answer-row"><p class="muted">Run the tests on each save?</p><p class="chosen">Yes (Recommended)</p></div>
+          <div class="answer-row"><p class="muted">Which folder holds the tests?</p><p class="chosen">Not answered: you skipped it.</p></div>
         </div>
       </div>
       <div class="mark"><span class="mark-label">Changed: a question card that closed without an answer</span><div class="question answered" role="article" aria-label="Claude asked">
         <h3>Claude asked</h3>
         <p class="muted">Do you want a watch script?</p><p class="chosen">Not answered: Claude Code exited.</p>
+      </div></div>
+      <div class="mark"><span class="mark-label">New: a card that was open when Aether crashed</span><div class="question answered-decision" role="article" aria-label="Permission answered">
+        <p class="muted">Run this command?</p><p class="chosen">Not answered: Aether stopped unexpectedly.</p>
       </div></div>
       <div class="msg"><p>I set up Vitest with coverage and JUnit XML.</p></div>
     </div>
