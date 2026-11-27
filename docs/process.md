@@ -19,7 +19,7 @@ Principle: automated evidence replaces the user's attention. The user owns the s
 |---|---|---|---|---|
 | 0 | Architecture baseline, when none exists | Starting session and user | `architecture.md`, decision records | User approves |
 | 1 | Brief | Starting session and user | Brief contract | All sections filled, each check testable, user approves |
-| 2 | Design and plan | Starting session and user | Architecture change, stories, todo list | Each check maps to a story, user approves |
+| 2 | Design and plan | Starting session and user | Architecture change, stories, one spec per story, todo list | Each check maps to a story, each story has a spec, user approves the design review |
 | 3 | Acceptance tests | Test author | Locked tests for one story | Tests fail for the expected reason |
 | 4 | Build | Builder | Code and unit tests through TDD, story PR | Locked tests and CI pass |
 | 5 | Review and story validation | Reviewer | Findings, and evidence for what the story changed | No open serious finding |
@@ -29,7 +29,7 @@ Principle: automated evidence replaces the user's attention. The user owns the s
 | 9 | Retrospective | Coordinator session | Metrics, lessons, cleanup | User approves new text rules |
 
 - Before step 3, the coordinator reads only the files and lists what it cannot answer. The user answers, and the files are updated.
-- Steps 3 to 6 repeat for each story.
+- Steps 3 to 6 repeat for each story. Independent stories run them in parallel. See "Parallel work".
 - Step 7 runs once, after all stories are merged. It runs again only after a fix.
 - The first stories form a walking skeleton. The coordinator then sends a demo and continues without waiting.
 - A story that changes no behavior can skip step 3.
@@ -61,6 +61,53 @@ The contract has these sections:
 
 A section that does not apply says why.
 
+## Story specs and design review
+
+Goal: settle the choices that the user would question before the execution starts. During the execution, the user's attention is the exception.
+
+### Story spec
+
+Step 2 writes one spec for each story in `docs/milestones/<id>/stories/<story>.md`. The spec has these sections:
+
+- behavior: flows, states and the checks of the story
+- screens: a mockup of each screen and state that the story adds or changes
+- data: tables, columns, constraints, migrations and other saved formats
+- interfaces: contracts, ports, IPC names and events
+- terms: the names in the UI, the code and the database
+- error and empty states
+- files and dependencies: the areas the story touches, and the stories it needs
+- open choices: each with options, a recommendation, the impact of each option, and if it is hard to revert
+
+A section that does not apply says why.
+
+### Mockups
+
+- Show each screen change as a mockup, not as text.
+- Write each mockup as one static HTML file: `docs/milestones/<id>/stories/<story>.mockup.html`.
+- Use the colors, fonts and components of the app. Use fake data.
+- Show each state of the screen: empty, loading, error and filled.
+- Mark each change against the current screen.
+- The user opens the mockup, comments on it or edits it. The spec then follows the mockup.
+- The approved mockup is the visual reference for the test author and the builder.
+
+### Design review
+
+1. The starting session writes the specs from the code, the documents, the decisions and `docs/user-preferences.md`.
+2. One reviewer run checks the specs against the code, the architecture and the decision records. It reports conflicts, false assumptions and checks that no spec covers.
+3. Each agent run asks the advisor about each open choice. The advisor answers as in "Escalation".
+4. The starting session shows the user the mockups and the hot items:
+   - each item of the user column of "Decisions"
+   - each choice that is hard to revert
+   - each choice where the advisor predicts that the user likely disagrees
+5. The other choices appear in one list. The user can skim it and veto an item.
+6. The user approves the design review. The specs are then the contract for the test author, the builder and the reviewer.
+
+### After the design review
+
+- A choice inside an approved spec follows "Escalation". It does not need a new user approval.
+- A user approves a saved format once, in the design review. A later change that only adds to it follows "Escalation".
+- A change that removes or changes an approved hot item goes to the user.
+
 ## Roles
 
 Four roles are separate agents. Three work per story, and the validator works per milestone. Each starts with a fresh context and reads files, not the conversation of another role.
@@ -74,21 +121,56 @@ A starting session does steps 0 to 2 with the user. A new coordinator session do
 
 ## Decisions
 
-| User | Advisor decides, builder records in the story PR | Builder alone |
+| User | Advisor decides, the agent records it in the story PR | Agent alone |
 |---|---|---|
 | Brief, scope, non-goals | Interfaces between modules | Names and structure inside a module |
-| Saved data format | New library with a free license | Unit test design |
-| Security, permissions, credentials | Error and empty states not in the brief | Fixes of findings within the limits |
-| Money and paid services | Visual details that follow existing patterns | |
-| Change of an approved decision | | |
+| Saved data format, in the design review | Additions to an approved saved format | Unit test design |
+| Security, permissions, credentials | New library with a free license | Fixes of findings within the limits |
+| Money and paid services | Error and empty states not in the spec | |
+| Change of an approved decision | Visual details that follow existing patterns or an approved mockup | |
+| A choice that is hard to revert | Other choices inside an approved spec | |
+| A change of an approved hot item | | |
 | Weaker gate, locked test meaning, or process rule | | |
 | Acceptance, merge to `main`, release | | |
 
+A choice is hard to revert when its undo needs one of these:
+
+- a migration of saved user data
+- a change in several modules
+- a change of an approved decision or an approved hot item
+
+### Advisor
+
 - Every agent can use the advisor. The advisor model is Fable.
 - For the builder, the advisor is a senior engineer who watches the work of a junior.
-- When the documents do not settle a choice in the middle column, the builder asks the advisor. The advisor decides or escalates.
-- On escalation, or when the advisor is unavailable, the builder stops with one question. The coordinator gives it to the user. Independent stories continue.
-- The other agents send an ambiguity to the coordinator. The coordinator asks the user if the documents do not answer it.
+- The user sets Fable as the default advisor before the coordinator session starts. `/advisor` in a running conversation keeps the old model.
+- The coordinator checks for the advisor tool as its first action. When the tool is missing, it stops and asks the user to start it.
+- No story starts without the advisor.
+
+### Escalation
+
+The advisor answers each question first. The user gets only the questions that need the user.
+
+1. The agent asks the advisor. It gives the choice, the options, its recommendation and the files that apply.
+2. The advisor reads `docs/user-preferences.md` and the story spec. It answers with:
+   - its decision and the reason
+   - if the choice is hard to revert
+   - if the user likely disagrees, and why
+3. The agent escalates to the coordinator in each of these cases:
+   - the item is in the user column
+   - the choice is hard to revert
+   - the advisor predicts that the user likely disagrees
+   - the advisor is unavailable
+4. Otherwise the agent applies the decision and records it in the story PR, under "Advisor decisions".
+5. The coordinator copies the advisor decisions of each merged story to `docs/milestones/<id>/decisions-to-review.md`.
+6. The user reads that list at the demo and at acceptance. A veto becomes a failing check and a new story.
+
+A question to the user follows these rules:
+
+- The coordinator sends together all the questions that wait.
+- Each question gives the options, the advisor recommendation, and the impact of each option in one line.
+- While a question waits, its story waits. Independent stories continue.
+- The coordinator records each answer and its reason in `docs/user-preferences.md`.
 
 ## Locked tests
 
@@ -124,6 +206,20 @@ Milestone 0 builds the gates before unattended work:
 
 CI is fast and deterministic. Evals test judgment at night, only when something changed.
 
+Before a milestone, the coordinator proves each tool assumption of the brief with one cheap probe.
+
+## Parallel work
+
+The coordinator runs each step that does not wait for another step at the same time.
+
+- The plan lists, for each story, the stories it needs and the areas it touches. The spec gives the same facts.
+- The coordinator starts each story when the stories it needs are merged.
+- Each story runs in its own worktree. At most three stories build at the same time.
+- The test author of a story can run while a builder works on another story. Its tests must not need unmerged code.
+- The reviewer of one story can run while a builder works on another story.
+- Stories that touch the same areas merge one at a time. The later story updates its branch and runs CI again.
+- A question or a 1Password prompt that blocks one story does not stop the other stories.
+
 ## Branches and pull requests
 
 - Each story uses a worktree, a story branch and a PR to `milestone/<id>`.
@@ -142,7 +238,9 @@ CI is fast and deterministic. Evals test judgment at night, only when something 
 - `docs/models.md`: model guidance
 - `docs/architecture.md`: current architecture
 - `docs/decisions/`: one record per decision
-- `docs/milestones/<id>/`: brief, plan with todo list, evidence, metrics
+- `docs/milestones/<id>/`: brief, plan with todo list, evidence, metrics, decisions to review
+- `docs/milestones/<id>/stories/`: one spec per story, and its mockups
+- `docs/user-preferences.md`: the past answers of the user and their reasons, for the advisor
 - `CLAUDE.md`: short rules for every session, with links
 
 All state is in files. The repository is public, so these files are public.

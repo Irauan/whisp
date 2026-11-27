@@ -27,9 +27,10 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 ## Advisor
 
 - Every agent can use the advisor.
-- The user turns the advisor on with `/advisor fable` in the coordinator session.
+- The user sets Fable as the default advisor with `/advisor fable`, then starts a new coordinator session.
+- `/advisor` in a running conversation keeps the old advisor model until `/clear` or `/compact`.
 - Subagents inherit the advisor from the coordinator.
-- The builder asks the advisor for the middle-column choices of "Decisions" in `docs/process.md`.
+- Every agent asks the advisor first. "Escalation" in `docs/process.md` says what goes to the user.
 
 ## Changing a row
 
