@@ -58,6 +58,9 @@ import {
 
 const TITLE = 'Plan the change'
 
+/** The refuse label of the plan exit in S5-26. */
+const REFUSE = 'No, keep planning and revise the plan'
+
 async function startWith(chat: ChatApp, prompt: unknown[], check: string): Promise<Page> {
   await chat.control.scenario('steps', { prompt })
   await writeOldProfile(chat, [DRAFT_IN_REPO_A])
@@ -172,7 +175,8 @@ test.describe('S5-6, S5-20, S5-24, S5-26 and S5-27: decision cards', () => {
     const muted = await resolvedColor(page, 'var(--muted)')
     const text = await resolvedColor(page, 'var(--text)')
     await expect(card, `${check}: the context of the card must name the tool kind "execute".`).toContainText('execute')
-    const context = card.getByText(shell.title, { exact: true })
+    // The context can be one text, for example "execute · npm test", so the test takes the element that ends with the title.
+    const context = card.getByText(new RegExp(`${shell.title}$`)).first()
     await expect(context, `${check}: the context of the card does not show the tool title "${shell.title}".`).toBeVisible()
     expect(await colorOf(context), `${check}: the context (the tool title) must have the secondary color (--muted).`).toBe(muted)
     const question = card.getByText(QUESTION_OF.execute, { exact: true })
@@ -227,46 +231,48 @@ test.describe('S5-6, S5-20, S5-24, S5-26 and S5-27: decision cards', () => {
     chat
   }) => {
     const check = 'S5-26'
-    const plan: Ask = { id: 'plan', title: 'Approve Plan', kind: 'switch_mode', options: PLAN_EXIT_OPTIONS }
+    // A longer refuse label than the one of Claude, so that the three buttons cannot share one line at 375 px.
+    const options = PLAN_EXIT_OPTIONS.map((option) => (option.kind === 'reject_once' ? { ...option, name: REFUSE } : option))
+    const plan: Ask = { id: 'plan', title: 'Approve Plan', kind: 'switch_mode', options }
     const page = await startWith(chat, [ask(plan), answers, say('Done.')], check)
     const card = openDecision(page, plan.title)
     await expect(card, `${check}: the agent asked a permission, but no card "Permission request" shows.`).toHaveCount(1)
     const main1 = buttonIn(card, 'Yes, manually approve edits')
     const more = buttonIn(card, 'More allow options')
-    const no = buttonIn(card, 'No, keep planning')
+    const no = buttonIn(card, REFUSE)
     for (const [button, name] of [
       [main1, 'Yes, manually approve edits'],
       [more, 'More allow options'],
-      [no, 'No, keep planning']
+      [no, REFUSE]
     ] as const) {
       await expect(button, `${check}: the plan exit card has no button "${name}".`).toBeVisible()
     }
 
     // Wide: one line, each button sized to its content.
     const wide = await contentOf(card, `${check}: the card`)
-    const [a, b, c] = [await boxOf(main1, 'main part'), await boxOf(more, 'dropdown part'), await boxOf(no, '"No, keep planning"')]
+    const [a, b, c] = [await boxOf(main1, 'main part'), await boxOf(more, 'dropdown part'), await boxOf(no, `"${REFUSE}"`)]
     const middle = (box: { y: number; height: number }) => box.y + box.height / 2
     expect(Math.abs(middle(a) - middle(c)), `${check}: at a wide width, the buttons must sit on one line.`).toBeLessThanOrEqual(2)
     expect(Math.abs(middle(a) - middle(b)), `${check}: at a wide width, the dropdown part must sit on the line of its main part.`).toBeLessThanOrEqual(2)
-    expect(c.width, `${check}: at a wide width, "No, keep planning" must size to its content, not to the width of the card.`).toBeLessThan(wide.width / 2)
+    expect(c.width, `${check}: at a wide width, "${REFUSE}" must size to its content, not to the width of the card.`).toBeLessThan(wide.width / 2)
     expect(a.width, `${check}: at a wide width, the main part must size to its content, not to the width of the card.`).toBeLessThan(wide.width / 2)
 
     // Narrow: the session window is 375 px wide. Each button takes the full width, at equal size, stacked.
     await resizeSession(chat, page, 375)
     await expect
       .poll(async () => {
-        const [top, bottom] = [await boxOf(main1, 'main part'), await boxOf(no, '"No, keep planning"')]
+        const [top, bottom] = [await boxOf(main1, 'main part'), await boxOf(no, `"${REFUSE}"`)]
         return bottom.y >= top.y + top.height - 1
-      }, { message: `${check}: at 375 px, the buttons do not stack: "No, keep planning" must sit below the split button.` })
+      }, { message: `${check}: at 375 px, the buttons do not stack: "${REFUSE}" must sit below the split button.` })
       .toBe(true)
     const narrow = await contentOf(card, `${check}: the card at 375 px`)
-    const [n1, n2, n3] = [await boxOf(main1, 'main part'), await boxOf(more, 'dropdown part'), await boxOf(no, '"No, keep planning"')]
+    const [n1, n2, n3] = [await boxOf(main1, 'main part'), await boxOf(more, 'dropdown part'), await boxOf(no, `"${REFUSE}"`)]
     expect(Math.abs(middle(n1) - middle(n2)), `${check}: at 375 px, the split button must keep its dropdown part on its line.`).toBeLessThanOrEqual(2)
     expect(n2.x + n2.width, `${check}: at 375 px, the dropdown part must sit at the right end of the split button.`).toBeGreaterThan(n1.x + n1.width - 1)
     expect(Math.abs(n1.x - narrow.left), `${check}: at 375 px, the split button must start at the left edge of the card.`).toBeLessThanOrEqual(2)
     expect(Math.abs(n2.x + n2.width - narrow.right), `${check}: at 375 px, the split button must reach the right edge of the card.`).toBeLessThanOrEqual(2)
-    expect(Math.abs(n3.x - narrow.left), `${check}: at 375 px, "No, keep planning" must start at the left edge of the card.`).toBeLessThanOrEqual(2)
-    expect(Math.abs(n3.width - narrow.width), `${check}: at 375 px, "No, keep planning" must take the full width of the card.`).toBeLessThanOrEqual(2)
+    expect(Math.abs(n3.x - narrow.left), `${check}: at 375 px, "${REFUSE}" must start at the left edge of the card.`).toBeLessThanOrEqual(2)
+    expect(Math.abs(n3.width - narrow.width), `${check}: at 375 px, "${REFUSE}" must take the full width of the card.`).toBeLessThanOrEqual(2)
     expect(Math.abs(n1.height - n3.height), `${check}: at 375 px, the stacked buttons must have the same height.`).toBeLessThanOrEqual(1)
 
     await main1.click()
