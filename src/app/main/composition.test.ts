@@ -285,7 +285,8 @@ describe('composeMain', () => {
       for (const composition of open) await composition.shutdown()
       await control.close()
     }
-  })
+    // Each close of a process lists its process tree first (S9-4), so this test, with its two closes, gets a longer limit.
+  }, 30_000)
 
   it('keeps the settings that a process started with: an edit of the account during the first start makes a new account, and the resume uses the old one (R2-1)', async () => {
     // A port whose processes wait for the test.

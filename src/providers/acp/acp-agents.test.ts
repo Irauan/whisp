@@ -238,7 +238,8 @@ describe('AcpAgents', () => {
     expect(control.received('session/new')).toHaveLength(1)
     // The mode applies to a resumed session too.
     expect(control.received('session/set_mode')).toHaveLength(2)
-  })
+    // Each close lists the process tree first (S9-4): two closes need a longer limit than the default.
+  }, 30_000)
 
   it('starts a new agent session when the resume fails, and says why', async () => {
     const process = start({ resume: 'unknown-session' })
