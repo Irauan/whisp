@@ -70,11 +70,11 @@ The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. Decision 001
 - [x] S3 Session slices, with decision 0012. PR #25, squash merge `2858c5f`.
 - [x] S4 Chat in a session. PR #26, squash merge `c649218`.
 - [x] Demo of the walking skeleton to the user, after the S4 merge.
-- [ ] S5 Permission queue
+- [x] S5 Permission queue. PR #42, squash merge `8ed051a`.
 - [x] S6 Repository and directory trust. PR #28, squash merge `50bd85a`.
 - [x] S7 Session settings reach the agent. PR #27, squash merge `597d6c5`.
-- [ ] S8 Plan widget
-- [ ] S9 Idle release and process limit
+- [x] S8 Frame, composer and plan widget. PR #35, squash merge `a92cb98`.
+- [x] S9 Idle release and process limit. PR #40, squash merge `c485a92`.
 - [ ] Step 7: milestone validation, with the live checks
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective

@@ -75,3 +75,9 @@ The advisor reads this file before each decision. It predicts from it if the use
 | 2026-11-27 | S9 choices | `started_by` in migration 004, constant times, background shells not counted, A21 as a slice test, the child-process fix | The recommendations |
 | 2026-11-27 | Run cap of m1 | 62, then 75 | The specs added work |
 | 2026-11-27 | Commits when 1Password cannot approve | Commit through `gh` with the Irauan account; GitHub signs | Work continues away from the PC |
+| 2026-11-27 | Line above the dock | No line between the transcript and the composer area; the header line stays | A clean frame |
+| 2026-11-27 | Cost of ending child processes (S9) | Accept about 0.9 s per close for m1; a faster design later | Correct first |
+| 2026-11-27 | Failed list of child processes | Force-kill the agent tree instead of a normal close | Close the security gap |
+| 2026-11-27 | Merge of main into the milestone | The coordinator merges the sync PR | Keep the milestone current |
+| 2026-11-27 | Acceptance runs of a story | Only the scenarios it touches; the full suite at milestone validation | Faster stories |
+| 2026-11-27 | Acceptance test windows | Hide them | No flashing, no stolen focus |
