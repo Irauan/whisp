@@ -131,16 +131,16 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors, the 
     expect(t.logged).toEqual([])
   })
 
-  it('logs a call that failed or timed out, gives no list, and names the error code and no output', async () => {
+  it('logs a call that failed or timed out, gives null, and names the error code and no output', async () => {
     const t = tools(null)
-    expect(await processTree(100, window, t)).toEqual([])
+    expect(await processTree(100, window, t)).toBeNull()
     expect(t.logged).toHaveLength(1)
-    expect(t.logged[0]).toMatch(/could not list the processes.*code 1, signal null, killed false.*outlive/)
+    expect(t.logged[0]).toMatch(/could not list the processes.*code 1, signal null, killed false.*taskkill/)
   })
 
   it('logs a list with no row that it can read, and never the text of the output', async () => {
     const t = tools('Get-CimInstance : Access denied\ngarbage')
-    expect(await processTree(100, window, t)).toEqual([])
+    expect(await processTree(100, window, t)).toBeNull()
     expect(t.logged).toHaveLength(1)
     expect(t.logged[0]).toMatch(/could not read the list/)
     expect(t.logged[0]).not.toContain('Access denied')
@@ -148,14 +148,14 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors, the 
 
   it('logs a root that is not in the list', async () => {
     const t = tools(listing([{ pid: 7, parent: 1, started: ticksOf(1_000_050) }]))
-    expect(await processTree(100, window, t)).toEqual([])
+    expect(await processTree(100, window, t)).toBeNull()
     expect(t.logged[0]).toMatch(/not in the list/)
   })
 
   it('logs a root that started before the window or after it: its number was reused', async () => {
     for (const at of [window.from - 60_000, window.to + 60_000]) {
       const t = tools(listing([root(at), child]))
-      expect(await processTree(100, window, t)).toEqual([])
+      expect(await processTree(100, window, t)).toBeNull()
       expect(t.logged[0]).toMatch(/did not start when the agent started/)
     }
   })
@@ -203,7 +203,7 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors (Wind
   it('lists the child of this process, with its start time, and ends it with endSurvivors', async () => {
     const child = wait()
     await spawned(child)
-    const tree = await processTree(process.pid, ownStart(), { log: fail })
+    const tree = (await processTree(process.pid, ownStart(), { log: fail }))!
     const found = tree.find((entry) => entry.pid === child.pid)
     expect(found, 'the child of this process is in its tree').toBeDefined()
     expect(found!.parent).toBe(process.pid)
@@ -217,7 +217,7 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors (Wind
   it('ends no process whose start time differs: the number was reused', async () => {
     const child = wait()
     await spawned(child)
-    const tree = await processTree(process.pid, ownStart(), { log: fail })
+    const tree = (await processTree(process.pid, ownStart(), { log: fail }))!
     const found = tree.find((entry) => entry.pid === child.pid)!
     await endSurvivors([{ ...found, started: found.started + 10_000_000n }], { log: fail })
     expect(isRunning(child.pid!)).toBe(true)
@@ -227,7 +227,7 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors (Wind
     await expect(endSurvivors([], { log: fail })).resolves.toBeUndefined()
     const child = wait()
     await spawned(child)
-    const tree = await processTree(process.pid, ownStart(), { log: fail })
+    const tree = (await processTree(process.pid, ownStart(), { log: fail }))!
     child.kill()
     expect(await ended(child.pid!)).toBe(true)
     await expect(
@@ -238,9 +238,9 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors (Wind
     ).resolves.toBeUndefined()
   }, 30_000)
 
-  it('logs a process that does not exist, and gives an empty list', async () => {
+  it('logs a process that does not exist, and gives no list (null)', async () => {
     const logged: string[] = []
-    expect(await processTree(2_147_483_000, ownStart(), { log: (message) => logged.push(message) })).toEqual([])
+    expect(await processTree(2_147_483_000, ownStart(), { log: (message) => logged.push(message) })).toBeNull()
     expect(logged).toHaveLength(1)
   }, 30_000)
 })

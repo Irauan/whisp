@@ -418,9 +418,15 @@ class AcpProcess implements AgentProcess {
    * list comes before the close of the session and of stdin: a child of an agent that ended has no
    * parent to find. At the end, end each process of the tree that still runs.
    *
+   * User decision 2026-11-27: when the list fails or times out (the log says so), the close ends the
+   * agent and its whole tree with `taskkill /T /F` at once, while the root still runs, so that `/T`
+   * finds the children. It skips the close of the session and of stdin. The process then counts as
+   * closed for the next start, as after any close.
+   *
    * Each step has a limit, so the quit limit of the app covers the worst case: the list 5 s, the close
    * of the session 3 s, the end of the agent after stdin 3 s, `taskkill` 5 s, the end after the kill 3 s,
-   * the kill of the survivors 5 s. That is 24 s. The turn that waits for the exit adds 2 s.
+   * the kill of the survivors 5 s. That is 24 s. The turn that waits for the exit adds 2 s. A failed
+   * list takes less: the list 5 s, `taskkill` 5 s and the end after the kill 3 s.
    */
   private async shutdown(): Promise<void> {
     this.aborted = true
@@ -433,20 +439,26 @@ class AcpProcess implements AgentProcess {
       const live = this.connection && sessionId !== null && this.isReady ? { agent: this.connection.agent, sessionId } : null
       // Step 1: the cancel and the list start together, so the list overlaps the end of the turn.
       const cancelled = live && this.turnActive ? within(live.agent.notify(methods.agent.session.cancel, { sessionId: live.sessionId }), limit) : Promise.resolve(true)
-      const listing: Promise<ProcessRow[]> =
+      const listing: Promise<ProcessRow[] | null> =
         child.pid === undefined ? Promise.resolve([]) : processTree(child.pid, { from: this.spawnCalled, to: this.spawnedAt }, tools)
       const [, tree] = await Promise.all([cancelled, listing])
-      // Step 2: close the session. Step 3: close stdin.
-      if (live && this.capabilities?.agentCapabilities?.sessionCapabilities?.close) {
-        await within(live.agent.request(methods.agent.session.close, { sessionId: live.sessionId }), limit)
-      }
-      child.stdin?.end()
-      if (!(await within(this.ended, limit))) {
+      if (tree === null) {
+        // The list failed: end the agent and its whole tree now, while the root runs.
         await killTree(child)
         await within(this.ended, limit)
+      } else {
+        // Step 2: close the session. Step 3: close stdin.
+        if (live && this.capabilities?.agentCapabilities?.sessionCapabilities?.close) {
+          await within(live.agent.request(methods.agent.session.close, { sessionId: live.sessionId }), limit)
+        }
+        child.stdin?.end()
+        if (!(await within(this.ended, limit))) {
+          await killTree(child)
+          await within(this.ended, limit)
+        }
+        // A child of the agent never outlives the close. This also ends a child that `taskkill` cannot find any more.
+        await endSurvivors(tree, tools)
       }
-      // A child of the agent never outlives the close. This also ends a child that `taskkill` cannot find any more.
-      await endSurvivors(tree, tools)
     }
     this.connection?.close()
   }

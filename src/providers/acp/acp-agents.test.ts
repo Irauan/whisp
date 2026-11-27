@@ -381,21 +381,34 @@ describe('AcpAgents', () => {
     }
   }, 30_000)
 
-  it('logs a failed list of the process tree, and the close still ends the agent (S1)', async () => {
+  it('ends the agent and its whole tree with taskkill when the list fails, logs it, and the process counts as closed (S1, user decision 2026-11-27)', async () => {
     await control.scenario('child-process', { chunks: ['Hello'] })
     const logged: string[] = []
-    const powershell: Powershell = async () => ({ ok: false, detail: 'code 1, signal null, killed true' })
-    const process = start({}, listen(), { powershell, log: (message) => logged.push(message) })
+    let listed = 0
+    const powershell: Powershell = async () => {
+      listed += 1
+      return { ok: false, detail: 'code 1, signal null, killed true' }
+    }
+    const listened = listen()
+    const process = start({}, listened, { powershell, log: (message) => logged.push(message) })
     await process.ready
     await process.prompt('go')
     const child = await control.waitForChild()
+    const agent = control.pids[0]!
     try {
-      await process.close()
-      expect(logged).toHaveLength(1)
-      expect(logged[0]).toMatch(/could not list the processes.*killed true/)
-      // The agent ended. The child stays: no fallback kills it (accepted gap, logged).
-      expect(isRunning(control.pids[0]!)).toBe(false)
+      expect(child.parent, 'the child belongs to the agent').toBe(agent)
       expect(isRunning(child.pid)).toBe(true)
+      await process.close()
+      // The list failed once, and it is logged.
+      expect(listed).toBe(1)
+      expect(logged).toHaveLength(1)
+      expect(logged[0]).toMatch(/could not list the processes.*killed true.*taskkill/)
+      // `taskkill /T /F` ran on the agent while it ran, so it ended the agent and the child that would outlive it.
+      expect(isRunning(agent), 'the agent still runs').toBe(false)
+      expect(isRunning(child.pid), 'the child of the agent outlived the forced kill').toBe(false)
+      // The close resolved and the exit was reported: the next start can go on (rules 7 and 8).
+      expect(listened.exits).toHaveLength(1)
+      await process.close()
     } finally {
       if (isRunning(child.pid)) globalThis.process.kill(child.pid)
     }

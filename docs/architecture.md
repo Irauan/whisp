@@ -216,8 +216,9 @@ The main process asks these questions, and stores the answers. The renderer cann
 - Shutdown sends cancel, closes the session, closes stdin, then kills the whole process tree after a limit.
 - A background shell command of the agent does not count as busy. It ends with its process after the release time. The user accepted this gap against decision 0006 on 2026-11-27. A background subagent holds the turn open, so it counts.
 - A close sends the cancel and lists the process tree in one step, before it closes the session and stdin. It checks that the root of the list started when the agent started. After the agent ends, it kills each listed process that still runs, and checks the start time of each one first.
-- On Windows the list uses PowerShell and takes about 0.9 s for one close, measured on a developer machine. The closes of many processes run together, so 6 or 7 closes take about 1.3 s together. Each PowerShell call and `taskkill` has a limit of 5 s.
-- Three cases still escape the kill of the tree: a crash of the agent, a child that starts after the list, and a list that fails or times out. A failed list is logged, and the close goes on with no forced kill. The alternative is to kill the whole tree with `taskkill /T` when the list fails. It would end every agent like a crash on a machine where PowerShell is blocked.
+- On Windows the list uses PowerShell and takes about 0.9 s for one close, measured on a developer machine. The closes of many processes run together, so a quit with 7 processes takes about 1.4 s, and the removal of a profile with 6 sessions about 1.3 s. Each PowerShell call and `taskkill` has a limit of 5 s.
+- When the list fails or times out, Aether logs it and ends the agent and its whole tree with `taskkill /T /F` at once, while the agent still runs, so that `/T` finds the children. It skips the close of the session and of stdin. User decision 2026-11-27. The process still counts as closed for the next start.
+- Two cases still escape the kill of the tree: a crash of the agent, and a child that starts after the list.
 - Processes and open questions live in memory only. A turn does not survive a restart of Aether.
 
 ### Agent environment

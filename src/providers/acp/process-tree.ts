@@ -7,8 +7,8 @@ import { join } from 'node:path'
  * Windows `taskkill /T` cannot find the children of a process that already ended. So Aether lists the
  * tree while the agent still runs, and ends each listed process that still runs after the agent ended.
  *
- * Known limits, recorded in `docs/architecture.md`: a crash of the agent, a child that starts after the
- * list, and a list that fails (the close goes on and the failure is logged) still let a child escape.
+ * Known limits, recorded in `docs/architecture.md`: a crash of the agent, and a child that starts after the
+ * list, still let a child escape. A list that fails makes the close end the whole tree with `taskkill /T /F`.
  * The list needs PowerShell. It takes about 0.7 to 1 s on a developer machine, and more on a loaded one.
  */
 
@@ -118,36 +118,38 @@ export interface StartWindow {
   to: number
 }
 
-const LOST = 'A child of the agent can outlive its close.'
+const FORCED = 'Aether ends the agent and its whole tree with taskkill instead.'
 
 /**
  * The processes below the root now. Call it while the root still runs: a child of an ended process
  * has no parent to find. It checks that the root started inside the window, so a number that another
- * process reused gives no list. It gives an empty list on a system other than Windows. A failure gives
- * an empty list too, and it is logged (four cases: the call failed or timed out, no row could be read,
- * the root is missing, the root started outside the window). The close goes on.
+ * process reused gives no list. It gives an empty list on a system other than Windows.
+ *
+ * A failure gives null, and it is logged (four cases: the call failed or timed out, no row could be
+ * read, the root is missing, the root started outside the window). User decision 2026-11-27: the
+ * caller then ends the agent and its whole tree with `taskkill /T /F`, while the root still runs.
  */
-export async function processTree(rootPid: number, window: StartWindow, { log, run = runPowershell }: TreeTools): Promise<ProcessRow[]> {
+export async function processTree(rootPid: number, window: StartWindow, { log, run = runPowershell }: TreeTools): Promise<ProcessRow[] | null> {
   if (process.platform !== 'win32') return []
   const listed = await run(LIST_SCRIPT)
   if (!listed.ok) {
-    log(`Aether could not list the processes of the agent (${listed.detail}). ${LOST}`)
-    return []
+    log(`Aether could not list the processes of the agent (${listed.detail}). ${FORCED}`)
+    return null
   }
   const rows = parseRows(listed.stdout)
   if (rows.length === 0) {
-    log(`Aether could not read the list of processes. ${LOST}`)
-    return []
+    log(`Aether could not read the list of processes. ${FORCED}`)
+    return null
   }
   const root = rows.find((candidate) => candidate.pid === rootPid)
   if (!root) {
-    log(`The process of the agent is not in the list of processes. ${LOST}`)
-    return []
+    log(`The process of the agent is not in the list of processes. ${FORCED}`)
+    return null
   }
   const at = startedAtMs(root.started)
   if (at < window.from - START_SLACK_MS || at > window.to + START_SLACK_MS) {
-    log(`The process ${rootPid} did not start when the agent started, so it is not the agent. Aether lists no children. ${LOST}`)
-    return []
+    log(`The process ${rootPid} did not start when the agent started, so the list is not the tree of the agent. ${FORCED}`)
+    return null
   }
   return descendantsOf(rootPid, rows)
 }
