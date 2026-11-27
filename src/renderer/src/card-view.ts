@@ -71,12 +71,14 @@ export function buttonGroups(options: readonly Option[]): ButtonGroup[] {
 
 /**
  * The two buttons of a form that is a binary choice (the refusal fallback of Claude): one choice field
- * with two options and no other field. The primary button is the recommended option, or the first.
+ * with two options and no other field, and an option that the recipe recommends. Any other form, also a
+ * yes or no form of an MCP server, shows its rows with "Submit" and "Skip", so the user can decline it.
+ * The primary button is the recommended option.
  */
 export function binaryChoice(form: Pick<ElicitationView, 'fields' | 'recommended'>): { key: string; options: { value: string; label: string; description: string | null }[]; primary: string } | null {
   const [only] = form.fields
-  if (form.fields.length !== 1 || only?.kind !== 'choice' || only.options.length !== 2) return null
-  const primary = only.options.find((option) => option.value === form.recommended) ?? only.options[0]
+  if (form.recommended === null || form.fields.length !== 1 || only?.kind !== 'choice' || only.options.length !== 2) return null
+  const primary = only.options.find((option) => option.value === form.recommended)
   return primary === undefined ? null : { key: only.key, options: only.options, primary: primary.value }
 }
 

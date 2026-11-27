@@ -65,12 +65,15 @@ describe('binaryChoice', () => {
 
   it('reads a form with one choice of two options as two buttons, and the recommended one is primary', () => {
     expect(binaryChoice(fallback)).toMatchObject({ key: 'choice', primary: 'cancelled' })
-    expect(binaryChoice({ ...fallback, recommended: null })).toMatchObject({ primary: 'cancelled' })
+    expect(binaryChoice({ ...fallback, recommended: 'retry_fallback' })).toMatchObject({ primary: 'retry_fallback' })
   })
 
   it('reads no other form as buttons', () => {
     const [choice] = fallback.fields
     expect(binaryChoice({ fields: [], recommended: null })).toBeNull()
+    // A yes or no form of an MCP server has no recommended option: it shows rows, "Submit" and "Skip".
+    expect(binaryChoice({ ...fallback, recommended: null })).toBeNull()
+    expect(binaryChoice({ ...fallback, recommended: 'other' })).toBeNull()
     expect(binaryChoice({ fields: [choice!, { key: 'note', kind: 'text', title: null, description: null, completes: null }], recommended: null })).toBeNull()
     expect(binaryChoice({ fields: [{ ...choice!, options: [...choice!.options, { value: 'c', label: 'C', description: null }] } as Field], recommended: null })).toBeNull()
   })

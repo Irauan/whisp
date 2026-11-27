@@ -202,7 +202,7 @@ export function ElicitationCard({ sessionId, view, entry, ref }: { sessionId: st
   } else {
     body = (
       <>
-        {questions.length > 1 && <p className={styles.header}>{view.message}</p>}
+        {questions.length > 1 && <p className={styles.text}>{view.message}</p>}
         {questions.map((field, index) => (
           <Question
             key={field.key}

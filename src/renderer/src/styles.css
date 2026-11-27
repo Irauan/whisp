@@ -757,12 +757,18 @@ fieldset {
 }
 
 .dialog-body .warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin: 12px 0 0;
-  padding: 8px 12px;
   font-size: 13px;
-  border: 1px solid var(--danger);
-  border-radius: 8px;
+  color: var(--danger);
   overflow-wrap: anywhere;
+}
+
+.dialog-body .warning > svg {
+  flex: none;
+  margin-top: 2px;
 }
 
 .dialog-actions {

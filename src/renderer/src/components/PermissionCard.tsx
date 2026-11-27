@@ -119,7 +119,7 @@ export function PermissionCard({ sessionId, view, entry, ref }: { sessionId: str
           <p className={styles.question}>{question}</p>
           <p className={styles.chosen}>
             <span>{sending}</span>
-            <Loader size={14} className="spin" aria-hidden="true" />
+            <Loader size={14} className="spin" role="img" aria-label="Sending" />
           </p>
         </>
       ) : (
