@@ -17,10 +17,14 @@
 // - Folders outside both: under `<root>\outside`.
 // - A repository is a real Git repository (`git init`). A plain folder is not.
 //
-// Readings of S6 (the coordinator sends each to the user when the documents do not answer it):
-// - A plain folder (not in a Git repository) under the workspace directory of the profile: S6 asks
-//   nothing, as in S4. `docs/architecture.md` defines a repository as a Git repository, and its
-//   table has no case for such a folder. No S6 test covers it. The S3 and S4 tests stay unchanged.
+// User decisions, 2026-11-27, through the coordinator:
+// - A plain folder (not in a Git repository) under the workspace directory with a `SessionStart`
+//   hook in `.claude/settings.json`, or a server in `.mcp.json`, gets the trust question for that
+//   folder. A plain folder without them starts at once, as in S3 and S4, so those tests stay.
+// - Trust answers belong to one profile. Trust of repo-b in "Personal" does not trust it in
+//   "Client Example". The builder stores them in a migration `003`. The tests read no table.
+//
+// Readings of S6, accepted by the user on 2026-11-27:
 // - A session folder inside a trusted repository asks nothing (table: "Session directory in a
 //   trusted repository"). Trust covers the Git repository, not one folder of it.
 // - "Allow once" covers one session. A new session in the same folder asks again.
@@ -32,11 +36,17 @@
 // - The Claude account that would read the files is the current Claude account of the profile of
 //   the session. The question names it by its Claude folder.
 //
+// Reading of the test author (not yet seen by the user): when two profiles have the same workspace
+// directory, a repository in it is under the workspace directory of each. Each profile then gets the
+// trust question, not the question for a folder of another profile. The test "A9 per profile" uses
+// it, so that the trust of one profile is the only thing that could make the other ask nothing.
+//
 // The UI that these tests expect (S6 test contract). The S1 to S4 contracts stay. The tests find
 // each question by role and name. They do not fix its place.
 // - Trust question: a `dialog` named exactly "Trust this repository?". It shows the name of the
 //   repository folder, each `SessionStart` hook with the event name and its command, and the name
-//   of each MCP server of `.mcp.json`. It has the buttons "Trust" and "Cancel".
+//   of each MCP server of `.mcp.json`. It has the buttons "Trust" and "Cancel". A plain folder with
+//   a hook or an MCP server gets the same question, with the same content, for that folder.
 // - Trust starts the session. Cancel closes the question and starts no agent. The session window
 //   then shows the exact text "Aether did not start the agent in this repository." (Trust refused).
 // - Directory question, folder outside the workspace directory: a `dialog` named exactly "Use a
@@ -121,6 +131,19 @@ export async function createRepository(path: string, content: RepositoryContent 
   if (init.error || init.status !== 0) {
     throw new Error(`git init failed in ${path}: ${init.error?.message ?? init.stderr}`)
   }
+  return addSessionStartItems(path, content)
+}
+
+/** Creates a plain folder (no Git repository) with a `SessionStart` hook and an MCP server when asked. */
+export async function createPlainFolderWith(path: string, content: RepositoryContent): Promise<string> {
+  await mkdir(path, { recursive: true })
+  const inside = spawnSync('git', ['-C', path, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', windowsHide: true })
+  if (inside.status === 0) throw new Error(`The plain folder ${path} is inside a Git repository.`)
+  return addSessionStartItems(path, content)
+}
+
+/** Writes the hook and the MCP server that Claude would run at session start in the folder. */
+async function addSessionStartItems(path: string, content: RepositoryContent): Promise<string> {
   if (content.hook) {
     await mkdir(join(path, '.claude', 'hooks'), { recursive: true })
     const settings = { hooks: { SessionStart: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }] } }
@@ -209,11 +232,16 @@ export async function writeProfiles(chat: ChatApp, drafts: Draft[]): Promise<voi
 
 /**
  * Starts the app on the old file and answers the import dialog of flow 1. A test can give the
- * workspace directory of "Personal" in another spelling, for example in upper case.
+ * workspace directory of "Personal" in another spelling, for example in upper case. A test can
+ * also give "Client Example" another workspace directory, for example the one of "Personal".
  */
-export async function startWithProfiles(chat: ChatApp, personalDirectory = directoryOf(chat, 'personal')): Promise<Page> {
+export async function startWithProfiles(
+  chat: ChatApp,
+  personalDirectory = directoryOf(chat, 'personal'),
+  clientDirectory = directoryOf(chat, 'client')
+): Promise<Page> {
   const page = await chat.start()
-  await answerDirectoryDialog(page, { [PROFILES.personal]: personalDirectory, [PROFILES.client]: directoryOf(chat, 'client') })
+  await answerDirectoryDialog(page, { [PROFILES.personal]: personalDirectory, [PROFILES.client]: clientDirectory })
   return page
 }
 

@@ -92,11 +92,11 @@
     "story": "m1-chat/s6"
   },
   "tests/acceptance/m1-chat/s6/fixture.ts": {
-    "sha256": "ab26768efe60c937faf9048299a88b9735751463a45414e97d4dce64533ccc7d",
+    "sha256": "34b3dd6184148ab4417f93f1ab6a7179db937506f22d88d7755b1ac04f8f2d10",
     "story": "m1-chat/s6"
   },
   "tests/acceptance/m1-chat/s6/trust.spec.ts": {
-    "sha256": "8b628073d61559a9ba793656cbd2374f70d8a1219c487d170b7850e8af81e7ac",
+    "sha256": "ad1db064746ccc0be8df163c120a5d678003e807536541e725b430e43fa4a18a",
     "story": "m1-chat/s6"
   },
   "tests/architecture/contracts.test.ts": {

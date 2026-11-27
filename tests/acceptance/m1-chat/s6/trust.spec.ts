@@ -9,6 +9,8 @@
 // session. Trust applies to one repository, not to the whole workspace directory. No agent process
 // starts before the trust answer.
 // Decision 0007: Aether asks for trust once per repository.
+// User decisions, 2026-11-27: a plain folder with a hook or an MCP server gets the trust question
+// for that folder. Trust answers belong to one profile.
 //
 // The fixture describes the UI contract, the launcher that runs the hooks as Claude does, and the
 // readings of S6. No test sleeps. Each wait is an auto-waiting check of Playwright.
@@ -16,6 +18,7 @@ import { join } from 'node:path'
 import {
   button,
   createFolder,
+  createPlainFolderWith,
   createRepository,
   day,
   directoryOf,
@@ -27,10 +30,12 @@ import {
   hookRan,
   mcpServerStarted,
   openNewSession,
+  PROFILES,
   replyWithHello,
   sendDraft,
   startSession,
   startWithProfiles,
+  switchProfile,
   test,
   trustQuestion,
   trustRefused,
@@ -148,5 +153,86 @@ test.describe('A9: the trust question of a repository', () => {
     await expect(trustRefused(page), 'A9 one repository (Trust refused): Cancel for repo-c does not show "Aether did not start the agent in this repository.".').toBeVisible()
     expect(chat.control.pids, 'A9 one repository: an agent process started for repo-c after Cancel.').toHaveLength(pids)
     expect(await hookRan(c), 'A9 one repository: the SessionStart hook of repo-c ran after Cancel.').toBe(false)
+  })
+})
+
+test.describe('A9: a plain folder with a hook or an MCP server (user decision, 2026-11-27)', () => {
+  /** R/notes-tool: a plain folder, not a Git repository, with a `SessionStart` hook and an MCP server. */
+  const plainFolder = (chat: ChatApp) =>
+    createPlainFolderWith(join(directoryOf(chat, 'personal'), 'notes-tool'), { hook: true, mcpServer: SERVER_B })
+
+  /** Sends the draft in the plain folder and checks the trust question with both items, while no agent process exists. */
+  async function expectPlainFolderQuestion(chat: ChatApp, check: string) {
+    const folder = await plainFolder(chat)
+    await writeProfiles(chat, [{ prompt: 'Sort the notes', profile: 'personal', folder, createdAt: day(1) }])
+    const page = await startWithProfiles(chat)
+    await sendDraft(page, 'Sort the notes', check)
+    const question = trustQuestion(page)
+    await expect(
+      question,
+      `${check}: the first message in the plain folder R/notes-tool, which has a SessionStart hook and .mcp.json, shows no dialog "Trust this repository?".`
+    ).toBeVisible()
+    await expect(question, `${check}: the trust question does not name the folder notes-tool.`).toContainText('notes-tool')
+    await expect(question, `${check}: the trust question does not list the hook event SessionStart.`).toContainText('SessionStart')
+    await expect(question, `${check}: the trust question does not list the command of the hook, "${HOOK_COMMAND}".`).toContainText(HOOK_COMMAND)
+    await expect(question, `${check}: the trust question does not list the MCP server "${SERVER_B}" of .mcp.json.`).toContainText(SERVER_B)
+    expectNoAgentProcess(chat, check, 'while the trust question for the plain folder shows')
+    return { page, folder, question }
+  }
+
+  test('A9 plain folder and Cancel: a plain folder under R with a SessionStart hook and .mcp.json gets the trust question with both, and Cancel runs nothing', async ({
+    chat
+  }) => {
+    await replyWithHello(chat)
+    const { folder, question } = await expectPlainFolderQuestion(chat, 'A9 plain folder')
+    await button(question, 'Cancel').click()
+    await expect(question, 'A9 plain folder: the trust question stays open after "Cancel".').toBeHidden()
+    expectNoAgentProcess(chat, 'A9 plain folder', 'after Cancel of the trust question')
+    expect(await hookRan(folder), 'A9 plain folder: the SessionStart hook of the plain folder ran after Cancel.').toBe(false)
+    expect(await mcpServerStarted(folder), 'A9 plain folder: the MCP server of the plain folder started after Cancel.').toBe(false)
+    await chat.stop()
+    expectNoAgentProcess(chat, 'A9 plain folder', 'after Cancel and the exit of Aether')
+  })
+
+  test('A9 plain folder and Trust: Trust starts the session in the plain folder with a hook and .mcp.json', async ({ chat }) => {
+    await replyWithHello(chat)
+    const { page, folder, question } = await expectPlainFolderQuestion(chat, 'A9 plain folder Trust')
+    await button(question, 'Trust').click()
+    await expect(question, 'A9 plain folder Trust: the trust question stays open after "Trust".').toBeHidden()
+    await expectReply(page, 'A9 plain folder Trust')
+    expect(await hookRan(folder), 'A9 plain folder Trust: the SessionStart hook did not run after Trust, so the launcher of the fixture does not work.').toBe(true)
+  })
+})
+
+test.describe('A9: trust belongs to one profile (user decision, 2026-11-27)', () => {
+  test('A9 per profile: after "Personal" trusts R/repo-b, a session of "Client Example" in R/repo-b still gets the trust question', async ({
+    chat
+  }) => {
+    await replyWithHello(chat)
+    const repository = await repoB(chat)
+    await writeProfiles(chat, [
+      { prompt: 'Fix the login page', profile: 'personal', folder: repository, createdAt: day(1) },
+      { prompt: 'Review the login page', profile: 'client', folder: repository, createdAt: day(2) }
+    ])
+    // Both profiles have the workspace directory R, so repo-b is under the workspace directory of each.
+    const page = await startWithProfiles(chat, directoryOf(chat, 'personal'), directoryOf(chat, 'personal'))
+
+    await sendDraft(page, 'Fix the login page', 'A9 per profile')
+    const question = trustQuestion(page)
+    await expect(question, 'A9 per profile: the first message of "Personal" in R/repo-b shows no dialog "Trust this repository?".').toBeVisible()
+    await button(question, 'Trust').click()
+    await expectReply(page, 'A9 per profile: repo-b in "Personal" after Trust')
+
+    const pids = chat.control.pids.length
+    await switchProfile(page, PROFILES.personal, PROFILES.client)
+    await sendDraft(page, 'Review the login page', 'A9 per profile')
+    await expect(
+      question,
+      'A9 per profile: a session of "Client Example" in R/repo-b shows no trust question, so the trust of "Personal" counted for "Client Example".'
+    ).toBeVisible()
+    expect(chat.control.pids, 'A9 per profile: an agent process started for "Client Example" before the trust answer.').toHaveLength(pids)
+    await button(question, 'Cancel').click()
+    await expect(question, 'A9 per profile: the trust question stays open after "Cancel".').toBeHidden()
+    expect(chat.control.pids, 'A9 per profile: an agent process started for "Client Example" after Cancel.').toHaveLength(pids)
   })
 })
