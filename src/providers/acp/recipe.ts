@@ -1,6 +1,24 @@
 import type { Mode } from '../../building-blocks/mode'
 import type { Result } from '../../building-blocks/result'
 
+/** What the recipe needs to know about a form of the agent, to tell which form it is. */
+export interface FormShape {
+  /** The ID of the tool call that asks, or null. */
+  toolId: string | null
+  /** The fields, in the order of the form. A choice field lists the values of its options. */
+  fields: readonly { key: string; kind: 'choice' | 'choices' | 'text'; values: readonly string[] }[]
+}
+
+/** The facts about a form that only the recipe of an agent knows. */
+export interface FormFacts {
+  /** The value of the option that Aether shows first and as the primary button, or null. */
+  recommended: string | null
+  /** True when the typed text can be saved. False for a form that can hold a secret. */
+  keepsText: boolean
+  /** For a text field that completes a choice field (the "Other" of a question): the key of that choice field. */
+  completes: Readonly<Record<string, string>>
+}
+
 /** The program that starts an agent, and the variables that only this agent needs. */
 export interface Launch {
   command: string
@@ -24,6 +42,8 @@ export interface AcpRecipe {
   modeId(mode: Mode): string
   /** The mode of the port for the ID of a permission mode of the agent, or null for an ID that the port does not know. */
   modeOf(id: string): Mode | null
+  /** The facts about a form of the agent: which option is recommended, if the text can be saved, and which text field completes which choice. */
+  formFacts(form: FormShape): FormFacts
   /** The message for a missing sign-in, with the sign-in steps of these settings. */
   notSignedIn(settings: Readonly<Record<string, unknown>>): string
 }

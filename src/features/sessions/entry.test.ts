@@ -10,6 +10,7 @@ import {
   noticeOfStop,
   planEntry,
   sessionEventSchema,
+  changeSchema,
   toolEntry,
   type Entry,
   type ToolEntry
@@ -192,5 +193,49 @@ describe('isSamePlan', () => {
 
   it('counts two plans with no steps as the same plan', () => {
     expect(isSamePlan({ kind: 'plan', steps: [] }, { kind: 'plan', steps: [] })).toBe(true)
+  })
+})
+
+describe('the entry answers', () => {
+  const entry = { kind: 'answers', card: 'question', toolId: null, outcome: 'open', rows: [{ question: 'Which runner?', answer: null }] }
+
+  it.each(['open', 'submitted', 'skipped', 'stopped', 'withdrawn', 'exited', 'quit', 'interrupted'])('accepts the outcome %s', (outcome) => {
+    expect(entrySchema.parse({ ...entry, outcome })).toEqual({ ...entry, outcome })
+  })
+
+  it.each([
+    { ...entry, outcome: 'released' },
+    { ...entry, card: 'dialog' },
+    { ...entry, rows: [{ question: 'q' }] },
+    { ...entry, rows: [{ question: 'q', answer: null, extra: 1 }] },
+    { ...entry, extra: 1 },
+    { kind: 'answers', card: 'decision', outcome: 'open', rows: [] }
+  ])('refuses the entry %j', (bad) => {
+    expect(entrySchema.safeParse(bad).success).toBe(false)
+  })
+})
+
+describe('the changes of a card, the live mode and the model', () => {
+  const view = { id: 'e1', entry: { kind: 'answers', card: 'decision', toolId: 't1', outcome: 'open', rows: [{ question: 'Run this command?', answer: null }] } }
+  const permission = { id: 'r1', entryId: 'e1', toolId: 't1', title: 'npm test', toolKind: 'execute', locations: [], options: [{ id: 'yes', label: 'Yes', kind: 'allow-once' }] }
+
+  it.each([
+    { type: 'card-opened', entry: view, card: { kind: 'permission', permission } },
+    { type: 'card-opened', entry: view, card: { kind: 'elicitation', elicitation: { id: 'f1', entryId: 'e1', toolId: null, message: 'm', fields: [], recommended: null } } },
+    { type: 'card-closed', entry: view, id: 'r1' },
+    { type: 'mode', mode: 'approve-all' },
+    { type: 'model', model: 'claude-opus-5-5' }
+  ])('accepts the change %j', (change) => {
+    expect(changeSchema.parse(change)).toEqual(change)
+  })
+
+  it.each([
+    { type: 'card-opened', entry: view },
+    { type: 'card-opened', entry: view, card: { kind: 'dialog' } },
+    { type: 'card-closed', entry: view },
+    { type: 'mode', mode: 'interactive' },
+    { type: 'model' }
+  ])('refuses the change %j', (change) => {
+    expect(changeSchema.safeParse(change).success).toBe(false)
   })
 })

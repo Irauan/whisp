@@ -5,6 +5,7 @@ import { isExistingFolder } from '../../../building-blocks/folder'
 import type { GithubTokenPort } from '../../../building-blocks/github.port'
 import type { Ids } from '../../../building-blocks/ids'
 import { err, ok, type Result } from '../../../building-blocks/result'
+import type { AgentRequestEvent } from '../cards'
 import { noticeOfStop, type Entry } from '../entry'
 import type { Processes, Turn } from '../processes.store'
 import { MESSAGES, PROVIDER_KIND, textForAgent, unsupportedAttachment, type Session } from '../session'
@@ -26,6 +27,8 @@ export interface SendMessageDeps {
   starting: AccountsInStart
   /** Passes an update of the agent to the slice `record-agent-update`. The composition root connects them. */
   record(sessionId: string, update: AgentUpdate): void
+  /** Passes a request of the agent (a permission request or a form) to the slice `record-agent-update`. */
+  recordRequest?(sessionId: string, event: AgentRequestEvent): void
   /**
    * The gate before an agent process starts (decision 0007). The composition root connects it to the
    * directory and trust questions of the feature `repositories`. An error is a refusal: its code and
@@ -72,7 +75,8 @@ export function sendMessageHandler(deps: SendMessageDeps, input: { id: string; t
   const { store, transcript, processes } = deps
   const session = store.find(input.id)
   if (!session) return refused('unknown-session', MESSAGES.unknownSession)
-  if (transcript.statusOf(session.id) !== 'idle') return refused('turn-active', MESSAGES.turnActive)
+  // A card that waits (also outside a turn) blocks the message: the user answers the card or presses Stop first.
+  if (transcript.statusOf(session.id) !== 'idle' || transcript.openCardCount(session.id) > 0) return refused('turn-active', MESSAGES.turnActive)
   const running = processes.get(session.id)
   // The folder can change after the session was created. A new process needs it, so check it again.
   if (!running && !isExistingFolder(session.sourcePath)) return refused('invalid-folder', MESSAGES.folderMissing)
@@ -202,6 +206,10 @@ async function startProcess(deps: SendMessageDeps, session: Session, turn: Turn,
       if (processes.turnOf(id) === undefined) processes.markIdle(id, deps.clock.now())
       deps.record(id, update)
     },
+    permission: (request) => deps.recordRequest?.(id, { type: 'permission', request }),
+    permissionClosed: (requestId, reason) => deps.recordRequest?.(id, { type: 'permission-closed', id: requestId, reason }),
+    elicitation: (form) => deps.recordRequest?.(id, { type: 'elicitation', form }),
+    elicitationClosed: (formId, reason) => deps.recordRequest?.(id, { type: 'elicitation-closed', id: formId, reason }),
     exited: () => processes.drop(id, agent)
   })
   processes.set(id, agent)

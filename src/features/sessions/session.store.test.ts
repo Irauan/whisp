@@ -242,3 +242,19 @@ describe('SessionStore: who started a session', () => {
     expect(() => store.startedByOf('s1')).toThrow()
   })
 })
+
+describe('SessionStore: the cards that were open at a stop', () => {
+  const answers = (outcome: string) => ({ kind: 'answers', card: 'decision', toolId: 't', outcome, rows: [{ question: 'Run this command?', answer: null }] })
+
+  it('changes each open card to interrupted, and leaves every other entry as it was', () => {
+    const { store } = setup()
+    store.insertEntry('s1', { id: 'a', entry: answers('open') as never }, 0, '2026-01-01')
+    store.insertEntry('s1', { id: 'b', entry: answers('submitted') as never }, 1, '2026-01-01')
+    store.insertEntry('s1', { id: 'c', entry: { kind: 'user', text: 'x' } }, 2, '2026-01-01')
+    store.insertEntry('s2', { id: 'd', entry: answers('open') as never }, 0, '2026-01-01')
+    expect(store.interruptOpenCards()).toBe(2)
+    expect(store.entriesOf('s1').map((view) => view.entry)).toEqual([answers('interrupted'), answers('submitted'), { kind: 'user', text: 'x' }])
+    expect(store.entriesOf('s2').map((view) => view.entry)).toEqual([answers('interrupted')])
+    expect(store.interruptOpenCards()).toBe(0)
+  })
+})

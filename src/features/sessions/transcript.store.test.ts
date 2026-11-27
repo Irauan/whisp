@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { Elicitation, PermissionRequest } from '../../building-blocks/agent.port'
 import { openDatabase } from '../../building-blocks/database'
 import { MIGRATIONS } from '../../building-blocks/migrations'
+import { answeredDecision, closedWithout } from './cards'
 import type { SessionEvent } from './entry'
 import { SessionStore } from './session.store'
 import { Transcript } from './transcript.store'
@@ -18,8 +20,8 @@ function setup() {
   const store = new SessionStore(database)
   const events: SessionEvent[] = []
   let count = 0
-  const make = () =>
-    new Transcript(store, (event) => events.push(event), { now: () => new Date('2026-01-02T00:00:00.000Z') }, { next: () => `e${++count}` })
+  const make = (cardsClosed?: (sessionId: string) => void) =>
+    new Transcript(store, (event) => events.push(event), { now: () => new Date('2026-01-02T00:00:00.000Z') }, { next: () => `e${++count}` }, cardsClosed)
   return { database, store, events, transcript: make(), make }
 }
 
@@ -56,7 +58,10 @@ describe('Transcript', () => {
     expect(transcript.snapshot('s1')).toEqual({
       entries: [{ id: 'e1', entry: { kind: 'agent', text: 'Hello from the agent.' } }],
       status: 'idle',
-      revision: 2
+      revision: 2,
+      permissions: [],
+      elicitations: [],
+      liveMode: null
     })
     transcript.flush('s1')
     expect(database.prepare('SELECT count(*) AS total FROM entries').get()).toMatchObject({ total: 1 })
@@ -232,5 +237,127 @@ describe('Transcript', () => {
     transcript.flush('s1')
     expect(events).toHaveLength(before)
     expect(database.prepare('SELECT count(*) AS total FROM entries').get()).toMatchObject({ total: 0 })
+  })
+
+  describe('cards', () => {
+    const request: PermissionRequest = {
+      id: 'r1',
+      toolId: 't1',
+      title: null,
+      toolKind: null,
+      locations: [],
+      options: [
+        { id: 'yes', label: 'Yes', kind: 'allow-once' },
+        { id: 'no', label: 'No', kind: 'refuse-once' }
+      ]
+    }
+    const second: PermissionRequest = { ...request, id: 'r2', toolId: 't2' }
+    const form: Elicitation = {
+      id: 'f1',
+      toolId: 'a1',
+      message: 'Which runner?',
+      fields: [{ key: 'question_0', kind: 'choice', title: null, description: null, options: [{ value: 'Jest', label: 'Jest', description: null }] }],
+      recommended: null,
+      keepsText: true
+    }
+
+    it('saves the entry of a card with the outcome open, and sends one change that carries the entry and its request', () => {
+      const { store, events, transcript } = setup()
+      transcript.announceTool('s1', { type: 'tool', id: 't1', title: 'npm test', toolKind: 'execute', status: 'pending' })
+      events.length = 0
+      transcript.openPermission('s1', request)
+      const saved = store.entriesOf('s1')
+      expect(saved.map((view) => view.entry.kind)).toEqual(['tool', 'answers'])
+      expect(saved[1]?.entry).toEqual({ kind: 'answers', card: 'decision', toolId: 't1', outcome: 'open', rows: [{ question: 'Run this command?', answer: null }] })
+      expect(events).toHaveLength(1)
+      expect(events[0]?.change).toMatchObject({
+        type: 'card-opened',
+        entry: { id: saved[1]?.id },
+        card: { kind: 'permission', permission: { id: 'r1', entryId: saved[1]?.id, title: 'npm test', toolKind: 'execute' } }
+      })
+      expect(transcript.openCardCount('s1')).toBe(1)
+      expect(transcript.snapshot('s1').permissions.map((item) => item.id)).toEqual(['r1'])
+    })
+
+    it('shows the cards in the order of arrival, the entries of both kinds in the same sequence', () => {
+      const { transcript } = setup()
+      transcript.openPermission('s1', request)
+      transcript.openElicitation('s1', form)
+      transcript.openPermission('s1', second)
+      const snapshot = transcript.snapshot('s1')
+      expect(snapshot.permissions.map((item) => item.id)).toEqual(['r1', 'r2'])
+      expect(snapshot.elicitations.map((item) => item.id)).toEqual(['f1'])
+      expect(snapshot.entries.map((view) => view.entry.kind)).toEqual(['answers', 'answers', 'answers'])
+      expect(snapshot.revision).toBe(3)
+    })
+
+    it('replaces the entry in place when a card closes, and the first close wins', () => {
+      const { store, events, transcript } = setup()
+      transcript.openPermission('s1', request)
+      transcript.openPermission('s1', second)
+      const [first] = store.entriesOf('s1')
+      expect(transcript.closeCard('s1', 'r1', (card) => answeredDecision(card.entry, 'Yes'))).toBe(true)
+      expect(transcript.closeCard('s1', 'r1', (card) => closedWithout(card.entry, 'withdrawn'))).toBe(false)
+      expect(store.entriesOf('s1')[0]).toEqual({
+        id: first?.id,
+        entry: { kind: 'answers', card: 'decision', toolId: 't1', outcome: 'submitted', rows: [{ question: 'Allow this tool?', answer: 'Yes' }] }
+      })
+      expect(store.entriesOf('s1')).toHaveLength(2)
+      const closed = events.filter((event) => event.change.type === 'card-closed')
+      expect(closed).toHaveLength(1)
+      expect(closed[0]?.change).toMatchObject({ type: 'card-closed', id: 'r1', entry: { id: first?.id } })
+      expect(transcript.snapshot('s1').permissions.map((item) => item.id)).toEqual(['r2'])
+    })
+
+    it('tells the composition root when the last card of a session closed, and only then', () => {
+      const closed: string[] = []
+      const { make } = setup()
+      const transcript = make((sessionId) => closed.push(sessionId))
+      transcript.openPermission('s1', request)
+      transcript.openPermission('s1', second)
+      transcript.closeCard('s1', 'r1', (card) => closedWithout(card.entry, 'stopped'))
+      expect(closed).toEqual([])
+      transcript.closeCard('s1', 'r2', (card) => closedWithout(card.entry, 'stopped'))
+      transcript.closeCard('s1', 'r2', (card) => closedWithout(card.entry, 'stopped'))
+      expect(closed).toEqual(['s1'])
+    })
+
+    it('closes every card of a session with one outcome, in the order of arrival', () => {
+      const { store, transcript } = setup()
+      transcript.openPermission('s1', request)
+      transcript.openElicitation('s1', form)
+      expect(transcript.closeAllCards('s1', (card) => closedWithout(card.entry, 'stopped'))).toBe(2)
+      expect(store.entriesOf('s1').map((view) => (view.entry.kind === 'answers' ? view.entry.outcome : null))).toEqual(['stopped', 'stopped'])
+      expect(transcript.openCardCount('s1')).toBe(0)
+      expect(transcript.sessionsWithCards()).toEqual([])
+    })
+
+    it('forgets the cards of a deleted session without a change or an entry', () => {
+      const { database, events, transcript } = setup()
+      transcript.openPermission('s1', request)
+      transcript.forget('s1')
+      database.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+      const before = events.length
+      expect(transcript.closeCard('s1', 'r1', (card) => closedWithout(card.entry, 'exited'))).toBe(false)
+      transcript.openPermission('s1', second)
+      expect(events).toHaveLength(before)
+      expect(database.prepare('SELECT count(*) AS total FROM entries').get()).toMatchObject({ total: 0 })
+    })
+
+    it('keeps the live mode apart from the saved mode, and shows the saved mode again after a clear', () => {
+      const { events, transcript } = setup()
+      transcript.setLiveMode('s1', 'approve-all')
+      expect(transcript.snapshot('s1').liveMode).toBe('approve-all')
+      expect(transcript.liveModeOf('s1')).toBe('approve-all')
+      transcript.clearLiveMode('s1', 'ask')
+      transcript.clearLiveMode('s1', 'ask')
+      expect(transcript.snapshot('s1').liveMode).toBeNull()
+      expect(events.map((event) => event.change)).toEqual([
+        { type: 'mode', mode: 'approve-all' },
+        { type: 'mode', mode: 'ask' }
+      ])
+      transcript.setModel('s1', 'claude-opus-5-5')
+      expect(events.at(-1)?.change).toEqual({ type: 'model', model: 'claude-opus-5-5' })
+    })
   })
 })

@@ -40,6 +40,31 @@ export function applyChange(view: SessionSnapshot, change: Change): SessionSnaps
     }
     case 'status':
       return { ...view, status: change.status, draft: view.draft && change.status === 'idle' }
+    case 'card-opened': {
+      // The entry and its request come together, so the view never holds an open entry without its request.
+      const { card } = change
+      return {
+        ...view,
+        draft: false,
+        entries: [...view.entries, change.entry],
+        permissions: card.kind === 'permission' ? [...view.permissions, card.permission] : view.permissions,
+        elicitations: card.kind === 'elicitation' ? [...view.elicitations, card.elicitation] : view.elicitations
+      }
+    }
+    case 'card-closed': {
+      if (!view.entries.some((item) => item.id === change.entry.id)) return null
+      return {
+        ...view,
+        entries: view.entries.map((item) => (item.id === change.entry.id ? change.entry : item)),
+        permissions: view.permissions.filter((item) => item.id !== change.id),
+        elicitations: view.elicitations.filter((item) => item.id !== change.id)
+      }
+    }
+    case 'mode':
+      return { ...view, liveMode: change.mode }
+    case 'model':
+      // No other event changes the session row: the model of the refusal fallback shows at once.
+      return { ...view, session: { ...view.session, model: change.model } }
   }
 }
 
@@ -109,10 +134,23 @@ export function splitFailedTurn(notice: { text: string }): { line: string; log: 
 
 /**
  * The model that the model button shows. The user chose it in a draft, and the window keeps it as
- * view state until the snapshot shows it: the snapshot of the window holds the model of its load,
- * and no event changes the session row. After Send the model is fixed, so the choice stays.
+ * view state until the snapshot shows it. After Send the model is fixed, so the choice stays, except
+ * after the refusal fallback: the event `model` changes the model of the window, and the window then
+ * drops the choice of the draft (see `SessionPage`).
  */
 export const shownModel = (chosen: string | null, saved: string): string => chosen ?? saved
+
+/**
+ * The mode that the Mode control shows: the mode that the agent reports, else the mode that the user
+ * chose in a draft, else the saved mode (spec S5, "Live mode"). The agent beats the choice of the draft.
+ */
+export const shownMode = <Mode extends string>(live: Mode | null, chosen: Mode | null, saved: Mode): Mode => live ?? chosen ?? saved
+
+/** The oldest open card of the view, by the order of its entry among the entries, or null. */
+export function oldestOpenCard(view: Pick<SessionSnapshot, 'entries' | 'permissions' | 'elicitations'>): string | null {
+  const open = new Set([...view.permissions.map((item) => item.entryId), ...view.elicitations.map((item) => item.entryId)])
+  return view.entries.find((item) => open.has(item.id))?.id ?? null
+}
 
 /** True when a scroll area shows the end of its content. The tolerance is for the rounding of the browser. */
 export function isAtBottom(area: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {

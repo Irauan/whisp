@@ -40,7 +40,7 @@ describe('sessions.open', () => {
   it('returns the saved draft with its prompt and its mode, and no entry', async () => {
     const { open } = setup()
     const result = await open({ id: 's1' })
-    expect(result).toEqual({ ok: true, value: { session, entries: [], status: 'idle', revision: 0, draft: true } })
+    expect(result).toEqual({ ok: true, value: { session, entries: [], status: 'idle', revision: 0, draft: true, permissions: [], elicitations: [], liveMode: null } })
     expect(openSession.output.safeParse(result).success).toBe(true)
   })
 
@@ -61,7 +61,10 @@ describe('sessions.open', () => {
         ],
         status: 'working',
         revision: 4,
-        draft: false
+        draft: false,
+        permissions: [],
+        elicitations: [],
+        liveMode: null
       }
     })
     expect(openSession.output.safeParse(result).success).toBe(true)
@@ -90,6 +93,34 @@ describe('sessions.open', () => {
     const { open } = setup()
     const result = await open({ id: 'missing' })
     expect(result).toMatchObject({ ok: false, error: { code: 'unknown-session' } })
+    expect(openSession.output.safeParse(result).success).toBe(true)
+  })
+
+  it('returns the open cards in the order of arrival, each with the entry that it saved, and the live mode', async () => {
+    const { transcript, open } = setup()
+    transcript.openPermission('s1', {
+      id: 'r1',
+      toolId: 't1',
+      title: 'npm test',
+      toolKind: 'execute',
+      locations: ['C:\\work\\a.txt'],
+      options: [{ id: 'yes', label: 'Yes', kind: 'allow-once' }]
+    })
+    transcript.openElicitation('s1', { id: 'f1', toolId: 'a1', message: 'Which runner?', fields: [], recommended: null, keepsText: true })
+    transcript.setLiveMode('s1', 'approve-all')
+    const result = await open({ id: 's1' })
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        entries: [
+          { id: 'e1', entry: { kind: 'answers', card: 'decision', outcome: 'open' } },
+          { id: 'e2', entry: { kind: 'answers', card: 'question', outcome: 'open' } }
+        ],
+        permissions: [{ id: 'r1', entryId: 'e1', title: 'npm test', toolKind: 'execute', locations: ['C:\\work\\a.txt'] }],
+        elicitations: [{ id: 'f1', entryId: 'e2', message: 'Which runner?', recommended: null }],
+        liveMode: 'approve-all'
+      }
+    })
     expect(openSession.output.safeParse(result).success).toBe(true)
   })
 })

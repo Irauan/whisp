@@ -1,4 +1,6 @@
 import type { Contract } from '../building-blocks/contract'
+import { answerElicitation } from '../features/sessions/answer-elicitation/answer-elicitation.contract'
+import { answerPermission } from '../features/sessions/answer-permission/answer-permission.contract'
 import { createSession } from '../features/sessions/create/create.contract'
 import { deleteSession } from '../features/sessions/delete/delete.contract'
 import { listSessions } from '../features/sessions/list/list.contract'
@@ -33,6 +35,8 @@ export const contracts: readonly Contract[] = [
   openSession,
   sendMessage,
   stopSession,
+  answerPermission,
+  answerElicitation,
   setMode,
   setModel,
   deleteSession,

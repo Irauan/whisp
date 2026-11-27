@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MODES } from '../../building-blocks/mode'
 import { err, ok } from '../../building-blocks/result'
-import { CLAUDE_MODES, claudeCodeRecipe, signInSteps } from './claude-code'
+import { CLAUDE_MODES, claudeCodeRecipe, claudeFormFacts, signInSteps } from './claude-code'
 
 describe('claudeCodeRecipe', () => {
   it('translates each mode of the port to a permission mode of Claude (decision 0012)', () => {
@@ -92,5 +92,33 @@ describe('signInSteps', () => {
 
   it('does not tell the user to set an API key in the environment of Aether', () => {
     expect(signInSteps({})).not.toContain('ANTHROPIC_API_KEY')
+  })
+})
+
+describe('claudeFormFacts', () => {
+  const text = (key: string) => ({ key, kind: 'text' as const, values: [] })
+  const choice = (key: string, values: string[]) => ({ key, kind: 'choice' as const, values })
+
+  it('knows a question of AskUserQuestion: it keeps the text, and links "Other" to its question', () => {
+    expect(
+      claudeFormFacts({ toolId: 't1', fields: [choice('question_0', ['a']), text('question_0_custom'), { key: 'question_1', kind: 'choices', values: ['x'] }, text('question_1_custom')] })
+    ).toEqual({ recommended: null, keepsText: true, completes: { question_0_custom: 'question_0', question_1_custom: 'question_1' } })
+  })
+
+  it('links no text to a question that the form does not have', () => {
+    expect(claudeFormFacts({ toolId: 't1', fields: [text('question_3_custom')] }).completes).toEqual({})
+  })
+
+  it('knows the refusal fallback: "Keep the refusal" is the recommended option', () => {
+    expect(claudeFormFacts({ toolId: null, fields: [choice('choice', ['retry_fallback', 'cancelled'])] })).toEqual({ recommended: 'cancelled', keepsText: true, completes: {} })
+  })
+
+  it('treats any other form as a form of an MCP server: no recommended option, and no saved text', () => {
+    const none = { recommended: null, keepsText: false, completes: {} }
+    expect(claudeFormFacts({ toolId: null, fields: [text('token')] })).toEqual(none)
+    // A form with the keys of a question but no tool call is not AskUserQuestion.
+    expect(claudeFormFacts({ toolId: null, fields: [choice('question_0', ['a']), text('question_0_custom')] })).toEqual(none)
+    expect(claudeFormFacts({ toolId: null, fields: [choice('choice', ['retry_fallback', 'other'])] })).toEqual(none)
+    expect(claudeFormFacts({ toolId: 't1', fields: [choice('question_0', ['a']), text('note')] })).toEqual(none)
   })
 })

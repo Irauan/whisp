@@ -12,10 +12,10 @@ export interface RetireIdleDeps {
   limits: ReleaseLimits
   log(message: string, cause?: unknown): void
   /**
-   * The open permission requests and the open questions of Claude of a session. Story S5 builds
-   * them. Until then the count is zero. The composition root passes it when it exists.
+   * The open permission requests and the open questions of Claude of a session (story S5). The
+   * composition root passes the count of the open cards. A session with an open card is busy.
    */
-  openRequests?(sessionId: string): number
+  openRequests(sessionId: string): number
 }
 
 /**
@@ -47,7 +47,8 @@ export async function retireIdleHandler(deps: RetireIdleDeps): Promise<void> {
 /** Whether a turn runs, or the session shows a status other than idle. A session that starts has a turn. */
 const inTurn = ({ processes, transcript }: RetireIdleDeps, id: string): boolean => processes.turnOf(id) !== undefined || transcript.statusOf(id) !== 'idle'
 
-const requestsOf = ({ openRequests }: RetireIdleDeps, id: string): number => openRequests?.(id) ?? 0
+// A caller that passes no count (a test of an earlier story) has no open card.
+const requestsOf = ({ openRequests }: RetireIdleDeps, id: string): number => (typeof openRequests === 'function' ? openRequests(id) : 0)
 
 const busy = (deps: RetireIdleDeps, id: string): boolean => inTurn(deps, id) || requestsOf(deps, id) > 0
 

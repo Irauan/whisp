@@ -22,6 +22,7 @@ import { resolveReal } from '../../../building-blocks/paths'
 import { err, ok, type Result } from '../../../building-blocks/result'
 import type { SessionEvent } from '../entry'
 import { Processes } from '../processes.store'
+import { closedWithout } from '../cards'
 import { SessionStore } from '../session.store'
 import { Transcript } from '../transcript.store'
 import { sendMessage } from './send-message.contract'
@@ -74,6 +75,14 @@ class FakeProcess implements AgentProcess {
       this.turn.resolve(ok('cancelled'))
     }
     return Promise.resolve()
+  }
+
+  answer(): ReturnType<AgentProcess['answer']> {
+    return err('unknown-request', 'This request is closed.')
+  }
+
+  answerElicitation(): ReturnType<AgentProcess['answerElicitation']> {
+    return err('unknown-request', 'This request is closed.')
   }
 
   close(): Promise<void> {
@@ -146,6 +155,12 @@ function setup(
     record: (sessionId, update) => {
       if (update.type === 'text') transcript.addText(sessionId, 'agent', update.text)
       else if (update.type === 'tool') transcript.announceTool(sessionId, update)
+    },
+    // The same for the requests of the agent: the slice `record-agent-update` opens and closes the cards.
+    recordRequest: (sessionId, event) => {
+      if (event.type === 'permission') transcript.openPermission(sessionId, event.request)
+      else if (event.type === 'elicitation') transcript.openElicitation(sessionId, event.form)
+      else transcript.closeCard(sessionId, event.id, (card) => closedWithout(card.entry, event.reason))
     },
     clock,
     ids,
@@ -1286,5 +1301,44 @@ describe('sessions.send-message, the idle release (S9)', () => {
     two.turn.resolve(ok('end_turn'))
     await second.finished
     expect(agents.processes).toHaveLength(2)
+  })
+
+  describe('open cards', () => {
+    const request = { id: 'r1', toolId: 't1', title: 'npm test', toolKind: 'execute', locations: [], options: [] }
+
+    it('opens a card for a request of the agent, and refuses a message while the card waits, also after the turn ended', async () => {
+      const { transcript, send, processOf } = setup()
+      const { finished } = send('s1', 'Run the tests')
+      const agent = await processOf(0)
+      agent.becomeReady('a1')
+      await agent.ready
+      await Promise.resolve()
+      agent.listener.permission(request)
+      expect(transcript.openCardCount('s1')).toBe(1)
+      agent.turn.resolve(ok('end_turn'))
+      await finished
+      expect(transcript.statusOf('s1')).toBe('idle')
+      expect(send('s1', 'Again')).toMatchObject({ result: { ok: false, error: { code: 'turn-active' } } })
+      agent.listener.permissionClosed('r1', 'withdrawn')
+      expect(transcript.openCardCount('s1')).toBe(0)
+      expect(send('s1', 'Again').result.ok).toBe(true)
+    })
+
+    it('does not close a card at the end of the turn, and closes it when the process reports an exit', async () => {
+      const { store, transcript, send, processOf } = setup()
+      const { finished } = send('s1', 'Run the tests')
+      const agent = await processOf(0)
+      agent.becomeReady('a1')
+      await agent.ready
+      await Promise.resolve()
+      agent.listener.permission(request)
+      agent.listener.elicitation({ id: 'f1', toolId: null, message: 'm', fields: [], recommended: null, keepsText: true })
+      agent.turn.resolve(ok('end_turn'))
+      await finished
+      expect(transcript.openCardCount('s1')).toBe(2)
+      agent.listener.permissionClosed('r1', 'exited')
+      agent.listener.elicitationClosed('f1', 'exited')
+      expect(store.entriesOf('s1').flatMap((view) => (view.entry.kind === 'answers' ? [view.entry.outcome] : []))).toEqual(['exited', 'exited'])
+    })
   })
 })
