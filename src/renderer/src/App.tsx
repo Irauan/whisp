@@ -16,7 +16,9 @@ import { OpenSession } from './components/OpenSession'
 import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
+import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import type { SessionSettings } from '../../shared/model'
+import { invokeContract } from './invoke'
 import { useNavigation, type View } from './navigation'
 import { useProfiles } from './useProfiles'
 
@@ -102,7 +104,11 @@ export function App() {
       attachments: settings.attachments
     })
     if ('message' in created) return created.message
+    // Flow 2: the session window opens, and the prompt goes as the first message. The session exists
+    // already, so a refusal leaves a draft with its prompt. The window of the draft shows it.
+    const sent = await invokeContract(sendMessage, { id: created.id, text: prompt })
     go({ kind: 'session', sessionId: created.id })
+    setProblem(sent.ok ? null : sent.error.message)
     return null
   }
 

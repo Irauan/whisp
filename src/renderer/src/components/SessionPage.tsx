@@ -1,26 +1,72 @@
-import { ArrowUp, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowUp, Loader, Square, Trash2 } from 'lucide-react'
+import { useState, type KeyboardEvent } from 'react'
+import { sendMessage } from '../../../features/sessions/send-message/send-message.contract'
+import { setMode } from '../../../features/sessions/set-mode/set-mode.contract'
+import { stopSession } from '../../../features/sessions/stop/stop.contract'
 import { labelOf, MODELS } from '../../../shared/model'
-import type { SessionView } from '../useProfiles'
+import { invokeContract } from '../invoke'
+import type { SessionSnapshot } from '../session-view'
+import type { Mode } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 import { ModeMenu } from './ModeMenu'
-
-const SEND_UNAVAILABLE = 'Send is coming soon. Aether cannot run sessions yet.'
+import { Transcript } from './Transcript'
 
 /**
- * A session in its window. Until the chat story, every session is a draft: the composer holds
- * the prompt and the mode of the session, and Send waits. The user can edit both, but Aether does
- * not save the change: no slice saves it yet.
+ * A session in its window (brief, Session window). The main process owns the conversation: this
+ * window shows the snapshot and its events, and sends the commands Send, Stop and the change of
+ * the mode of a draft. The composer holds only the text that the user has not sent.
  */
-export function SessionPage({ session, onDelete }: { session: SessionView; onDelete(): void }) {
-  // View state: the text of the composer. The user can edit it, and Aether does not save it.
-  const [text, setText] = useState(session.prompt)
-  // View state: the mode in the Mode control, like the text.
-  const [mode, setMode] = useState(session.mode)
+export function SessionPage({ view, onDelete }: { view: SessionSnapshot; onDelete(): void }) {
+  const { session, status, draft } = view
+  // View state: the text of the composer. A draft starts with its prompt (flow 6).
+  const [text, setText] = useState(draft ? session.prompt : '')
+  // View state: the mode that the user chose in a draft, until the snapshot shows it.
+  const [chosenMode, setChosenMode] = useState<Mode | null>(null)
+  // View state: the text of the last command that failed, or null.
+  const [problem, setProblem] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+
+  const running = status !== 'idle'
+  const ready = !running && !sending && text.trim() !== ''
   const rows: [string, string][] = [
     ['Folder', session.sourcePath],
     ['Model', labelOf(MODELS, session.model)]
   ]
+
+  const send = () => {
+    if (!ready) return
+    setSending(true)
+    setProblem(null)
+    void invokeContract(sendMessage, { id: session.id, text }).then((result) => {
+      setSending(false)
+      if (result.ok) setText('')
+      else setProblem(result.error.message)
+    })
+  }
+
+  const stop = () => {
+    void invokeContract(stopSession, { id: session.id }).then((result) => {
+      if (!result.ok) setProblem(result.error.message)
+    })
+  }
+
+  const changeMode = (mode: Mode) => {
+    setProblem(null)
+    setChosenMode(mode)
+    void invokeContract(setMode, { id: session.id, mode }).then((result) => {
+      if (!result.ok) {
+        // The saved mode stays. Show it again.
+        setChosenMode(null)
+        setProblem(result.error.message)
+      }
+    })
+  }
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    send()
+  }
 
   return (
     <div className="page">
@@ -30,7 +76,6 @@ export function SessionPage({ session, onDelete }: { session: SessionView; onDel
           <Trash2 size={18} />
         </button>
       </header>
-      <p className="muted description">Aether saved this session as a draft. Aether cannot run sessions yet.</p>
       <dl className="facts">
         {rows.map(([name, value]) => (
           <div key={name}>
@@ -52,18 +97,51 @@ export function SessionPage({ session, onDelete }: { session: SessionView; onDel
           </ul>
         </section>
       )}
-      <form className="composer" onSubmit={(event) => event.preventDefault()}>
+      {draft ? (
+        <p className="muted description">This session has not started. Send starts it with the prompt below.</p>
+      ) : (
+        <Transcript entries={view.entries} />
+      )}
+      {status === 'starting' && (
+        <p className="agent-status muted">
+          <Loader size={16} className="spin" aria-hidden="true" />
+          <span>Starting Claude Code</span>
+        </p>
+      )}
+      {status === 'working' && (
+        <p className="agent-status muted">
+          <Loader size={16} className="spin" aria-hidden="true" />
+          <span>Working</span>
+        </p>
+      )}
+      <form
+        className="composer"
+        onSubmit={(event) => {
+          event.preventDefault()
+          send()
+        }}
+      >
         <div className="composer-box">
-          <textarea aria-label="Prompt" rows={3} value={text} onChange={(event) => setText(event.target.value)} />
+          <textarea aria-label="Prompt" rows={3} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKeyDown} />
           <div className="composer-actions session-actions">
-            <ModeMenu mode={mode} onChange={setMode} />
+            <ModeMenu mode={chosenMode ?? session.mode} disabled={!draft} onChange={changeMode} />
             <span className="spacer" />
-            <button type="submit" className="send" aria-label="Send" title={SEND_UNAVAILABLE} disabled>
-              <ArrowUp size={20} />
-            </button>
+            {running ? (
+              <button type="button" className="send" aria-label="Stop" title="Stop" onClick={stop}>
+                <Square size={16} />
+              </button>
+            ) : (
+              <button type="submit" className="send" aria-label="Send" title="Send" disabled={!ready}>
+                <ArrowUp size={20} />
+              </button>
+            )}
           </div>
         </div>
-        <p className="muted composer-error">{SEND_UNAVAILABLE}</p>
+        {problem && (
+          <p className="error composer-error" role="alert">
+            {problem}
+          </p>
+        )}
       </form>
     </div>
   )
