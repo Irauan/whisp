@@ -4,7 +4,7 @@
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/fixture.ts": {
-    "sha256": "4616a206c20fa31c77993db04efac47c1dc2eba503156709925c1136993d19f6",
+    "sha256": "ab45ad9ea4433e8f5bb7b7568278648122bb003a4d205a64ddc8fcade1f30d1a",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/github-accounts.spec.ts": {
@@ -20,11 +20,11 @@
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s1/fixture.ts": {
-    "sha256": "40bcda97402cfb3003c97e02294713b327765b88d1bd85fc4f9820cbe9a12f43",
+    "sha256": "97d3457712ff811a51bd1b55d5cd5cdf42441cf11e2c3997d9cb3b1d5c54b44f",
     "story": "m1-chat/s1"
   },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
-    "sha256": "53a31d221ee73aa4f7d6f4aca983061a199352a84da777fa2ac589cec4f90d28",
+    "sha256": "cdf6466be56ad240410022591f71b0cf0220013d848092b4e689ecf682f5a32c",
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s2/import.spec.ts": {
@@ -60,7 +60,7 @@
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/fixture.ts": {
-    "sha256": "2a89a40214acf50015b1843a803ebece361202c158de702022dd41abd8e9ae0e",
+    "sha256": "2a8bb2ba1d4af4f433ec2cb187081e9e16f8f349daa12a588896871eac41f367",
     "story": "m1-chat/s4"
   },
   "tests/acceptance/m1-chat/s4/mode.spec.ts": {
@@ -166,6 +166,14 @@
   "tests/acceptance/m1-chat/s9/process-limit.spec.ts": {
     "sha256": "1f2aad35814ec8f8a7566974cab38f6a45bc6598ea0859abc1cfd0a250a26e83",
     "story": "m1-chat/s9"
+  },
+  "tests/acceptance/support/hidden-windows.cjs": {
+    "sha256": "c9a4f113a4afe89aa95bd39ac70ef25532e4020bd8b39dde3adc8240bd60f9cb",
+    "story": "m1-chat/test-windows"
+  },
+  "tests/acceptance/support/windows.ts": {
+    "sha256": "526861bc6b9fab4217a00ec62d79b5dafe1b9a6aecd7e47bb71b9ef5755f1114",
+    "story": "m1-chat/test-windows"
   },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
