@@ -109,6 +109,10 @@ export function PermissionCard({ sessionId, view, entry, ref }: { sessionId: str
       setSending(null)
       // The card closed already: the event removes it, so there is nothing more to show.
       if (result.error.code !== 'unknown-request') setProblem(result.error.message)
+    }).catch(() => {
+      // The call itself failed: the buttons come back, with the error line of a refused answer.
+      setSending(null)
+      setProblem('Aether cannot send this answer.')
     })
   }
 

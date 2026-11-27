@@ -64,6 +64,8 @@ export interface PermissionOption {
   /** The name of the choice, as the agent wrote it. */
   label: string
   kind: PermissionOptionKind
+  /** True for the option that the provider adds to a request with no option. It only cancels, and it is never recommended. */
+  cancel?: boolean
 }
 
 /** A question of the agent: may it use a tool? It stays open until the user answers or the agent withdraws it. */

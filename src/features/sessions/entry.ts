@@ -80,7 +80,7 @@ export const permissionViewSchema = z.strictObject({
   toolKind: z.string().nullable(),
   locations: z.array(z.string()),
   options: z.array(
-    z.strictObject({ id: z.string(), label: z.string(), kind: z.enum(['allow-once', 'allow-always', 'refuse-once', 'refuse-always']) })
+    z.strictObject({ id: z.string(), label: z.string(), kind: z.enum(['allow-once', 'allow-always', 'refuse-once', 'refuse-always']), cancel: z.boolean().optional() })
   )
 })
 

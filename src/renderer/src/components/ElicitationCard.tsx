@@ -146,6 +146,10 @@ export function ElicitationCard({ sessionId, view, entry, ref }: { sessionId: st
       if (result.ok) return
       setSending(null)
       if (result.error.code !== 'unknown-request') setProblem(result.error.message)
+    }).catch(() => {
+      // The call itself failed: the card comes back, with the error line of a refused answer.
+      setSending(null)
+      setProblem('Aether cannot send this answer.')
     })
   }
 

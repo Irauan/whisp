@@ -149,7 +149,7 @@ const PERMISSION_KINDS: Readonly<Record<string, PermissionOptionKind>> = {
 const CANCELLED: RequestPermissionResponse = { outcome: { outcome: 'cancelled' } }
 
 /** The option that a request with no option gets: the only way to close its card. It answers "cancelled". */
-const CANCEL_OPTION = { id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once' } as const
+const CANCEL_OPTION = { id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once', cancel: true } as const
 
 /** What Aether remembers about a tool call that the agent announced, for the request that asks about it. */
 interface KnownTool {
@@ -232,6 +232,8 @@ class AcpProcess implements AgentProcess {
   private turnActive = false
   /** True from the cancel of a running turn until the turn ends. A request that comes then gets "cancelled" at once. */
   private cancelling = false
+  /** The number of calls of `cancel` that run. A request that comes during one gets "cancelled" at once, turn or not. */
+  private cancelCalls = 0
   private readonly permissions = new Map<string, PendingPermission>()
   private readonly elicitations = new Map<string, PendingElicitation>()
   /** The tool calls that the agent announced, by ID. A permission request of the real adapter names only the ID. */
@@ -496,12 +498,19 @@ class AcpProcess implements AgentProcess {
     }
     const sessionId = this.sessionId
     if (sessionId === null || !this.connection) return
-    // A request that comes while the cancel of the turn runs gets "cancelled" at once.
+    // A request that comes while the cancel of the turn runs gets "cancelled" at once. The guard also holds
+    // for the whole call outside a turn: a card that opens between the cancel and its answers would be answered
+    // in silence, and stay open with no request behind it.
     if (this.turnActive) this.cancelling = true
-    // The agent gets the cancel first, so it ends the turn as cancelled when its tools get their answers.
-    await this.connection.agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
-    // Each request that the agent did not withdraw on the cancel gets "cancelled". The agent waits for it.
-    await this.cancelRequests()
+    this.cancelCalls += 1
+    try {
+      // The agent gets the cancel first, so it ends the turn as cancelled when its tools get their answers.
+      await this.connection.agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
+      // Each request that the agent did not withdraw on the cancel gets "cancelled". The agent waits for it.
+      await this.cancelRequests()
+    } finally {
+      this.cancelCalls -= 1
+    }
   }
 
   answer(requestId: string, optionId: string): Result<true, 'unknown-request' | 'unknown-option'> {
@@ -581,7 +590,7 @@ class AcpProcess implements AgentProcess {
 
   private askPermission(params: RequestPermissionRequest, signal: AbortSignal): Promise<RequestPermissionResponse> {
     // After Stop, while the cancel runs, or while the process closes: no card.
-    if (this.aborted || this.cancelling || signal.aborted) return Promise.resolve(CANCELLED)
+    if (this.aborted || this.cancelling || this.cancelCalls > 0 || signal.aborted) return Promise.resolve(CANCELLED)
     const known = this.tools.get(params.toolCall.toolCallId)
     const options = params.options.flatMap((option) => {
       const kind = PERMISSION_KINDS[option.kind]
@@ -626,7 +635,7 @@ class AcpProcess implements AgentProcess {
     if (params.mode !== 'form' || typeof params.message !== 'string') throw RequestError.invalidParams(undefined, 'Aether shows only forms.')
     const parsed = fieldsOfSchema(params.requestedSchema)
     if (parsed === null) throw RequestError.invalidParams(undefined, 'Aether cannot show this form.')
-    if (this.aborted || this.cancelling || signal.aborted) return Promise.resolve({ action: 'cancel' })
+    if (this.aborted || this.cancelling || this.cancelCalls > 0 || signal.aborted) return Promise.resolve({ action: 'cancel' })
     const toolId = typeof params.toolCallId === 'string' ? params.toolCallId : null
     const facts = this.options.recipe.formFacts({
       toolId,

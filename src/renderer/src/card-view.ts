@@ -53,13 +53,15 @@ const isAllow = (option: Option): boolean => option.kind === 'allow-once' || opt
  * refuse options another. The recommended option of the allow group is its first `allow-once` option, or
  * its first option. The recommended option of the refuse group is its first option. The allow group
  * comes first and is primary when the group has an `allow-once` option. A safety ask has a refuse option
- * first, and an allow option after it: then the refuse group comes first and is primary. Any other
- * request has no primary button, for example a request that offers a refuse option only.
+ * first: then the refuse group comes first and is primary, also when it is the only group. The option
+ * that the provider adds to a request with no option ("Cancel request") is never recommended. Any other
+ * request has no primary button.
  */
 export function buttonGroups(options: readonly Option[]): ButtonGroup[] {
   const allow = options.filter(isAllow)
   const refuse = options.filter((option) => !isAllow(option))
-  const safety = options[0] !== undefined && !isAllow(options[0]) && allow.length > 0
+  const first = options[0]
+  const safety = first !== undefined && !isAllow(first) && first.cancel !== true
   const group = (kind: ButtonGroup['kind'], list: Option[], primary: boolean): ButtonGroup[] => {
     const main = kind === 'allow' ? (list.find((option) => option.kind === 'allow-once') ?? list[0]) : list[0]
     return main === undefined ? [] : [{ kind, main, more: list.filter((option) => option !== main), primary }]

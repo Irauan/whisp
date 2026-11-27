@@ -635,7 +635,7 @@ describe('AcpAgents, permission requests', () => {
     await process.ready
     const turn = process.prompt('Run it')
     const request = await waitFor(() => listened.permissions[0], 'the request')
-    expect(request.options).toEqual([{ id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once' }])
+    expect(request.options).toEqual([{ id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once', cancel: true }])
     expect(process.answer(request.id, 'aether-cancel-request').ok).toBe(true)
     expect(await control.waitForPermission('a')).toEqual({ id: 'a', outcome: { outcome: 'cancelled' } })
     await turn
@@ -866,5 +866,32 @@ describe('AcpAgents, forms of the agent', () => {
     await turn
     await waitFor(() => (listened.updates.some((update) => update.type === 'model') ? true : undefined), 'the model update')
     expect(listened.updates.filter((update) => update.type === 'model')).toEqual([{ type: 'model', model: 'claude-opus-5-5' }])
+  })
+})
+
+describe('AcpAgents, a request while cancel runs outside a turn', () => {
+  it('answers cancelled at once and opens no card, for a request and for a form, while a cancel with no turn is sent', async () => {
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const internals = process as unknown as {
+      askPermission(params: unknown, signal: AbortSignal): Promise<unknown>
+      askElicitation(params: unknown, signal: AbortSignal): Promise<unknown>
+    }
+    // No prompt runs: the cancel is Stop with no turn. The calls below come while `cancel` is still sending.
+    const cancelling = process.cancel()
+    const permission = internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'late' }, options: [{ optionId: 'yes', name: 'Yes', kind: 'allow_once' }] }, new AbortController().signal)
+    const form = internals.askElicitation(
+      { mode: 'form', message: 'm', requestedSchema: { type: 'object', properties: { x: { type: 'string' } } } },
+      new AbortController().signal
+    )
+    expect(await permission).toEqual({ outcome: { outcome: 'cancelled' } })
+    expect(await form).toEqual({ action: 'cancel' })
+    await cancelling
+    expect(listened.permissions).toEqual([])
+    expect(listened.elicitations).toEqual([])
+    // After the cancel ended, a new request opens a card again.
+    void internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'next' }, options: [{ optionId: 'yes', name: 'Yes', kind: 'allow_once' }] }, new AbortController().signal)
+    expect(listened.permissions.map((request) => request.toolId)).toEqual(['next'])
   })
 })

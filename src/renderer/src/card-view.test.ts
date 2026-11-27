@@ -38,7 +38,10 @@ describe('buttonGroups', () => {
 
   it('makes no button primary when the request has no allow-once option and no refuse option first', () => {
     expect(names(buttonGroups([always('always'), refuse('no')])).map((group) => group.primary)).toEqual([false, false])
-    expect(names(buttonGroups([refuse('cancel-request')]))).toEqual([{ kind: 'refuse', main: 'cancel-request', more: [], primary: false }])
+    // A request that offers refuse options only: the first one is recommended, first and primary.
+    expect(names(buttonGroups([refuse('no'), refuse('never')]))).toEqual([{ kind: 'refuse', main: 'no', more: ['never'], primary: true }])
+    // The option that the provider adds to a request with no option is never recommended.
+    expect(names(buttonGroups([{ ...refuse('cancel-request'), cancel: true }]))).toEqual([{ kind: 'refuse', main: 'cancel-request', more: [], primary: false }])
   })
 
   it('shows no group for no option', () => {
