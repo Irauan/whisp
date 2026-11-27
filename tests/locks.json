@@ -107,6 +107,10 @@
     "sha256": "20f34d9a71bda1110e27415f4ed73664c27943a2b2233f113e7112b8275b8f05",
     "story": "m1-chat/s7"
   },
+  "tests/acceptance/m1-chat/s7/directories.spec.ts": {
+    "sha256": "283257237e0011b5957de755badedf275219f744913ca67801d1a29e19aaf411",
+    "story": "m1-chat/s7"
+  },
   "tests/acceptance/m1-chat/s7/fixture.ts": {
     "sha256": "cac2b44a7efc8d2ef60a58efb30cd06dd610b28d222d808b5b52d8b60555ce56",
     "story": "m1-chat/s7"
