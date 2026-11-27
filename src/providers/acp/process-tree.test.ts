@@ -70,7 +70,8 @@ describe.runIf(process.platform === 'win32')('processTree and endSurvivors (Wind
     expect(found!.parent).toBe(process.pid)
     expect(isRunning(child.pid!)).toBe(true)
 
-    await endSurvivors(tree)
+    // Only the row of the child: the tree of this process holds other children of the test runner.
+    await endSurvivors([found!])
     expect(await ended(child.pid!)).toBe(true)
   }, 30_000)
 
