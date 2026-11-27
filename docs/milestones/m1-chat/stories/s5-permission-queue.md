@@ -83,10 +83,12 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-11 | "Skip" sends `decline`. Stop sends `cancel` for an open question card. | Slice |
 | S5-12 | A form with a number field gets the error -32602, and no card shows. | Slice |
 
-| S5-13 | A session folder under R, in a Git repository whose root holds R. The trust question shows the root path as "Repository root", and the warning that names R and the profile. | Acceptance |
+| S5-13 | A session folder under R, in a Git repository whose root holds R, and a second case where the root equals R. The trust question shows the facts "Repository" and "Repository root", and the warning that names R and the profile. | Acceptance |
+| S5-15 | The refusal fallback dialog shows "Keep the refusal" first and primary. "Retry with <fallback>" sends `accept`. The agent reports the new model. The model button shows it, and after a restart the session starts with it. | Acceptance |
+| S5-16 | The agent reports `acceptEdits` with the S7 notice for the fallback of Auto. The Mode control shows "Accept edits". The saved mode stays `auto`, and the notice shows again at the next start. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-14 are not in the brief. They cover the rules above.
+S5-1 to S5-16 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -97,7 +99,8 @@ The references to lines of the adapter (`v1/acp-agent.js` and others) in this sp
 - The Mode control shows this live mode at once.
 - Aether saves the live mode in `sessions.mode`, so a new process starts in it. A release (S9) and a restart keep the mode that the user chose.
 - Approve all (`approve-all`, Claude `bypassPermissions`) shows in the Mode control, but Aether never saves it. The session keeps its last saved mode. A new process then falls back to that mode. This follows the rule of decision 0012 for Approve all.
-- The S7 notice for the fallback of Auto compares the reported mode with the asked mode. `record-agent-update` decides the notice first, then saves the new mode.
+- The S7 notice for the fallback of Auto compares the reported mode with the asked mode. `record-agent-update` decides the notice first.
+- Auto fallback (user decision B, 2026-11-27): when the reported mode comes with the S7 notice for the fallback of Auto, Aether shows the live mode but keeps `auto` saved. The notice then shows again at the next start, as decision 0012 and S9 rule 12 say.
 - A new session copies the mode of the newest session (decision 0012). A saved live mode counts. Approve all is never copied, as before.
 - After the first message, the user still cannot change the Mode control. Only the agent changes the mode.
 
@@ -135,6 +138,18 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
 - Any other field (number, integer, boolean, a string with `format` or `enum`) makes the whole form unsupported. Aether answers -32602.
 - MCP elicitations: a form of an MCP server that uses only the three field types renders on the same path, at no extra cost. Each other MCP form gets -32602, so the MCP server receives `cancel`. URL elicitations stay off.
 - The refusal fallback dialog is one single select, so it renders on the same path. Its options are "Retry with <fallback>" and "Keep the refusal".
+- Refusal fallback (user decision A, 2026-11-27):
+  - "Keep the refusal" is first and primary. It is the default of the adapter (`refusalFallbackResultFromResponse` in `elicitation.js`).
+  - The general rule would make the first option of the adapter, "Retry with <fallback>", primary. So Aether must know this dialog:
+    - The form has one field with the key `choice`, and its option values are `retry_fallback` and `cancelled` (`elicitation.js` 339-375).
+    - The `providers/claude-code` recipe holds this rule, not `providers/acp`: a recipe function picks the recommended option of an elicitation. For this form it returns `cancelled`, and Aether shows that option first.
+  - When the user picks "Retry with <fallback>", the adapter switches the model with `syncModelAfterExternalSwitch` (`v1/acp-agent.js` 4028 and 7599-7611). It then sends `config_option_update` with the full list `configOptions` (`updateConfigOption`, 7435-7439).
+  - The adapter sends `config_option_update` from other places too. S7 does not translate it (checked on `story/m1-s7-settings`).
+  - `providers/acp` keeps the value of the option `model` from the response of `session/new` or `session/resume` as the base, after `ready`.
+  - It reports the port update `{ type: "model", model }` only when a later `config_option_update` carries another value of the option `model`. So a session saved as `default` is not overwritten by the concrete ID of the default model.
+  - Aether shows the new model in the model button and in the header fact "Model", and saves it in `sessions.model`. A restart or a release then keeps it.
+  - This is the one case where the model changes after the first message.
+  - A new process can refuse the saved fallback model. Then the start fails with the S4 notice of `settings-refused`, as for any refused model. The model button stays disabled, because the session is not a draft. The user can start a new session.
 
 #### The question card
 
@@ -147,7 +162,11 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
   - else the first option
   - The other options keep the order of the agent.
 - Multi select: one compact toggle button for each option, with `aria-pressed`. A compact primary "Submit" sends the answer.
-- Several questions in one form: each question shows its options as toggles, and one "Submit" sends all answers.
+- Several questions in one form:
+  - The field `title` is only a small header. The field `description` is the question text, and the card shows it (`elicitation.js` 145-146, 171).
+  - A single select stays one choice, like a radio button: a click picks one option and clears the others of that question. Use the role `radiogroup` with `radio` items.
+  - Only a multi select uses toggles.
+  - One "Submit" sends all answers.
 - "Other": a one-line text field under the options. Typing in it, then Enter or "Submit", sends the text as `question_<n>_custom`.
 - "Skip": a compact plain button. It sends `decline`.
 - Stop closes the card and sends `cancel`.
@@ -159,11 +178,12 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
 S5 also changes the trust question of S6 (`QuestionDialog`, kind `trust`).
 
 - Facts: S6 walks up from the session folder to the repository root, also past the workspace directory (`check-directory.handler.ts` 98-99). So a repository above the workspace directory R, for example a dotfiles repository in the home folder, asks for trust.
-- The dialog shows the repository root path as the fact "Repository root". The facts "Folder" and "Profile" stay.
+- The dialog keeps the fact "Repository" of S6, and adds the fact "Repository root" with the path. The facts "Folder" and "Profile" stay.
 - When the repository root holds the workspace directory, the dialog shows a warning above the buttons:
   - "This repository holds the workspace directory <R>. Trust covers every plain folder under <R> for the profile <name>."
 - The warning does not show for a repository inside the workspace directory.
 - The buttons do not change: "Cancel" and the primary "Trust".
+- "Holds the workspace directory" includes a root equal to R. `check-directory` compares with `pathKey`: the root holds R when `pathKey(root)` equals `pathKey(R)`, or R is inside the root.
 - The question gets one field, `holdsWorkspace: boolean`. `check-directory` sets it. The question lives in memory, so no saved format changes.
 
 ### Not in this story
@@ -249,7 +269,8 @@ The trust and directory questions of S6 are an app-level dialog (`QuestionDialog
 - The queue of permission requests and elicitations lives in main memory. `docs/architecture.md` says that open questions live in memory only.
 - The answer adds no entry to the transcript. The tool call entry shows the result: "Completed" after an allowed tool, and "Failed" after a refused one. See open choice 4.
 - Changed use of a saved column: `sessions.mode` now also changes after the first message, when the agent reports a live mode. Aether never saves `approve-all` this way. The values of the column do not change. Today only `sessions.set-mode` of a draft writes it.
-- The live Approve all lives in memory only, for the session view.
+- The live mode lives in memory only, for the session view, in two cases: Approve all, and a mode that comes with the notice for the fallback of Auto (decision B).
+- Changed use of a saved column: `sessions.model` changes after the first message only after the refusal fallback (decision A).
 
 ## Interfaces
 
@@ -317,8 +338,8 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 
 ```ts
 export type ElicitationField =
-  | { key: string; kind: 'choice'; title: string | null; options: ElicitationChoice[]; recommended: string | null }
-  | { key: string; kind: 'choices'; title: string | null; options: ElicitationChoice[]; recommended: string | null }
+  | { key: string; kind: 'choice'; title: string | null; description: string | null; options: ElicitationChoice[]; recommended: string | null }
+  | { key: string; kind: 'choices'; title: string | null; description: string | null; options: ElicitationChoice[]; recommended: string | null }
   | { key: string; kind: 'text'; title: string | null; description: string | null }
 export interface ElicitationChoice { value: string; label: string; description: string | null }
 export interface Elicitation { id: string; toolId: string | null; message: string; fields: ElicitationField[] }
@@ -342,9 +363,10 @@ export type ElicitationAnswer =
 
 - `record-agent-update` handles the port update `mode` of S7:
   1. It decides the S7 notice for the fallback of Auto against the saved mode.
-  2. It saves the new mode in `sessions.mode`, unless the new mode is `approve-all`.
+  2. It saves the new mode in `sessions.mode`, unless the new mode is `approve-all`, or the update comes with the notice for the fallback of Auto (then `auto` stays saved).
   3. It sends the change `{ type: 'mode', mode }` of `sessions.changed`.
-- The snapshot gets `liveMode: Mode | null`, in memory. The Mode control shows `liveMode ?? session.mode`.
+- The snapshot gets `liveMode: Mode | null`, in memory. The Mode control and the header fact "Mode" both show `liveMode ?? session.mode`.
+- `record-agent-update` also handles the port update `model`: it saves `sessions.model` and sends the change `{ type: "model", model }`.
 - `SessionStore` gets a method to save the mode of a session that is not a draft.
 
 ### Simulated agent (`tests/simulated-agent/`)

@@ -90,7 +90,7 @@ button:disabled { cursor: default; opacity: .5; }
 .question-actions .button:not(.primary):hover:not(:disabled) { background: var(--hover); }
 .locations li { font-size: 12px; }
 /* New: the question card of Claude (form elicitation). */
-.question-actions .button.toggle[aria-pressed="true"] { color: var(--text); background: var(--selected); border-color: var(--accent); }
+.question-actions .button.toggle[aria-pressed="true"], .question-actions .button.toggle[aria-checked="true"] { color: var(--text); background: var(--selected); border-color: var(--accent); }
 .question .other { width: 100%; max-width: 420px; height: 28px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
 .question .other:focus { border-color: var(--accent); }
 
@@ -457,9 +457,25 @@ button:disabled { cursor: default; opacity: .5; }
               <button class="button toggle" type="button" aria-pressed="false">HTML</button>
             </div>
             <div class="question-tool"><input class="other" type="text" aria-label="Other" value="A summary in the console"></div>
+            <p class="muted" style="font-size:12px">Watch</p>
+            <p style="font-size:13px">Run the tests on each save?</p>
+            <div class="question-actions" role="radiogroup" aria-label="Run the tests on each save?">
+              <button class="button toggle" type="button" role="radio" aria-checked="true">Yes (Recommended)</button>
+              <button class="button toggle" type="button" role="radio" aria-checked="false">No</button>
+            </div>
+            <p class="muted" style="font-size:12px">In a form with several questions, the field title ("Reports", "Watch") is a small header, and the field description is the question text. A single select stays one choice, like a radio button. Only a multi select uses toggles.</p>
             <div class="question-actions">
               <button class="button primary" type="button">Submit</button>
               <button class="button" type="button">Skip</button>
+            </div>
+          </div>
+          <div class="question" role="group" aria-label="claude-fake-1 declined this request. Retry with claude-fake-2?">
+            <h3>Claude asks</h3>
+            <p>claude-fake-1 declined this request. Retry with claude-fake-2?</p>
+            <p class="muted" style="font-size:12px">Refusal fallback (user decision A). "Keep the refusal" is first and primary, the default of the adapter. "Retry" switches the model, and Aether shows and saves it.</p>
+            <div class="question-actions">
+              <button class="button primary" type="button" title="You can send a new message.">Keep the refusal</button>
+              <button class="button" type="button" title="The session continues on claude-fake-2.">Retry with claude-fake-2</button>
             </div>
           </div>
         </div>
@@ -501,6 +517,7 @@ button:disabled { cursor: default; opacity: .5; }
       <p class="muted" style="font-size:13px">Claude Code reads the settings, the hooks and the MCP servers of a repository when a session starts, before it asks anything. Trust only a repository that you know.</p>
       <div class="mark"><span class="mark-label">Changed: the repository root</span>
         <dl class="facts" style="margin:0">
+          <div><dt class="muted">Repository</dt><dd>sam</dd></div>
           <div><dt class="muted">Repository root</dt><dd class="mono">C:\Users\sam</dd></div>
           <div><dt class="muted">Folder</dt><dd class="mono">C:\Users\sam\work\repo-a</dd></div>
           <div><dt class="muted">Profile</dt><dd>Personal</dd></div>

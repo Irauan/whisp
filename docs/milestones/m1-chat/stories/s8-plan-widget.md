@@ -53,7 +53,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - The status line keeps the S6 condition: no "Starting Claude Code" while `asking` is true.
 - The header shows the title, the facts and the button "Delete session" (`s3/sessions.spec.ts` 117).
   - Today the page shows the facts profile, folder and model. The mode shows only in the Mode control.
-  - The brief (Session window) lists title, profile, folder, model and mode in the header. S8 adds the mode as a fact.
+  - The brief (Session window) lists title, profile, folder, model and mode in the header. S8 adds the mode as a fact. The fact "Mode" shows the same value as the Mode control: `liveMode ?? session.mode` (S5). The fact "Model" shows the same value as the model button.
 - The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
 - When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again. This is decided by the user (2026-11-27).
 - The dock itself never scrolls. The composer is always fully in view.
@@ -91,7 +91,9 @@ The user decided on 2026-11-27: the composer of the session window follows the c
   - At the left, in this order:
     1. A small "+" button. Its accessible name is "Add context". It is disabled and shows "Coming soon", because a running session takes no new attachment in m1.
     2. The Mode control, as a small text-only button with no border. It keeps the accessible name "Mode". After the first message it is disabled, as in S3.
-    3. The model of the session, as a small text-only button with no border. It is disabled after the first message, like Mode, because the model is fixed once the session starts. This is decided by the user (2026-11-27).
+    3. The model of the session, as a small text-only button with no border. Its menu has the label "Model", as the model menu of the new-session composer (`SessionComposer.tsx` 341).
+       - In a draft, it is enabled until the first message, like Mode (user decision C, 2026-11-27). A choice saves the model with `sessions.set-model`.
+       - After the first message, it is disabled (user decision, 2026-11-27). The model stays fixed, with one exception: the refusal fallback of S5 (user decision A). When the user picks "Retry with <fallback>", the agent switches the model, and Aether shows and saves it.
   - At the right: the small round button "Send". It shows as "Stop" during a turn.
 - No mic button. Voice input is outside m1 (brief, Non-goals).
 - The session window has no row below the box. The folder and the account are fixed once the session starts.
@@ -108,6 +110,9 @@ The user decided on 2026-11-27, as part of the frame:
 - The style follows the reference "Execution failed: Model … is not available".
 - Today S4 shows such a notice in the danger color. S8 changes only its look.
 - The line keeps the role `alert` and the texts of S4 and S7. The S4 tests find "Claude Code is not signed in." and "exit code <n>" in an `alert`.
+- The line keeps the exit code in its text, for example "Claude Code stopped (exit code 7)."
+- The last log lines of the agent go in a fold-out under the line ("Show log"), as brief line 58 requires ("An error notice with the exit code and the last log lines"). The fold-out is a `<details>` inside the `alert` element, so the text of the log stays in the alert. The S4 test A20 (`s4/restart.spec.ts` 108) uses `toContainText`, which reads the text content, so it passes while the fold-out is closed.
+- The sign-in steps of "Claude Code is not signed in." stay visible, not folded.
 - An info notice, such as "Stopped.", does not change.
 
 ### More rules of the widget
@@ -137,6 +142,9 @@ The user decided on 2026-11-27, as part of the frame:
 | S8-3 | A new plan replaces the old one and adds one "Updated the plan" at its point. | Acceptance | `plan-updates.spec.ts`, first test |
 | S8-4 | A change of the step states only adds no "Updated the plan", also after a restart. | Acceptance | `plan-updates.spec.ts`, second test |
 | S8-5 | A plan with no steps clears the widget, also after a restart. | Acceptance | `plan-updates.spec.ts`, third test |
+| S8-6 | In a draft, the user picks another model with the model button. The first start sends that model to the agent. | Acceptance | new, not locked yet |
+| S8-7 | After the first message, the model button is disabled. `sessions.set-model` answers `session-started`. | Acceptance and slice | new, not locked yet |
+| S8-8 | The agent exits with exit code 7 and a log line. The muted line with an info icon shows "exit code 7". The log line is in the fold-out "Show log". | Acceptance | new, not locked yet |
 
 ## Screens
 
@@ -149,7 +157,8 @@ See the mockup. It shows these states:
 - a new plan with the marker in the transcript
 - all steps completed
 - an empty plan
-- a failed turn, as one muted line with an info icon
+- a failed turn, as one muted line with an info icon, the exit code and the log lines in a fold-out
+- a draft, with the Mode control and the model button enabled
 - the error state of the widget: none applies, and the mockup says why
 
 Each state of the mockup shows the fixed frame.
@@ -203,8 +212,26 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 
 ## Interfaces
 
-- No new contract, IPC name or event.
+- One new contract: `sessions.set-model` (user decision C). No new event.
 - The renderer derives the widget from the entries of the `sessions.open` snapshot and the `sessions.changed` events that exist.
+
+### Contract `sessions.set-model`
+
+The advisor answered on the shape: mirror `sessions.set-mode`. Not hard to revert. The user likely agrees.
+
+- Slice: `src/features/sessions/set-model/` with contract, controller, handler and test, like `set-mode/`.
+- Input: `{ id: string, model: string }`. The model uses the schema of `model` in `sessions.create` (`z.string().min(1).max(100)`). The column `sessions.model` stays free text, because the refusal fallback of S5 can save an ID outside the list.
+- Result: `ok({})`.
+- Errors: the set of `sessions.set-mode`: `unknown-session` and `session-started`.
+- The handler uses the draft guard of `set-mode`. After the first message, it answers `session-started`.
+- No new event. The view follows the pattern of `set-mode`: the window keeps the chosen model as view state until the snapshot shows it.
+- A new session takes the model of the last session (`SessionComposer.tsx` 74-77). So after a save, the window tells the app to load a new snapshot of the sessions, as `onModeSaved` does.
+- The start reads the model from the session row, so the draft change reaches the agent (S7 maps the model to the agent).
+
+### Header facts before S5
+
+- S8 merges before S5. Until S5 merges, the header facts "Mode" and "Model" read `session.mode` and `session.model`.
+- S5 then changes the source to `liveMode ?? session.mode`, and adds the model update of the refusal fallback.
 - `Transcript.addPlan` (main) needs one store query: the latest plan entry of a session. `SessionStore` gets a method such as `latestPlan(sessionId)`.
 - A pure function decides "same plan": `isSamePlan(previous, next)`, in `src/features/sessions/entry.ts`.
 - A pure renderer function finds the latest plan and counts the completed steps, for example in `src/renderer/src/session-view.ts`.
@@ -245,6 +272,9 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - `src/renderer/src/components/ModeMenu.tsx`: a text-only look with no border for the control row, if its style needs a variant. Its accessible name stays "Mode".
 - `src/renderer/src/components/Transcript.tsx` and `styles.css`: the muted line with an info icon for an error notice. The role `alert` stays.
 - `COMPOSER_MAX_LINES` in the renderer, for example in `SessionPage.tsx` or a small composer module.
+- `src/features/sessions/set-model/`: new slice with contract, controller, handler and test (decision C).
+- `src/app/contracts.ts` and `src/app/main/composition.ts`: the contract `sessions.set-model`. Shared with S5, S7 and S9.
+- `docs/architecture.md`, "Permissions": the sentence on `sessions.set-mode` also names `sessions.set-model` for a draft.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
 - `src/renderer/src/styles.css`: the global rules of the frame (`.page`, `.content`, `.composer`, `.transcript`, `.error-notice`). The old `.plan` rules can go. Shared with S5.
 - New CSS Modules for `PlanWidget.tsx` and the dock. See "CSS Modules".

@@ -12,8 +12,8 @@ Status: draft for the design review. Not approved.
 
 ### Terms of the rule
 
-- A session is **idle** when its process is ready, and it has no turn, no open permission request and no background task.
-- The **idle time** of a session starts when it becomes idle: at the end of a turn, or when its last open permission request closes outside a turn. An agent update outside a turn restarts it (open choice 3, D).
+- A session is **idle** when its process is ready, and it has no turn, no open permission request, no open question of Claude (elicitation) and no background task.
+- The **idle time** of a session starts when it becomes idle: at the end of a turn, or when its last open card (permission request or question of Claude) closes outside a turn. An agent update outside a turn restarts it (open choice 3, D).
 - The **release time** is 30 minutes for a session that a person started, and 2 minutes for a session that an automation started.
 - The **idle limit** is 6 idle processes.
 
@@ -21,9 +21,9 @@ Status: draft for the design review. Not approved.
 
 1. An idle process closes when its idle time reaches the release time.
 2. When more than 6 processes are idle, the oldest idle process closes first, until 6 stay. The oldest is the one with the earliest idle time. A tie goes to the lower session ID.
-3. A session that is not idle never closes for rule 1 or rule 2. This includes a session in the state Starting and a session with an open permission request.
+3. A session that is not idle never closes for rule 1 or rule 2. This includes a session in the state Starting and a session with an open permission request or an open question of Claude.
 4. The next message after a release resumes the agent session, as after a restart (S4).
-5. A pure function with a clock decides the release. It gets each session with an open process and its busy state (turn, open permission request), the time now and the limits. It returns the sessions to close.
+5. A pure function with a clock decides the release. It gets each session with an open process and its busy state (turn, open permission requests, open questions of Claude), the time now and the limits. It returns the sessions to close.
 6. The release checks again that the session is idle right before the close. A message that came in the meantime keeps the process.
 7. A message that comes while its process closes waits for the close to end. Then a new process starts and resumes. Two processes never run for one session.
 8. `ensureProcess` keeps this order:
@@ -33,12 +33,12 @@ Status: draft for the design review. Not approved.
 9. The close follows the shutdown of `docs/architecture.md`: cancel, close the session, close stdin, then kill the whole process tree after a limit.
 10. A child process of the agent never outlives the release. See open choice 6.
 11. A release keeps the mode that the user chose. S5 saves the live mode of the agent in `sessions.mode` (user decision, S5 open choice 5), and `applySettings` sets that saved mode at each start. Approve all is never saved: after a release, a session that ran in Approve all starts in its last saved mode.
-12. After a release, the S7 notice for the fallback of the mode Auto can show again at the next start. See open choice 7.
+12. After a release, the S7 notice for the fallback of the mode Auto shows again at the next start. `auto` stays saved (user decision B, 2026-11-27), so each start asks for `auto` again. See open choice 7.
 
 ### Busy state outside a turn
 
 - Claude can start a model cycle after the prompt resolved, for example after a background task. Updates and permission requests can then come outside an Aether turn (S5, "Requests outside a turn").
-- So an open permission request counts as busy, also with no turn.
+- So an open permission request, or an open question of Claude (S5 elicitation), counts as busy, also with no turn.
 - A background subagent holds the turn open until it ends (`v1/acp-agent.js` 437-447, 2544-2600). A background shell does not. See open choice 3.
 
 ### When the rule runs
@@ -63,7 +63,7 @@ The user sees no new state. After a release:
 | A21 | A person's session is idle for 30 minutes, measured with a test clock. Its process closes. The next message resumes the session. | Slice, with a fake clock and the simulated agent over real ACP. See open choice 4. |
 | A22 | 7 idle sessions with open processes. The oldest idle process closes. An active session never closes for this limit. | Acceptance. It needs no clock: the seventh turn end triggers the rule. |
 | S9-1 | An automated session closes after 2 minutes, a person's session does not. | Unit, pure function |
-| S9-2 | A session with an open permission request, or with a turn, never closes. | Unit, pure function. The function gets the busy state, so the unit test can cover it. |
+| S9-2 | A session with an open permission request, an open question of Claude, or a turn, never closes. | Unit, pure function. The function gets the busy state, so the unit test can cover it. |
 | S9-3 | A message during the close waits, then resumes in one new process. | Slice |
 | S9-4 | After a release, no process of the agent tree runs. The simulated agent starts a child that outlives its parent. | Slice or acceptance. See open choice 6. |
 
@@ -110,7 +110,7 @@ interface OpenSession {
   startedBy: 'person' | 'automation'
   idleSince: Date | null      // null while the session is busy
   turn: boolean
-  openRequests: number
+  openRequests: number        // permission requests and questions of Claude (elicitations)
 }
 interface ReleaseLimits { releaseMs: { person: number; automation: number }; idleLimit: number }
 function sessionsToRetire(open: readonly OpenSession[], now: Date, limits: ReleaseLimits): string[]
@@ -269,7 +269,7 @@ The advisor answered each choice. Its answer is recorded under the choice.
   - B. A notice that is not saved. Impact: a new change type and a mockup.
 - Recommendation: A.
 - Advisor: A. No mockup, with the reason in "Screens".
-- The repeated notice of the Auto fallback (S7):
+- The repeated notice of the Auto fallback (S7). **Decided by the user on 2026-11-27 (decision B): repeat.** Aether keeps `auto` saved, and the notice shows again at each start, as decision 0012 says. This replaces the earlier recommendation and advisor answer below.
   - Facts: each start sets the saved mode again. If the model cannot use Auto, S7 adds its fallback notice at each start. A release after 30 minutes of idle time then adds the same saved line again.
   - Options:
     - A. Show the fallback notice once per session. Impact: the transcript has one line; a later start does not repeat it.

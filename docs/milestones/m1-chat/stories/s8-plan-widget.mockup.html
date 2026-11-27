@@ -365,7 +365,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: failed turn as one muted line</span>
         <p class="fail-line" role="alert"><i class="info" aria-hidden="true">i</i><span>Claude Code did not accept the model "claude-fake-1".</span></p>
       </div>
-      <p class="fail-line" role="alert"><i class="info" aria-hidden="true">i</i><span>Claude Code stopped (exit code 7).</span></p>
+      <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: exit code in the line, log lines in a fold-out</span>
+        <div class="fail-line" role="alert"><i class="info" aria-hidden="true">i</i><div><span>Claude Code stopped (exit code 7).</span><details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px">Show log</summary><pre class="mono" style="margin:6px 0 0;white-space:pre-wrap">simulated agent: the disk is full
+write failed: ENOSPC</pre></details></div></div>
+      </div>
     </div>
     <div class="dock">
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
@@ -377,6 +380,26 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 <section class="state">
   <h2>8. Loading and error of the widget</h2>
   <p class="muted">Neither applies. The widget has no load and no command of its own. It shows the latest plan entry of the snapshot of <span class="mono">sessions.open</span>, and each event updates it at once. The waiting state is the step in progress with its spinner (state 2). With reduced motion, the spinner stops, like the other spinners of the app.</p>
+</section>
+
+<section class="state">
+  <h2>9. A draft: Mode and model enabled</h2>
+  <p class="muted">User decision C. In a draft, the Mode control and the model button are enabled until the first message. The model button opens the menu "Model" and saves the choice with sessions.set-model. After the first message both are disabled. The model changes later only after the refusal fallback of S5.</p>
+  <div class="window frame" style="height:360px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Fix the login page</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <dl class="facts-row"><div><dt>Profile</dt><dd>Personal</dd></div><div><dt>Folder</dt><dd>C:\work\repo-a</dd></div><div><dt>Model</dt><dd>Opus 5.5</dd></div><div><dt>Mode</dt><dd>Ask</dd></div></dl>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <p class="muted" style="font-size:13px">This session has not started. Send starts it with the prompt below.</p>
+    </div>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">New: the model button is enabled in a draft</span>
+        <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt">Fix the login page: the error text overlaps the button.</textarea>
+          <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode">Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" aria-haspopup="menu">Opus 5.5<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><span class="spacer"></span><button class="send" type="button" aria-label="Send">↑</button></div></div></form>
+      </div>
+    </div>
+  </div>
 </section>
 
 <script>
