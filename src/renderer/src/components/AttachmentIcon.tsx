@@ -18,7 +18,8 @@ const ICONS: Record<Attachment['kind'], LucideIcon> = {
   session: MessageSquare
 }
 
-export function AttachmentIcon({ kind, size }: { kind: Attachment['kind']; size: number }) {
-  const Icon = ICONS[kind]
+/** The kind of a saved attachment is text. A kind that Aether does not know gets the file icon. */
+export function AttachmentIcon({ kind, size }: { kind: string; size: number }) {
+  const Icon = ICONS[kind as Attachment['kind']] ?? File
   return <Icon size={size} />
 }

@@ -10,6 +10,12 @@
 // The control protocol is one JSON object per line, in both directions.
 //
 //   agent -> test   { type: 'hello', pid }                      the agent connected
+//                   { type: 'environment', pid, cwd, env, args }
+//                                                               right after hello: the folder,
+//                                                               the environment and the arguments
+//                                                               after the script (the pipe name
+//                                                               first) that the process got at
+//                                                               its start
 //                   { type: 'message', message }                an ACP message from the client
 //                   { type: 'gate', name, state }               'waiting' or 'passed'
 //                   { type: 'exit', code }                      the agent ends on a scenario step
@@ -101,7 +107,13 @@ socket.on('data', (text) => {
     if (line) command(JSON.parse(line))
   }
 })
-socket.on('connect', () => void report({ type: 'hello', pid: process.pid }))
+socket.on('connect', () => {
+  // The environment report: what the client gave this process at its start. It goes in the same
+  // write as the hello, so a test that closes the pipe after the hello cannot break it. `args` are
+  // the arguments after the script: the pipe name, then any argument that the client added.
+  const start = { type: 'environment', pid: process.pid, cwd: process.cwd(), env: { ...process.env }, args: process.argv.slice(2) }
+  socket.write(`${JSON.stringify({ type: 'hello', pid: process.pid })}\n${JSON.stringify(start)}\n`)
+})
 
 // The steps of a scenario.
 
@@ -124,7 +136,9 @@ async function runSteps(steps, { signal, sessionId, client }) {
   const update = (value) => client.notify(methods.client.session.update, { sessionId, update: value })
   const say = (text) => update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } })
   for (const step of steps) {
-    if (!client && (step.do === 'say' || step.do === 'tool')) throw new Error(`Step "${step.do}" needs a session.`)
+    if (!client && (step.do === 'say' || step.do === 'tool' || step.do === 'update')) {
+      throw new Error(`Step "${step.do}" needs a session.`)
+    }
     switch (step.do) {
       case 'gate':
         if ((await waitAtGate(step.name, signal)) === 'cancelled') return 'cancelled'
@@ -147,6 +161,12 @@ async function runSteps(steps, { signal, sessionId, client }) {
         await say(allowed ? step.allowed : step.refused)
         break
       }
+      case 'update':
+        await update(step.update)
+        break
+      case 'log':
+        await new Promise((resolve) => process.stderr.write(`${step.text}\n`, () => resolve()))
+        break
       case 'fail':
         throw new RequestError(step.code, step.message)
       case 'exit':
@@ -162,6 +182,54 @@ async function runSteps(steps, { signal, sessionId, client }) {
 
 // The ACP side.
 
+/** The permission modes of Claude Code. The agent accepts these in `session/set_mode`. */
+const MODES = [
+  { id: 'default', name: 'Default' },
+  { id: 'acceptEdits', name: 'Accept edits' },
+  { id: 'plan', name: 'Plan' },
+  { id: 'auto', name: 'Auto' },
+  { id: 'bypassPermissions', name: 'Bypass permissions' }
+]
+
+/** The values of the `model` configuration option. The agent accepts these in `session/set_config_option`. */
+const MODELS = ['default', 'claude-fable-5-2', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
+
+/** The mode that Claude Code uses when the model cannot use `auto`. */
+const AUTO_FALLBACK = 'acceptEdits'
+
+/**
+ * Applies the fallback of Claude Code: when the mode is `auto` and the scenario says that the model
+ * cannot use it, the session uses `acceptEdits` and the agent sends a `current_mode_update`. It runs
+ * after each change of the mode or the model, so the order of the two requests does not matter.
+ */
+async function applyAutoFallback(sessionId, client) {
+  const current = settingsOf(sessionId)
+  if (current.mode !== 'auto' || !(scenario.noAuto ?? []).includes(current.model)) return
+  current.mode = AUTO_FALLBACK
+  await client.notify(methods.client.session.update, {
+    sessionId,
+    update: { sessionUpdate: 'current_mode_update', currentModeId: AUTO_FALLBACK }
+  })
+}
+
+/** The current mode and model of each session. */
+const settings = new Map()
+function settingsOf(sessionId) {
+  if (!settings.has(sessionId)) settings.set(sessionId, { mode: 'default', model: 'default' })
+  return settings.get(sessionId)
+}
+
+/** The modes and the configuration options of a session, as `session/new` and `session/resume` answer them. */
+function stateOf(sessionId) {
+  const { mode, model } = settingsOf(sessionId)
+  return {
+    modes: { currentModeId: mode, availableModes: MODES },
+    configOptions: [
+      { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: MODELS.map((value) => ({ value, name: value })) }
+    ]
+  }
+}
+
 let nextSession = 0
 /** The running turn of each session. A cancel notification aborts it. */
 const turns = new Map()
@@ -172,18 +240,37 @@ const app = agent({ name: 'simulated-agent' })
     await runSteps(scenario.initialize, { signal: new AbortController().signal })
     return {
       protocolVersion: PROTOCOL_VERSION,
-      agentCapabilities: { sessionCapabilities: { resume: {} } },
+      // Claude Code also takes `additionalDirectories` in `session/new` and `session/resume`.
+      agentCapabilities: { sessionCapabilities: { resume: {}, additionalDirectories: {} } },
       authMethods: []
     }
   })
   .onRequest(methods.agent.session.new, async () => {
     await ready
-    return { sessionId: `s${++nextSession}` }
+    const sessionId = `s${++nextSession}`
+    return { sessionId, ...stateOf(sessionId) }
   })
   .onRequest(methods.agent.session.resume, async ({ params }) => {
     await ready
     if (!params.sessionId.startsWith('s')) throw RequestError.invalidParams(undefined, 'Unknown session')
+    return stateOf(params.sessionId)
+  })
+  .onRequest(methods.agent.session.setMode, async ({ params, client }) => {
+    await ready
+    if (!MODES.some((mode) => mode.id === params.modeId)) {
+      throw RequestError.invalidParams(undefined, `Unknown mode "${params.modeId}"`)
+    }
+    settingsOf(params.sessionId).mode = params.modeId
+    await applyAutoFallback(params.sessionId, client)
     return {}
+  })
+  .onRequest(methods.agent.session.setConfigOption, async ({ params, client }) => {
+    await ready
+    if (params.configId !== 'model') throw RequestError.invalidParams(undefined, `Unknown option "${params.configId}"`)
+    if (!MODELS.includes(params.value)) throw RequestError.invalidParams(undefined, `Unknown model "${params.value}"`)
+    settingsOf(params.sessionId).model = params.value
+    await applyAutoFallback(params.sessionId, client)
+    return { configOptions: stateOf(params.sessionId).configOptions }
   })
   .onNotification(methods.agent.session.cancel, ({ params }) => turns.get(params.sessionId)?.abort())
   .onRequest(methods.agent.session.prompt, async ({ params, client }) => {

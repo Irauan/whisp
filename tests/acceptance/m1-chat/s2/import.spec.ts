@@ -1,0 +1,354 @@
+// A17 of milestone m1-chat, on the built app, with flow 1 of the brief.
+//
+// A17: a profile with `workspace.json` (2 accounts, 3 session drafts) and `runs/`. After the
+// first start after the upgrade, 2 workspaces and 3 sessions exist. Each draft has the mode
+// from the import order. The old files are unchanged.
+// Flow 1: Aether imports each account as a workspace. A dialog asks for the root of each one.
+// User decision, 2026-11-26: a workspace of the brief is now a profile, and its root is its
+// workspace directory. The tests use the new terms.
+//
+// The import order of the brief maps the old settings of a draft to a mode:
+//   Plan -> plan, Autopilot -> auto, Approve all -> approve-all, Assisted -> auto, else -> ask.
+// The old mode is one of interactive, plan, autopilot. The old permissions are one of ask,
+// assisted, all. The drafts of the two profiles below cover each branch, and the order of the
+// branches: a draft that matches two branches gets the mode of the first.
+//
+// The tests read the mode from the database, because S2 shows no mode. S3 shows it.
+// No test sleeps. Each wait is an auto-waiting check of Playwright.
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { Page } from '@playwright/test'
+import {
+  answerDirectoryDialog,
+  expect,
+  holdsPath,
+  modesOf,
+  readFiles,
+  DIRECTORY_DIALOG,
+  directoryField,
+  SAVE_DIRECTORIES,
+  test,
+  type AetherApp,
+  type Mode,
+  type SavedData
+} from './fixture'
+
+interface Draft {
+  prompt: string
+  account: 'personal' | 'client'
+  mode: 'interactive' | 'plan' | 'autopilot'
+  permissions: 'ask' | 'assisted' | 'all'
+  /** The mode that the import order gives. */
+  expected: Mode
+}
+
+const PROFILES = { personal: 'Personal', client: 'Client Example' } as const
+
+/** The drafts of A17. Each one has Approve all, so only the order picks Plan or Auto first. */
+const DRAFTS: Draft[] = [
+  // Plan comes before Approve all.
+  { prompt: 'Write the release notes', account: 'personal', mode: 'plan', permissions: 'all', expected: 'plan' },
+  // Autopilot comes before Approve all.
+  { prompt: 'Fix the login page', account: 'personal', mode: 'autopilot', permissions: 'all', expected: 'auto' },
+  // Approve all, with no Plan and no Autopilot.
+  { prompt: 'Review the invoice export', account: 'client', mode: 'interactive', permissions: 'all', expected: 'approve-all' }
+]
+
+/** The other drafts: Assisted, the else branch, and Plan before Assisted. */
+const OTHER_DRAFTS: Draft[] = [
+  { prompt: 'Sort the inbox', account: 'personal', mode: 'interactive', permissions: 'assisted', expected: 'auto' },
+  { prompt: 'Rename the old files', account: 'personal', mode: 'interactive', permissions: 'ask', expected: 'ask' },
+  { prompt: 'Count the open issues', account: 'client', mode: 'plan', permissions: 'assisted', expected: 'plan' }
+]
+
+/** The workspace directories that the user chooses in the import dialog. */
+const directoriesOf = (aether: AetherApp) => ({
+  [PROFILES.personal]: join(aether.root, 'directories', 'personal'),
+  [PROFILES.client]: join(aether.root, 'directories', 'client')
+})
+
+/**
+ * Writes the old files: `workspace.json` of version 4 with 2 accounts and the drafts, and a
+ * `runs/` folder with one conversation file and one unreadable conversation file.
+ *
+ * The app writes `workspace.json` as JSON with 2 spaces and LF. This file is compact JSON with
+ * CRLF and a final line end, so a rewrite of the file by the app shows as a change.
+ */
+async function writeOldProfile(aether: AetherApp, drafts: Draft[]): Promise<void> {
+  const directories = directoriesOf(aether)
+  const at = '2026-01-01T00:00:00.000Z'
+  const folderOf = (draft: Draft) => join(directories[PROFILES[draft.account]], 'repo-a')
+  for (const directory of Object.values(directories)) await mkdir(join(directory, 'repo-a'), { recursive: true })
+
+  const profile = {
+    version: 4,
+    accounts: [
+      { id: 'personal', label: PROFILES.personal, github: null },
+      {
+        id: 'client',
+        label: PROFILES.client,
+        github: { login: 'example-user-one', name: 'Example User One', avatar: null }
+      }
+    ],
+    currentAccountId: 'personal',
+    projects: [],
+    workItems: [],
+    sessions: drafts.map((draft, index) => ({
+      id: `session-${index + 1}`,
+      accountId: draft.account,
+      title: draft.prompt,
+      prompt: draft.prompt,
+      settings: {
+        folder: folderOf(draft),
+        mode: draft.mode,
+        permissions: draft.permissions,
+        model: 'default',
+        checkout: 'folder',
+        attachments: []
+      },
+      createdAt: at
+    }))
+  }
+  const lines = JSON.stringify(profile).replace(/,"sessions":/, ',\r\n"sessions":')
+  await writeFile(join(aether.dataDir, 'workspace.json'), `${lines}\r\n`)
+
+  // The conversation files of the old work items. One of them is unreadable.
+  const runs = join(aether.dataDir, 'runs')
+  await mkdir(runs, { recursive: true })
+  const run = {
+    itemId: 'work-item-1',
+    agentId: null,
+    sessionId: null,
+    status: 'idle',
+    entries: [{ kind: 'user', text: 'An old message' }],
+    question: null
+  }
+  await writeFile(join(runs, 'work-item-1.json'), `${JSON.stringify(run)}\r\n`)
+  await writeFile(join(runs, 'work-item-2.json'), '{"itemId":"work-item-2","entries":[\r\n')
+}
+
+const OLD_FILES = ['workspace.json', 'runs']
+
+const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Main' })
+
+/** Switches to a profile through the profile menu. */
+async function switchProfile(page: Page, from: string, to: string): Promise<void> {
+  await page.getByRole('button', { name: new RegExp(`^${from}`) }).first().click()
+  const menu = page.getByRole('group', { name: 'Profiles' })
+  await expect(menu, 'The profile menu "Profiles" does not open.').toBeVisible()
+  await menu.getByRole('button', { name: to, exact: true }).click()
+}
+
+/** Opens the settings of the current profile through the profile menu, and checks its name. */
+async function openSettings(page: Page, current: string) {
+  await page.getByRole('button', { name: new RegExp(`^${current}`) }).first().click()
+  const menu = page.getByRole('group', { name: 'Profiles' })
+  await expect(menu, 'The profile menu "Profiles" does not open.').toBeVisible()
+  await menu.getByRole('button', { name: 'Profile settings', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Profile settings' })
+  await expect(dialog, `The dialog "Profile settings" of ${current} does not open.`).toBeVisible()
+  await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(current)
+  return dialog
+}
+
+/** Checks that the sidebar lists the drafts of one profile, and no draft of the other. */
+async function sidebarShows(page: Page, drafts: Draft[], account: Draft['account']): Promise<void> {
+  for (const draft of drafts) {
+    const item = sidebar(page).getByText(draft.prompt, { exact: true })
+    if (draft.account === account) {
+      await expect(item, `The sidebar of ${PROFILES[account]} does not list its draft "${draft.prompt}".`).toBeVisible()
+    } else {
+      await expect(item, `The sidebar of ${PROFILES[account]} lists "${draft.prompt}" of another profile.`).toHaveCount(0)
+    }
+  }
+}
+
+/** Checks the saved data: 2 profiles, and one session per draft with the mode of the import order. */
+function expectImported(data: SavedData, drafts: Draft[]): void {
+  const dump = `The database holds:\n${data.describe()}`
+
+  // 2 profiles: one row per account name, in one table with 2 rows. The table name does not count.
+  const profileRows = Object.values(PROFILES).map((name) => {
+    const rows = data.holding(name)
+    expect(rows, `A17: the database must hold one profile "${name}".\n${dump}`).toHaveLength(1)
+    return rows[0]!
+  })
+  const profileTable = profileRows[0]!.table
+  expect(profileRows.map((row) => row.table), `A17: the profiles must be in one table.\n${dump}`).toEqual([
+    profileTable,
+    profileTable
+  ])
+  expect(data.rowsOf(profileTable), `A17: exactly 2 profiles must exist.\n${dump}`).toHaveLength(2)
+
+  // 3 sessions: one row per draft, with its prompt and its mode, in one table with 3 rows.
+  const sessionRows = drafts.map((draft) => {
+    const rows = data.sessionsWithPrompt(draft.prompt)
+    expect(rows, `A17: the database must hold one session with the prompt "${draft.prompt}" and a mode.\n${dump}`).toHaveLength(1)
+    return { draft, row: rows[0]! }
+  })
+  const sessionTable = sessionRows[0]!.row.table
+  for (const { row } of sessionRows) {
+    expect(row.table, `A17: the sessions must be in one table.\n${dump}`).toBe(sessionTable)
+  }
+  expect(data.rowsOf(sessionTable), `A17: exactly 3 sessions must exist.\n${dump}`).toHaveLength(3)
+
+  // Each draft has the mode from the import order.
+  for (const { draft, row } of sessionRows) {
+    expect(
+      { prompt: draft.prompt, modes: modesOf(row) },
+      `A17: the draft with mode ${draft.mode} and permissions ${draft.permissions} must have the mode ${draft.expected}.`
+    ).toEqual({ prompt: draft.prompt, modes: [draft.expected] })
+  }
+}
+
+test.describe('A17: the first start imports the old profile', () => {
+  test('A17 (flow 1): the first start shows a dialog that asks for the workspace directory of each profile, and saves them', async ({
+    aether
+  }) => {
+    await writeOldProfile(aether, DRAFTS)
+    const directories = directoriesOf(aether)
+    const page = await aether.start()
+
+    const dialog = page.getByRole('dialog', { name: DIRECTORY_DIALOG })
+    await expect(dialog, `A17 (flow 1): no dialog "${DIRECTORY_DIALOG}" asks for the workspace directory of each profile.`).toBeVisible()
+    // One field for each imported profile, named by the profile.
+    await expect(dialog.getByRole('textbox', { name: /^Workspace directory of / })).toHaveCount(2)
+    for (const [profile, path] of Object.entries(directories)) {
+      const field = dialog.getByRole('textbox', { name: directoryField(profile), exact: true })
+      await expect(field, `The dialog has no field "${directoryField(profile)}".`).toBeVisible()
+      await field.fill(path)
+    }
+    await dialog.getByRole('button', { name: SAVE_DIRECTORIES, exact: true }).click()
+    await expect(dialog).toBeHidden()
+
+    // Each profile keeps the workspace directory that the user chose.
+    await aether.stop()
+    const data = await aether.readDatabase()
+    for (const [profile, path] of Object.entries(directories)) {
+      const rows = data.holding(profile)
+      expect(rows, `A17: the database must hold one profile "${profile}".\n${data.describe()}`).toHaveLength(1)
+      expect(
+        holdsPath(rows[0]!, path),
+        `A17: the profile "${profile}" must keep the workspace directory ${path}.\n${data.describe()}`
+      ).toBe(true)
+    }
+  })
+
+  test('A17: 2 profiles and 3 sessions exist, and each draft has the mode of the import order (Plan, Autopilot, Approve all)', async ({
+    aether
+  }) => {
+    await writeOldProfile(aether, DRAFTS)
+    const page = await aether.start()
+    await answerDirectoryDialog(page, directoriesOf(aether))
+
+    // Each profile owns its sessions: the sidebar lists the drafts of the current profile only.
+    await sidebarShows(page, DRAFTS, 'personal')
+    await switchProfile(page, PROFILES.personal, PROFILES.client)
+    await sidebarShows(page, DRAFTS, 'client')
+
+    await aether.stop()
+    expectImported(await aether.readDatabase(), DRAFTS)
+  })
+
+  test('A17: the import order maps Assisted to Auto, the other settings to Ask, and Plan before Assisted', async ({
+    aether
+  }) => {
+    await writeOldProfile(aether, OTHER_DRAFTS)
+    const page = await aether.start()
+    await answerDirectoryDialog(page, directoriesOf(aether))
+    await sidebarShows(page, OTHER_DRAFTS, 'personal')
+
+    await aether.stop()
+    expectImported(await aether.readDatabase(), OTHER_DRAFTS)
+  })
+
+  test('A17: the old workspace.json and runs/ stay byte-equal, and a second start imports nothing again', async ({
+    aether
+  }) => {
+    await writeOldProfile(aether, DRAFTS)
+    const before = await readFiles(aether.dataDir, OLD_FILES)
+    expect([...before.keys()].sort()).toEqual(['runs\\work-item-1.json', 'runs\\work-item-2.json', 'workspace.json'])
+
+    // The first start, with the answer of the import dialog.
+    const page = await aether.start()
+    await answerDirectoryDialog(page, directoriesOf(aether))
+    await sidebarShows(page, DRAFTS, 'personal')
+    await aether.stop()
+    expect(await readFiles(aether.dataDir, OLD_FILES), 'A17: the first start changed the old files.').toEqual(before)
+
+    // The second start: no import dialog, and the same profiles and sessions.
+    const again = await aether.start()
+    await sidebarShows(again, DRAFTS, 'personal')
+    // A click proves that no modal dialog blocks the window.
+    await switchProfile(again, PROFILES.personal, PROFILES.client)
+    await sidebarShows(again, DRAFTS, 'client')
+    await expect(again.getByRole('dialog', { name: DIRECTORY_DIALOG }), 'A17: the second start asks for the workspace directories again.').toHaveCount(0)
+    await aether.stop()
+
+    expect(await readFiles(aether.dataDir, OLD_FILES), 'A17: the second start changed the old files.').toEqual(before)
+    expectImported(await aether.readDatabase(), DRAFTS)
+  })
+
+  test('A17: after the import, a switch of the profile and an edit of its workspace directory leave workspace.json and runs/ byte-equal', async ({
+    aether
+  }) => {
+    // Decision 0005: the old files stay unchanged, also after a change of the imported data.
+    await writeOldProfile(aether, DRAFTS)
+    const before = await readFiles(aether.dataDir, OLD_FILES)
+    const directories = directoriesOf(aether)
+    const edited = join(aether.root, 'directories', 'client-edited')
+    await mkdir(edited, { recursive: true })
+
+    const page = await aether.start()
+    await answerDirectoryDialog(page, directories)
+    await switchProfile(page, PROFILES.personal, PROFILES.client)
+    await sidebarShows(page, DRAFTS, 'client')
+
+    // Edit the workspace directory of "Client Example" in its settings.
+    const settings = await openSettings(page, PROFILES.client)
+    const directory = settings.getByRole('textbox', { name: 'Workspace directory', exact: true })
+    await expect(
+      directory,
+      'The profile settings do not show the workspace directory that the import dialog saved.'
+    ).toHaveValue(directories[PROFILES.client]!)
+    await directory.fill(edited)
+    await settings.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(settings).toBeHidden()
+    await aether.stop()
+
+    expect(await readFiles(aether.dataDir, OLD_FILES), 'A17: a switch and an edit of a workspace directory changed the old files.').toEqual(
+      before
+    )
+    const data = await aether.readDatabase()
+    const rows = data.holding(PROFILES.client)
+    expect(rows, `A17: the database must hold one profile "${PROFILES.client}".\n${data.describe()}`).toHaveLength(1)
+    expect(
+      holdsPath(rows[0]!, edited),
+      `A17: the profile "${PROFILES.client}" must keep the edited workspace directory ${edited}.\n${data.describe()}`
+    ).toBe(true)
+    expect(
+      holdsPath(rows[0]!, directories[PROFILES.client]!),
+      `A17: the profile "${PROFILES.client}" still holds its old workspace directory.\n${data.describe()}`
+    ).toBe(false)
+  })
+
+  test('A17: the GitHub account of an old account carries over to its profile', async ({ aether }) => {
+    await writeOldProfile(aether, DRAFTS)
+    const page = await aether.start()
+    await answerDirectoryDialog(page, directoriesOf(aether))
+
+    // "Personal" had no GitHub account. Its settings do not show the one of "Client Example".
+    const personal = await openSettings(page, PROFILES.personal)
+    await expect(personal.getByText('@example-user-one', { exact: true })).toHaveCount(0)
+    await personal.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(personal).toBeHidden()
+
+    // "Client Example" had the GitHub account example-user-one.
+    await switchProfile(page, PROFILES.personal, PROFILES.client)
+    const client = await openSettings(page, PROFILES.client)
+    await expect(
+      client.getByText('@example-user-one', { exact: true }),
+      'A17: the settings of "Client Example" do not show its GitHub account @example-user-one.'
+    ).toBeVisible()
+  })
+})

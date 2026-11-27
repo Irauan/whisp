@@ -1,23 +1,19 @@
-import { stat } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import iconIco from '../../resources/icon.ico?asset'
 import iconPng from '../../resources/icon.png?asset'
 import { contracts, events } from '../app/contracts'
+import { composeMain, type Composition } from '../app/main/composition'
 import { createInvoke, createSubscribe } from '../app/main/ipc'
-import { listGithubAccounts } from '../features/workspaces/list-github-accounts/list-github-accounts.contract'
-import { listGithubAccountsController } from '../features/workspaces/list-github-accounts/list-github-accounts.controller'
+import { AcpAgents } from '../providers/acp/acp-agents'
+import { claudeCodeRecipe } from '../providers/claude-code/claude-code'
 import { GithubCli } from '../providers/github-cli/github-cli'
-import type { GithubAccounts } from '../shared/bridge'
+import { waitAtMost } from '../building-blocks/wait-at-most'
 import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
-import { isWorkspace } from '../shared/model'
-import { AgentHost } from './agents/host'
 import { AgentRegistry } from './agents/registry'
-import { isItemId, RunStore } from './agents/run-store'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
 import { git, listRepositoryFiles } from './repository'
-import { WorkspaceFile } from './workspace-file'
 
 if (process.env.AETHER_DATA_DIR) app.setPath('userData', process.env.AETHER_DATA_DIR)
 
@@ -42,21 +38,33 @@ function isAppFrame(event: IpcMainInvokeEvent): boolean {
   return address === appPage
 }
 
-const invoke = createInvoke({
-  contracts,
-  controllers: { [listGithubAccounts.name]: listGithubAccountsController(github) },
-  isTrusted: isAppFrame,
-  log: (message, cause) => console.error(message, cause)
-})
-const subscription = createSubscribe({ events, isTrusted: isAppFrame })
-ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
-ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
+/** The database and the controllers. They exist after the start, before the first window. */
+let main: Composition | null = null
 
-const file = new WorkspaceFile(join(app.getPath('userData'), 'workspace.json'))
-const registry = new AgentRegistry(join(app.getPath('userData'), 'agents.json'))
-const agents = new AgentHost(registry, new RunStore(join(app.getPath('userData'), 'runs')), (run) => {
-  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('agent:run', run)
-})
+/** Opens the database, runs the import and connects the handlers of `invoke` and `subscribe`. */
+function startMain(): void {
+  const dataDir = app.getPath('userData')
+  // An entry `claude-code` in `agents.json` replaces only the program and the arguments of the Claude recipe.
+  const registry = new AgentRegistry(join(dataDir, 'agents.json'))
+  const agents = new AcpAgents({ recipe: claudeCodeRecipe({ override: () => registry.claudeCodeOverride() }) })
+  const subscription = createSubscribe({ events, isTrusted: isAppFrame })
+  const composed = composeMain({ dataDir, github, agents, publish: subscription.publish })
+  if (!composed.ok) {
+    // A newer database, or a failure that Aether cannot repair. Aether writes nothing and exits.
+    dialog.showErrorBox('Aether could not start', composed.error.message)
+    app.exit(1)
+    return
+  }
+  main = composed.value
+  const invoke = createInvoke({
+    contracts,
+    controllers: main.controllers,
+    isTrusted: isAppFrame,
+    log: (message, cause) => console.error(message, cause)
+  })
+  ipcMain.handle(INVOKE_CHANNEL, (event, name: unknown, input: unknown) => invoke(event, name, input))
+  ipcMain.handle(SUBSCRIBE_CHANNEL, (event, name: unknown) => subscription.handler(event, name))
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -95,16 +103,6 @@ function asText(value: unknown): string {
   return value
 }
 
-ipcMain.handle('workspace:load', () => file.load())
-ipcMain.handle('workspace:save', (_event, workspace: unknown) => {
-  if (!isWorkspace(workspace)) throw new Error('Refused to save data that is not a workspace.')
-  return file.save(workspace)
-})
-// The old channel. The renderer reads the accounts through `invoke` now. m1-chat removes this one.
-ipcMain.handle('github:accounts', async (): Promise<GithubAccounts> => {
-  const result = await github.listAccounts()
-  return result.ok ? { ok: true, profiles: result.value } : { ok: false, reason: result.error.message }
-})
 ipcMain.handle('folder:choose', () => chooseFolder())
 ipcMain.handle('folders:choose', () => chooseFolders())
 ipcMain.handle('files:choose', () => chooseFiles())
@@ -116,46 +114,25 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
   )
 )
 
-async function isFolder(path: unknown): Promise<boolean> {
-  if (typeof path !== 'string' || !isAbsolute(path)) return false
-  try {
-    return (await stat(path)).isDirectory()
-  } catch {
-    return false
-  }
-}
-
-function requireItemId(itemId: unknown): string {
-  if (!isItemId(itemId)) throw new Error('Not a work item id.')
-  return itemId
-}
-
-ipcMain.handle('agents:list', () => registry.info())
-ipcMain.handle('agent:get', (_event, itemId: unknown) => agents.get(requireItemId(itemId)))
-ipcMain.handle('agent:send', async (_event, request: unknown) => {
-  const { itemId, agentId, cwd, text } = (request ?? {}) as Record<string, unknown>
-  if (typeof agentId !== 'string' || typeof text !== 'string') throw new Error('Not a message for an agent.')
-  if (!(await isFolder(cwd))) throw new Error('The project folder does not exist.')
-  // Resolves when the turn ends. Its progress arrives as agent:run events, and
-  // only a message that cannot start rejects.
-  return agents.send({ itemId: requireItemId(itemId), agentId, cwd: cwd as string, text })
-})
-ipcMain.handle('agent:cancel', (_event, itemId: unknown) => agents.cancel(requireItemId(itemId)))
-ipcMain.handle('agent:answer', (_event, itemId: unknown, choiceId: unknown) =>
-  agents.answer(requireItemId(itemId), typeof choiceId === 'string' ? choiceId : null)
-)
-ipcMain.handle('agent:forget', (_event, itemId: unknown) => agents.forget(requireItemId(itemId)))
-
-// Finish the saves in progress, and stop the agents, before the app exits.
-let settled = false
+// Before Aether quits, end the agent processes: cancel, close, and kill the process trees after a limit.
+// The quit goes on when they are gone, or when the limit of the whole wait passes: one hang must not
+// keep Aether open for ever. Each change is one transaction, so no save is in progress at the exit.
+// The limit is larger than the longest end of a process: its close limits add up to about 11 seconds.
+const QUIT_LIMIT_MS = 30_000
+let quitting = false
 app.on('before-quit', (event) => {
-  if (settled) return
+  if (quitting || !main) return
+  quitting = true
   event.preventDefault()
-  void Promise.all([file.settled(), agents.shutdown()]).then(() => {
-    settled = true
+  const shutdown = main.shutdown().catch((cause: unknown) => console.error('Aether could not end the agent processes.', cause))
+  void waitAtMost(shutdown, QUIT_LIMIT_MS).then((outcome) => {
+    if (outcome === 'timeout') console.error('Aether could not end the agent processes in time. It quits anyway.')
     app.quit()
   })
 })
+
+// Close the database.
+app.on('will-quit', () => main?.close())
 
 app.on('second-instance', () => {
   const [window] = BrowserWindow.getAllWindows()
@@ -172,6 +149,8 @@ if (hasLock) {
   app
     .whenReady()
     .then(() => {
+      startMain()
+      if (!main) return
       createWindow()
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()

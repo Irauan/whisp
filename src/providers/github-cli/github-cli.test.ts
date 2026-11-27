@@ -122,3 +122,19 @@ it('lists the pull requests and issues of the repository with the token of the a
     ]
   })
 })
+
+it('reads the token of one account without the token variables of Aether', async () => {
+  const calls: { line: string; withoutTokens: boolean | undefined }[] = []
+  const github = new GithubCli(async (args, _token, options) => {
+    calls.push({ line: args.join(' '), withoutTokens: options?.withoutTokens })
+    return { stdout: 'fake-token-of-two\n', missing: false }
+  })
+  expect(await github.tokenOf('example-two')).toEqual({ ok: true, value: 'fake-token-of-two' })
+  expect(calls).toEqual([{ line: 'auth token --hostname github.com --user example-two', withoutTokens: true }])
+})
+
+it('gives an error and no token when gh has none for the account, or is missing', async () => {
+  expect(await new GithubCli(fakeGh({})).tokenOf('example-two')).toMatchObject({ ok: false, error: { code: 'github-token-missing' } })
+  const missing = new GithubCli(async () => ({ stdout: '', missing: true }))
+  expect(await missing.tokenOf('example-two')).toMatchObject({ ok: false, error: { code: 'github-cli-missing' } })
+})

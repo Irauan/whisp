@@ -18,6 +18,8 @@ import { ControlServer } from './control'
 interface Harness {
   child: ChildProcess
   exited: Promise<number | null>
+  /** What the agent wrote to its log (stderr) so far. */
+  log(): string
   connection: ClientConnection
   updates: Record<string, unknown>[]
   /** What the client answers to a permission request. */
@@ -33,10 +35,17 @@ interface Harness {
 let control: ControlServer
 let harness: Harness[]
 
-function startAgent(): Harness {
+function startAgent(env: NodeJS.ProcessEnv = process.env): Harness {
   const { command, args } = control.agent
-  const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true })
-  const exited = new Promise<number | null>((resolve) => child.once('exit', resolve))
+  const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, env })
+  let log = ''
+  child.stderr!.setEncoding('utf8')
+  child.stderr!.on('data', (text: string) => {
+    log += text
+    process.stderr.write(text)
+  })
+  // The exit code comes with 'close', after the log is complete.
+  const exited = new Promise<number | null>((resolve) => child.once('close', resolve))
   const updates: Record<string, unknown>[] = []
   const permissions: unknown[] = []
   const state = {
@@ -62,6 +71,7 @@ function startAgent(): Harness {
   const made: Harness = {
     child,
     exited,
+    log: () => log,
     connection,
     updates,
     permissions,
@@ -285,6 +295,205 @@ describe('simulated agent', () => {
       expect(answered).toBe(true)
       await agent.prompt(await agent.newSession())
       expect(texts(agent.updates)).toEqual(['Hel', 'lo'])
+    })
+  })
+
+  // Added for story S4 of milestone m1-chat: the start report, the process of each report, the
+  // steps "update" and "log", the log line of the crash scenario, and the mode and model requests.
+  describe('start report and processes', () => {
+    it('reports its process ID, its folder and its environment when it connects', async () => {
+      const agent = startAgent({ ...process.env, AETHER_SIMULATED_PROBE: 'probe-value' })
+      expect(await control.waitForAgent()).toBe(agent.child.pid)
+      const start = await control.waitForEnvironment()
+      expect(start.pid).toBe(agent.child.pid)
+      expect(start.cwd).toBe(process.cwd())
+      expect(start.env.AETHER_SIMULATED_PROBE).toBe('probe-value')
+      expect(control.pids).toEqual([agent.child.pid])
+      expect(control.environments.map(({ pid }) => pid)).toEqual([agent.child.pid])
+    })
+
+    it('tells which process received each message', async () => {
+      const first = startAgent()
+      const firstPid = await control.waitForAgent()
+      const second = startAgent()
+      const secondPid = await control.waitForAgent()
+      await first.initialize()
+      await second.initialize()
+      await first.prompt(await first.newSession())
+      await second.prompt(await second.newSession())
+      await control.waitForMessage('session/prompt')
+      await control.waitForMessage('session/prompt')
+      expect(firstPid).not.toBe(secondPid)
+      expect(control.receivedBy('session/new').map(({ pid }) => pid)).toEqual([firstPid, secondPid])
+      expect(control.receivedBy('session/prompt').map(({ pid }) => pid)).toEqual([firstPid, secondPid])
+    })
+
+    it('tells which process closed its pipe', async () => {
+      await control.scenario('crash', { exitCode: 5 })
+      const agent = startAgent()
+      const pid = await control.waitForAgent()
+      await agent.initialize()
+      await expect(agent.prompt(await agent.newSession())).rejects.toBeDefined()
+      expect(await control.waitForClose()).toBe(pid)
+    })
+  })
+
+  describe('steps update and log', () => {
+    it('sends the update of a step as it is, with no permission request', async () => {
+      const update = { sessionUpdate: 'tool_call', toolCallId: 'run', title: 'Run the tests', kind: 'execute', status: 'in_progress' }
+      await control.scenario('steps', { prompt: [{ do: 'update', update }, { do: 'say', text: 'Done' }] })
+      const agent = startAgent()
+      await agent.initialize()
+      expect(await agent.prompt(await agent.newSession())).toEqual({ stopReason: 'end_turn' })
+      expect(agent.updates).toMatchObject([update, { sessionUpdate: 'agent_message_chunk', content: { text: 'Done' } }])
+      expect(agent.permissions).toEqual([])
+    })
+
+    it('writes the line of a log step to stderr', async () => {
+      await control.scenario('steps', { prompt: [{ do: 'log', text: 'simulated agent: a log line' }, { do: 'gate', name: 'logged' }] })
+      const agent = startAgent()
+      await agent.initialize()
+      const turn = agent.prompt(await agent.newSession())
+      await control.waitForGate('logged')
+      await control.open('logged')
+      await turn
+      agent.child.stdin!.end()
+      await agent.exited
+      expect(agent.log()).toContain('simulated agent: a log line')
+    })
+
+    it('writes the log line of the crash scenario, then ends with its exit code', async () => {
+      await control.scenario('crash', { exitCode: 4, log: 'simulated agent: the disk is full' })
+      const agent = startAgent()
+      await agent.initialize()
+      await expect(agent.prompt(await agent.newSession())).rejects.toBeDefined()
+      expect(await agent.exited).toBe(4)
+      expect(agent.log()).toContain('simulated agent: the disk is full')
+    })
+  })
+
+  describe('modes and models', () => {
+    const CLAUDE_MODES = ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']
+
+    it('answers session/new and session/resume with the five Claude modes and the model option', async () => {
+      const agent = startAgent()
+      await agent.initialize()
+      const created = await agent.connection.agent.request(methods.agent.session.new, { cwd: process.cwd(), mcpServers: [] })
+      expect(created.modes?.currentModeId).toBe('default')
+      expect(created.modes?.availableModes.map(({ id }) => id)).toEqual(CLAUDE_MODES)
+      expect(created.configOptions).toMatchObject([{ id: 'model', type: 'select', currentValue: 'default' }])
+      const resumed = await agent.connection.agent.request(methods.agent.session.resume, {
+        sessionId: created.sessionId,
+        cwd: process.cwd(),
+        mcpServers: []
+      })
+      expect(resumed.modes?.currentModeId).toBe('default')
+    })
+
+    it('applies each permission mode of Claude and refuses another mode', async () => {
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      for (const modeId of CLAUDE_MODES) {
+        await agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId })
+      }
+      await expect(agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId: 'ask' })).rejects.toBeInstanceOf(
+        RequestError
+      )
+      const resumed = await agent.connection.agent.request(methods.agent.session.resume, { sessionId, cwd: process.cwd(), mcpServers: [] })
+      expect(resumed.modes?.currentModeId).toBe('bypassPermissions')
+    })
+
+    it('applies the model option and refuses an unknown model', async () => {
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      const answer = await agent.connection.agent.request(methods.agent.session.setConfigOption, {
+        sessionId,
+        configId: 'model',
+        value: 'claude-opus-5-5'
+      })
+      expect(answer.configOptions).toMatchObject([{ id: 'model', currentValue: 'claude-opus-5-5' }])
+      await expect(
+        agent.connection.agent.request(methods.agent.session.setConfigOption, { sessionId, configId: 'model', value: 'other-model' })
+      ).rejects.toBeInstanceOf(RequestError)
+    })
+  })
+
+  // Added for story S7 of milestone m1-chat: the arguments in the start report, the capability
+  // `additionalDirectories`, and the scenario `no-auto` (a model that cannot use the mode auto).
+  describe('arguments, directories and the auto fallback', () => {
+    const modeUpdates = (agent: Harness) => agent.updates.filter((update) => update.sessionUpdate === 'current_mode_update')
+
+    it('reports the arguments after its script: the pipe name, then each argument that the client added', async () => {
+      const { command, args } = control.agent
+      const child = spawn(command, [...args, '--extra-flag'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+      try {
+        const start = await control.waitForEnvironment()
+        expect(start.pid).toBe(child.pid)
+        expect(start.args).toEqual([control.pipeName, '--extra-flag'])
+      } finally {
+        child.kill()
+      }
+      startAgent()
+      expect((await control.waitForEnvironment()).args).toEqual([control.pipeName])
+    })
+
+    it('advertises additionalDirectories, as Claude Code does', async () => {
+      const agent = startAgent()
+      expect(await agent.initialize()).toMatchObject({ agentCapabilities: { sessionCapabilities: { resume: {}, additionalDirectories: {} } } })
+    })
+
+    it('falls back to acceptEdits and sends current_mode_update when the model of the session cannot use auto', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      // The mode first, then the model: auto holds until the model changes.
+      await agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId: 'auto' })
+      expect(modeUpdates(agent)).toEqual([])
+      await agent.connection.agent.request(methods.agent.session.setConfigOption, { sessionId, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(agent)).toEqual([{ sessionUpdate: 'current_mode_update', currentModeId: 'acceptEdits' }])
+      const resumed = await agent.connection.agent.request(methods.agent.session.resume, { sessionId, cwd: process.cwd(), mcpServers: [] })
+      expect(resumed.modes?.currentModeId).toBe('acceptEdits')
+      expect(await agent.prompt(sessionId)).toEqual({ stopReason: 'end_turn' })
+      expect(texts(agent.updates)).toEqual(['Hel', 'lo'])
+    })
+
+    it('also falls back when the model comes first and the mode auto follows', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const agent = startAgent()
+      await agent.initialize()
+      const sessionId = await agent.newSession()
+      await agent.connection.agent.request(methods.agent.session.setConfigOption, { sessionId, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(agent)).toEqual([])
+      await agent.connection.agent.request(methods.agent.session.setMode, { sessionId, modeId: 'auto' })
+      expect(modeUpdates(agent)).toEqual([{ sessionUpdate: 'current_mode_update', currentModeId: 'acceptEdits' }])
+    })
+
+    it('keeps auto for a model that can use it, and in every other scenario', async () => {
+      await control.scenario('no-auto', { models: ['claude-haiku-5-5'] })
+      const first = startAgent()
+      await first.initialize()
+      const kept = await first.newSession()
+      await first.connection.agent.request(methods.agent.session.setMode, { sessionId: kept, modeId: 'auto' })
+      await first.connection.agent.request(methods.agent.session.setConfigOption, { sessionId: kept, configId: 'model', value: 'claude-opus-5-5' })
+      expect(modeUpdates(first)).toEqual([])
+      const resumed = await first.connection.agent.request(methods.agent.session.resume, { sessionId: kept, cwd: process.cwd(), mcpServers: [] })
+      expect(resumed.modes?.currentModeId).toBe('auto')
+
+      await control.scenario('text')
+      const second = startAgent()
+      await second.initialize()
+      const other = await second.newSession()
+      await second.connection.agent.request(methods.agent.session.setMode, { sessionId: other, modeId: 'auto' })
+      await second.connection.agent.request(methods.agent.session.setConfigOption, { sessionId: other, configId: 'model', value: 'claude-haiku-5-5' })
+      expect(modeUpdates(second)).toEqual([])
+    })
+
+    it('refuses the scenario no-auto without models, in the test', async () => {
+      await expect(control.scenario('no-auto')).rejects.toThrow('needs `models`')
+      await expect(control.scenario('no-auto', { models: [] })).rejects.toThrow('needs `models`')
     })
   })
 

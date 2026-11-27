@@ -1,4 +1,5 @@
-export const TRIGGERS = ['@', '#', '&'] as const
+/** The session attachment (`&`) is coming soon, so it is no trigger. */
+export const TRIGGERS = ['@', '#'] as const
 
 export type Trigger = (typeof TRIGGERS)[number]
 
@@ -11,7 +12,7 @@ export interface Mention {
 
 /** Finds the mention that ends at the caret. A mention starts the text or follows a space. */
 export function findMention(text: string, caret: number): Mention | null {
-  const match = /(?:^|\s)([@#&])(\S*)$/.exec(text.slice(0, caret))
+  const match = /(?:^|\s)([@#])(\S*)$/.exec(text.slice(0, caret))
   if (!match) return null
   const [, trigger, query = ''] = match
   return { trigger: trigger as Trigger, query, start: caret - query.length - 1 }

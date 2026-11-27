@@ -14,11 +14,9 @@ the conversation continues where it stopped, also after a restart of Aether.
 ### Claude Code
 
 Claude Code is built in, through the [Claude Agent ACP adapter](https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp).
-Aether starts the adapter with `--hide-claude-auth`, because Anthropic does not allow other products to
-use claude.ai subscriptions. Claude Code in Aether therefore runs on one of these:
-
-- an API key: start Aether with `ANTHROPIC_API_KEY` set
-- an Anthropic Console account: run `claude auth login --console` once
+Claude Code in Aether runs on your Claude subscription. Sign in once with `claude auth login`.
+Aether stores no key and no token. Anthropic limits the use of subscriptions by other products, so check
+its terms before you use Aether (decision 0011).
 
 ### Other agents
 
@@ -40,7 +38,7 @@ signed in) are optional.
 
 ```sh
 npm install
-ANTHROPIC_API_KEY=... npm run dev
+npm run dev
 ```
 
 1. Create a project and choose its folder. Use a test folder or a Git repository with a clean tree.
