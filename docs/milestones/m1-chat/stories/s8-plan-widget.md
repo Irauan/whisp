@@ -1,11 +1,11 @@
 # S8 Plan widget: story spec
 
-Status: draft for the design review. Not approved.
+Status: the user decided the hot items on 2026-11-27 (`docs/user-preferences.md`). The tests are locked. The builder follows this spec.
 
 - Milestone: m1-chat.
 - Check: A11, and the brief section "Plan widget".
 - Mockup: [s8-plan-widget.mockup.html](s8-plan-widget.mockup.html).
-- Locked tests: branch `story/m1-s8-plan-widget`, commits `0b60fa5` and `29466f3`, folder `tests/acceptance/m1-chat/s8/`. This spec follows their UI contract.
+- Locked tests: branch `story/m1-s8-frame-and-plan`, commit `fe0bb98`, folder `tests/acceptance/m1-chat/s8/`. This spec follows their UI contract.
 - Depends on: S4 (merged). Shares files with S5 and S7.
 
 ## Behavior
@@ -62,6 +62,8 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
   - Only the list of the plan widget can scroll inside, in its own area.
   - The dock has no scroll offset when the locked place check of `s8/fixture.ts` (128-134) runs.
 - A draft session uses the same frame. Its dock holds only the composer.
+- The "Attachments" panel of a session shows at the top of the scroll area, before the first entry, in a draft and in a started session. In a started session it is a child of the log.
+  - The advisor decided this. The frame, the header and the dock contents are approved, and the panel goes with the first message.
 
 #### Conditions for the locked tests
 
@@ -115,6 +117,9 @@ The user decided on 2026-11-27, as part of the frame:
 - The line keeps the exit code in its text, for example "Claude Code stopped (exit code 7)."
 - The last log lines of the agent go in a fold-out under the line ("Show log"), as brief line 58 requires ("An error notice with the exit code and the last log lines"). The fold-out is a `<details>` inside the `alert` element, so the text of the log stays in the alert. The S4 test A20 (`s4/restart.spec.ts` 108) uses `toContainText`, which reads the text content, so it passes while the fold-out is closed.
 - The sign-in steps of "Claude Code is not signed in." stay visible, not folded.
+- The fold-out holds the log lines of a stopped agent (the notice code `agent-stopped`).
+  - The renderer splits the text at its first line break (`splitFailedTurn`).
+  - Another error notice has no reliable boundary, so it stays whole.
 - An info notice, such as "Stopped.", does not change.
 
 ### More rules of the widget
@@ -144,9 +149,9 @@ The user decided on 2026-11-27, as part of the frame:
 | S8-3 | A new plan replaces the old one and adds one "Updated the plan" at its point. | Acceptance | `plan-updates.spec.ts`, first test |
 | S8-4 | A change of the step states only adds no "Updated the plan", also after a restart. | Acceptance | `plan-updates.spec.ts`, second test |
 | S8-5 | A plan with no steps clears the widget, also after a restart. | Acceptance | `plan-updates.spec.ts`, third test |
-| S8-6 | In a draft, the user picks another model with the model button. The first start sends that model to the agent. | Acceptance | new, not locked yet |
-| S8-7 | After the first message, the model button is disabled. `sessions.set-model` answers `session-started`. | Acceptance and slice | new, not locked yet |
-| S8-8 | The agent exits with exit code 7 and a log line. The muted line with an info icon shows "exit code 7". The log line is in the fold-out "Show log". | Acceptance | new, not locked yet |
+| S8-6 | In a draft, the user picks another model with the model button. The first start sends that model to the agent. | Acceptance | `model.spec.ts`, first test |
+| S8-7 | After the first message, the model button is disabled. `sessions.set-model` answers `session-started`. | Acceptance and slice | `model.spec.ts`, second and third test; slice test `set-model.test.ts` |
+| S8-8 | The agent exits with exit code 7 and a log line. The muted line with an info icon shows "exit code 7". The log line is in the fold-out "Show log". | Acceptance | `failed-turn.spec.ts` |
 
 ## Screens
 
@@ -295,7 +300,7 @@ No test contradicts the brief. The tests settle five points that the brief leave
 2. The brief does not cover an empty plan. The tests say: a plan with no steps hides the widget. The brief says "It stays after the turn ends". That sentence covers a turn end, not an empty plan, so the two agree.
 3. The brief gives icons only. The tests also require a state text in each step: "Pending", "In progress", "Completed". It can be visually hidden.
 4. The brief says "pinned above the composer". The tests check the place only: below the transcript and above the composer. They do not check a sticky dock. The user chose the dock (open choice 3). The tests still hold, if the log element is the scroll area. See "UI contract of the locked tests".
-5. The brief says the transcript shows "Updated the plan" when a new plan replaces the old one. The tests do not decide the first plan of a session. See open choice 2.
+5. The brief says the transcript shows "Updated the plan" when a new plan replaces the old one. The tests decide the first plan: it shows no "Updated the plan", and an empty plan shows one (Flow, rule 5; States). See open choice 2.
 
 The count agrees with A11: "Plan 1 of 3" counts the completed steps. The brief example "Plan 2 of 5" fits this reading.
 

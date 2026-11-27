@@ -302,7 +302,11 @@ Each step leaves a working app. Steps 3 to 6 are the first stories of the chat m
 
 These parts stay as they are: React, the visual design and CSS tokens, navigation, menus, the composer of a new session, mentions, the Git and GitHub wrappers, the window security settings, the single instance lock, and the custom agents file (`agents.json`, read only). New slices use CSS Modules.
 
-The session window is a fixed frame (story S8): the header, the transcript as the only scroll area, and the bottom dock with the status line, the plan widget and the composer. Its composer follows the composer of the GitHub app, with its control row inside the box. A plan update that only changes the states replaces the latest plan entry in place.
+The session window is a fixed frame (story S8). It has the header, the transcript and the bottom dock. The transcript is the only scroll area. The dock holds the status line, the plan widget and the composer.
+
+The composer of the session window follows the composer of the GitHub app. Its control row sits inside the box.
+
+A plan update that only changes the states replaces the latest plan entry in place.
 
 ## Known defects in the current code
 
