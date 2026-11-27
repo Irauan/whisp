@@ -19,6 +19,7 @@
 //     each turn, so that a later wait does not meet a stale report.
 // Each agent process reports its process ID, its folder, its environment and its arguments when it connects.
 // `pids`, `environments` and `processMessages` keep them, so a test can tell the processes apart.
+// `children` keeps each child process that an agent started with the step 'child', and its parent.
 // The protocol is described at the top of `agent.mjs`.
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server, type Socket } from 'node:net'
@@ -52,6 +53,14 @@ export interface ProcessMessage {
   message: AcpMessage
 }
 
+/** A child process that an agent started with the step 'child' (story S9 of m1-chat). */
+export interface ChildProcessReport {
+  /** The process ID of the child. */
+  pid: number
+  /** The process ID of the agent that started it. */
+  parent: number
+}
+
 /** What the agent reports on the control pipe. */
 export type AgentEvent =
   | { type: 'hello'; pid: number }
@@ -59,6 +68,8 @@ export type AgentEvent =
   | { type: 'message'; message: AcpMessage }
   | { type: 'gate'; name: string; state: 'waiting' | 'passed' }
   | { type: 'exit'; code: number }
+  /** A step started a child process that outlives the agent. `parent` is the process ID of the agent. */
+  | ({ type: 'child' } & ChildProcessReport)
   /** The control server adds this when the agent closes its pipe. The pid is absent when no hello came. */
   | { type: 'closed'; pid?: number }
 
@@ -102,6 +113,8 @@ export class ControlServer {
   readonly pids: number[] = []
   /** The start of each agent process, in the order of their reports. */
   readonly environments: AgentEnvironment[] = []
+  /** Each child process that an agent started with the step 'child', in the order of their reports. */
+  readonly children: ChildProcessReport[] = []
 
   private chosen: { name: string; options: Record<string, unknown> } = { name: 'text', options: {} }
   private readonly opened = new Set<string>()
@@ -188,6 +201,12 @@ export class ControlServer {
     return (event as Extract<AgentEvent, { type: 'closed' }>).pid
   }
 
+  /** Waits for the next report of a child process that an agent started (step 'child'). */
+  async waitForChild(): Promise<ChildProcessReport> {
+    const event = (await this.inbox.take((e) => e.type === 'child')) as Extract<AgentEvent, { type: 'child' }>
+    return { pid: event.pid, parent: event.parent }
+  }
+
   /** The ACP messages of one method that agents received so far. */
   received(method: string): AcpMessage[] {
     return this.messages.filter((message) => message.method === method)
@@ -242,6 +261,7 @@ export class ControlServer {
       this.write(connection, { type: 'start', scenario: this.chosen, opened: [...this.opened] })
     }
     if (event.type === 'environment') this.environments.push({ pid: event.pid, cwd: event.cwd, env: event.env, args: event.args })
+    if (event.type === 'child') this.children.push({ pid: event.pid, parent: event.parent })
     if (event.type === 'message') {
       this.messages.push(event.message)
       // A message comes after the hello of its agent, so the pid is known. A bare test socket may skip the hello.
