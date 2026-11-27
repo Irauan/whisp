@@ -88,7 +88,7 @@
     "story": "m1-chat/s5"
   },
   "tests/acceptance/m1-chat/s5/decision-cards.spec.ts": {
-    "sha256": "18d4eae355cf6a9a7b8c9ffd4ebdd0a1fbfcd3ac6e30b65c63c3cb65245d78a3",
+    "sha256": "aac503dc8122f452407e317c05b50f6f98dc661ed4e479f391e5ca754d5426d4",
     "story": "m1-chat/s5"
   },
   "tests/acceptance/m1-chat/s5/fixture.ts": {
