@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S5 Permission queue mockup</title>
+<style>
+/* Tokens copied from src/renderer/src/styles.css (:root). */
+:root {
+  color-scheme: dark;
+  --canvas: #070709;
+  --sidebar: #101013;
+  --raised: #0d0d0f;
+  --selected: #212126;
+  --hover: #18181b;
+  --line: #2d2d33;
+  --text: #eeeef1;
+  --muted: #9d9ea6;
+  --accent: #ac99ff;
+  --fill: #6030f0;
+  --on-fill: #fff;
+  --danger: #e5786d;
+  /* Mockup only: the color of the change marks. */
+  --mark: #f2c14e;
+  font: 14px/1.45 system-ui, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--canvas);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px 64px; background: var(--canvas); }
+h1, h2, h3, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+button:disabled { cursor: default; opacity: .5; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, 'Cascadia Code', Menlo, monospace; font-size: 12px; }
+
+/* Mockup frame */
+.intro { max-width: 860px; margin: 0 auto 24px; }
+.intro h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+.intro p { margin-bottom: 6px; }
+.state { max-width: 860px; margin: 0 auto 40px; }
+.state > h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.state > p { margin-bottom: 10px; }
+.window { border: 1px solid var(--line); border-radius: 12px; padding: 8px 32px 24px; background: var(--canvas); }
+.mark { outline: 2px dashed var(--mark); outline-offset: 4px; position: relative; }
+.mark-label { display: inline-block; margin-bottom: 6px; padding: 1px 8px; color: var(--canvas); background: var(--mark); border-radius: 6px; font-size: 12px; font-weight: 600; }
+.legend { display: inline-flex; gap: 8px; align-items: center; }
+
+/* App parts, from styles.css */
+.page-head { display: flex; justify-content: space-between; gap: 16px; margin: 8px 0 16px; }
+.page-head h1 { font-size: 24px; font-weight: 600; line-height: 1.25; }
+.facts div { display: grid; grid-template-columns: 140px 1fr; min-height: 26px; }
+.facts { margin: 0 0 16px; }
+.facts dd { margin: 0; }
+.transcript { display: grid; gap: 10px; }
+.msg { white-space: pre-wrap; }
+.msg.user { justify-self: end; max-width: 85%; padding: 8px 12px; background: var(--selected); border-radius: 12px 12px 4px 12px; }
+.tool { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.tool-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, 'Cascadia Code', Menlo, monospace; font-size: 12px; }
+.tool-failed { color: var(--danger); }
+.notice { color: var(--muted); font-size: 13px; }
+.agent-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.composer { margin-top: 24px; max-width: 760px; }
+.composer-box { background: var(--canvas); border: 1px solid var(--line); border-radius: 14px; }
+.composer textarea { display: block; width: 100%; padding: 14px 16px 4px; font: inherit; font-size: 15px; color: inherit; resize: none; background: none; border: 0; outline: 0; }
+.composer-actions { display: flex; align-items: center; gap: 4px; padding: 6px 10px 10px; }
+.bar-button { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; color: var(--muted); border-radius: 7px; }
+.spacer { flex: 1; }
+.send { display: grid; place-items: center; width: 34px; height: 34px; color: var(--on-fill); background: var(--fill); border-radius: 50%; }
+.send.off { color: var(--muted); background: var(--selected); }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 14px; background: var(--selected); border-radius: 8px; }
+.button.primary { color: var(--on-fill); background: var(--fill); }
+.error { color: var(--danger); font-size: 13px; }
+
+/* New: the permission queue. It reuses .question and .question-actions of styles.css. */
+.permission-queue { display: grid; gap: 8px; margin-top: 16px; max-width: 760px; }
+.question { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--accent); border-radius: 10px; overflow-wrap: anywhere; background: var(--raised); }
+.question h3 { font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+.question .age { margin-left: auto; font-weight: 400; color: var(--muted); }
+.question-tool { display: flex; gap: 8px; align-items: baseline; }
+.question-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* New: compact card buttons, like the Claude desktop app (user decision, 2026-11-27).
+   The recommended option comes first, as the primary button. */
+.question-actions .button { height: 26px; padding: 0 10px; gap: 4px; font-size: 12.5px; line-height: 1; border-radius: 6px; }
+.question-actions .button:not(.primary) { background: transparent; border: 1px solid var(--line); }
+.question-actions .button:not(.primary):hover:not(:disabled) { background: var(--hover); }
+.locations li { font-size: 12px; }
+/* New: the question card of Claude (form elicitation). */
+.question-actions .button.toggle[aria-pressed="true"], .question-actions .button.toggle[aria-checked="true"] { color: var(--text); background: var(--selected); border-color: var(--accent); }
+.question .other { width: 100%; max-width: 420px; height: 28px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
+.question .other:focus { border-color: var(--accent); }
+
+/* New (S8 builds it, user decision 2026-11-27): the session window is a fixed frame.
+   The header stays at the top, the transcript is the only scroll area, and the bottom dock stays in view. */
+.frame { display: flex; flex-direction: column; height: 600px; padding: 0; overflow: hidden; }
+.frame-head { flex: none; padding: 8px 32px 0; border-bottom: 1px solid var(--line); }
+.frame-head .page-head { margin-bottom: 8px; }
+.frame-head .facts { margin-bottom: 8px; }
+.frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
+.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); }
+.dock > * { max-width: 760px; width: 100%; }
+/* The header keeps the title, the facts and the button "Delete session". */
+.head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.delete { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
+.text-button svg { width: 12px; height: 12px; margin-left: 4px; }
+.dock .agent-status, .dock .composer { margin-top: 0; }
+.transcript .permission-queue { margin-top: 4px; }
+.jump { height: 24px; padding: 0 10px; margin-left: 8px; font-size: 12px; color: var(--text); background: var(--selected); border-radius: 6px; }
+.dock-label { outline: 2px dashed var(--mark); outline-offset: 2px; }
+/* S8 plan widget, folded, to show the order of the dock. */
+.plan-widget { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.plan-widget .chev { color: var(--muted); font-weight: 400; }
+/* Changed (S8 builds it, user decision 2026-11-27): the composer like the GitHub app.
+   The text area is at least 2 lines high and grows up to COMPOSER_MAX_LINES (8), then scrolls.
+   The control row sits inside the box, at its bottom. No row below the box in the session window. */
+.composer.gh { margin-top: 0; }
+.composer.gh .composer-box { border-radius: 12px; }
+.composer.gh textarea { padding: 10px 14px 2px; font-size: 14px; line-height: 20px; min-height: calc(20px * 2 + 12px); max-height: calc(20px * 8 + 12px); overflow-y: auto; field-sizing: content; }
+.composer.gh textarea::placeholder { color: var(--muted); }
+.composer-controls { display: flex; align-items: center; gap: 2px; padding: 2px 8px 8px; }
+.composer-controls .plus { display: grid; place-items: center; width: 26px; height: 26px; color: var(--muted); border-radius: 6px; font-size: 18px; line-height: 1; }
+.text-button { display: inline-flex; align-items: center; height: 26px; padding: 0 8px; color: var(--muted); font-size: 12.5px; border-radius: 6px; }
+.text-button:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+.composer.gh .send { width: 28px; height: 28px; font-size: 14px; }
+/* Changed (S8): a failed turn shows as one muted line with an info icon. It keeps role="alert". */
+.fail-line { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 13px; }
+.fail-line .info { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 700; font-style: normal; }
+/* Changed (user decision, 2026-11-27): option rows with a radio or a checkbox, split by separators. */
+.rows { display: grid; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; cursor: pointer; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--hover); }
+.row input[type="radio"], .row input[type="checkbox"] { margin: 3px 0 0; accent-color: var(--fill); }
+.row > span { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.row-label { color: var(--text); font-size: 13.5px; }
+.row-sub { color: var(--muted); font-size: 12.5px; }
+.row-other { display: grid; gap: 6px; }
+.block { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* Changed (user decision, 2026-11-27): the answered card, one row for each question. */
+.question.answered { border-color: var(--line); gap: 0; }
+.question.answered h3 { color: var(--muted); margin-bottom: 6px; }
+.answer-row { display: grid; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.answer-row:first-of-type { border-top: 0; }
+/* Changed (user decision, 2026-11-27): the decision card. Context in secondary, question in primary,
+   options grouped by meaning into split buttons. Buttons size to content on one line, and stack
+   at full width, at equal size, when they would wrap. */
+.question .ctx { color: var(--muted); font-size: 12.5px; }
+/* Changed (user decision, 2026-11-27): the answered decision card. Question in secondary, answer in primary, no buttons. */
+.question.answered-decision { border-color: var(--line); gap: 2px; }
+.question.answered-decision .muted { font-size: 12.5px; }
+.question .chosen { color: var(--text); font-size: 13.5px; display: flex; gap: 6px; align-items: center; }
+.question .ask { color: var(--text); font-size: 14px; font-weight: 500; }
+.decision-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.decision-actions .button { height: 26px; padding: 0 10px; font-size: 12.5px; border-radius: 6px; }
+.decision-actions .button:not(.primary) { background: transparent; border: 1px solid var(--line); }
+.split { position: relative; display: inline-flex; }
+.split > .button:first-child { border-radius: 6px 0 0 6px; }
+.split > .more { border-radius: 0 6px 6px 0; padding: 0 8px; border-left: 1px solid rgba(255,255,255,.25); }
+.split .menu { position: absolute; top: 30px; left: 0; z-index: 2; display: grid; min-width: 260px; padding: 4px; background: var(--sidebar); border: 1px solid var(--line); border-radius: 8px; }
+.split .menu [role="menuitem"] { padding: 6px 10px; font-size: 12.5px; border-radius: 6px; cursor: pointer; }
+.split .menu [role="menuitem"]:hover { background: var(--hover); }
+.decision-actions.stacked { flex-direction: column; }
+.decision-actions.stacked > .button, .decision-actions.stacked > .split { width: 100%; }
+.decision-actions.stacked .split > .button:first-child { flex: 1; }
+.frame.narrow > .transcript, .frame.narrow .dock, .frame.narrow .frame-head { padding-left: 16px; padding-right: 16px; }
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <h1>S5 Permission queue</h1>
+  <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
+  <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
+  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Decision cards (permission requests) and question cards of Claude show inside the transcript, where Claude asked: at the place of their entry, in the order of arrival (tool A, card A, tool B, card B). They scroll with the chat. An answered decision card stays as "Permission answered" (question in secondary, answer in primary). An answered question card turns into the saved card "Claude asked". No card shows disabled buttons.</p>
+  <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact. On a safety ask, the refuse option that the agent puts first is the recommended one.</p>
+  <p class="muted">Frame (S8): the header holds only the title and "Delete session". The transcript is the only scroll area. Bottom dock, from the top: status line, plan widget (S8), composer. The trust and directory questions of S6 stay an app-level dialog.</p>
+</header>
+
+
+<section class="state">
+  <h2>0. Current screen (S4), for comparison</h2>
+  <p class="muted">Today the whole page scrolls, the header shows a facts row, and Aether answers each request with "cancelled". The tool fails at once, and the user sees no card.</p>
+  <div class="window">
+    <div class="page-head"><h1>Fix the failing test</h1></div>
+    <dl class="facts">
+      <div><dt class="muted">Profile</dt><dd>Personal</dd></div>
+      <div><dt class="muted">Folder</dt><dd>C:\work\repo-a</dd></div>
+      <div><dt class="muted">Model</dt><dd>Default</dd></div>
+    </dl>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests first.</p></div>
+      <div class="tool tool-failed"><span>✕</span><span class="tool-title">npm test</span><span>Failed</span></div>
+      <div class="msg"><p>I could not run the command.</p></div>
+    </div>
+    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
+      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+  </div>
+</section>
+
+<section class="state">
+  <h2>1. No open card, during a turn</h2>
+  <p class="muted">No request is open, so no card shows. A long transcript scrolls under the dock. The dock holds the status line and the composer.</p>
+  <div class="window frame">
+    <div class="frame-head mark"><span class="mark-label">Changed (S8): title and Delete session only, no facts row</span>
+      <div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Look at the parser first.</p></div>
+      <div class="msg"><p>The parser reads the input in two passes. The first pass splits the lines. The second pass builds the tree.</p></div>
+      <div class="tool"><span>✓</span><span class="tool-title">Read src\parser.ts</span><span>Completed</span></div>
+      <div class="msg"><p>The parser looks correct. The failure comes from the formatter.</p></div>
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I read the test file first.</p></div>
+      <div class="tool"><span class="spin">◌</span><span class="tool-title">Read tests\format.test.ts</span><span>Running</span></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>2. Two cards at once, oldest first (A4)</h2>
+  <p class="muted">The agent asks two permissions at the same time. Each card shows inside the log where Claude asked, right after its tool call: tool A, card A, tool B, card B. The user can answer them in any order. The simulated agent offers "Allow" and "Refuse". Each card is an article named "Permission request"; the tool title is text inside it.</p>
+  <div class="window frame">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
+      <div class="mark"><span class="mark-label">New: cards inline. Changed: decision card layout (context, question, buttons)</span>
+        <div class="permission-queue">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">execute · <span class="mono">npm test</span></p>
+            <p class="ask">Run this command?</p>
+            <div class="decision-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
+          </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">read · <span class="mono">Read C:\work\logs\last-run.txt</span></p>
+            <p class="ask">Read this?</p>
+            <ul class="locations muted"><li class="mono">C:\work\logs\last-run.txt</li></ul>
+            <div class="decision-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">Changed: status text</span>
+        <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      </div>
+      <div class="plan-widget" aria-label="Plan"><span class="chev">›</span>Plan 1 of 3 <span class="muted" style="font-weight:400;font-size:12px">(S8)</span></div>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>3. Decision cards: grouped options, the plan exit and a safety ask</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): a permission card is a decision card. The context is in the secondary color, the question in the primary color, and the buttons have no explanation. Options with the same meaning form one group: the allow group is a split button, with the recommended allow option as its main part and the other allow options in the dropdown "More allow options", with Claude's labels. A group with one option is a plain button. The allow group comes first and is primary. On a safety ask, the refuse group comes first and is primary. The "always" options show (user decision, choice 2 A).</p>
+  <div class="window frame" style="height:620px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg"><p>The plan is ready. I wait for your answer before I code.</p></div>
+      <div class="mark"><span class="mark-label">Changed: decision cards with split buttons</span>
+        <div class="permission-queue">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">execute · <span class="mono">npm test</span></p>
+            <p class="ask">Run this command?</p>
+            <div class="decision-actions">
+              <span class="split primary"><button class="button primary" type="button">Yes</button><button class="button primary more" type="button" aria-label="More allow options" aria-haspopup="menu" aria-expanded="true">▾</button>
+                <span class="menu" role="menu"><span role="menuitem" tabindex="-1">Yes, and don't ask again for npm test commands</span></span>
+              </span>
+              <button class="button" type="button">No</button>
+            </div>
+          </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Approve Plan</span><span>Pending</span></div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">switch_mode · <span class="mono">Approve Plan</span></p>
+            <p class="ask">Approve the plan?</p>
+            <div class="decision-actions">
+              <span class="split primary"><button class="button primary" type="button">Yes, manually approve edits</button><button class="button primary more" type="button" aria-label="More allow options" aria-haspopup="menu" aria-expanded="false">▾</button></span>
+              <button class="button" type="button">No, keep planning</button>
+            </div>
+            <p class="muted" style="font-size:12px">The dropdown holds "Yes, and use auto mode" and "Yes, and bypass permissions".</p>
+          </div>
+      <div class="tool"><span>◌</span><span class="tool-title">rm -rf build</span><span>Pending</span></div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">execute · <span class="mono">rm -rf build</span></p>
+            <p class="ask">Run this command?</p>
+            <div class="decision-actions">
+              <button class="button primary" type="button">No</button>
+              <span class="split"><button class="button" type="button">Yes</button><button class="button more" type="button" aria-label="More allow options" aria-haspopup="menu" aria-expanded="false">▾</button></span>
+            </div>
+            <p class="muted" style="font-size:12px">A safety ask: the refuse group comes first and is primary.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Plan<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>3b. Decision cards at a narrow width</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): when the buttons would wrap, as on a mobile width, each button takes the full width of the card, at equal size, stacked. A split button keeps its dropdown part at its right end. The frame below is 375 px wide.</p>
+  <div class="window frame narrow" style="height:560px;max-width:375px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>◌</span><span class="tool-title">Approve Plan</span><span>Pending</span></div>
+      <div class="mark"><span class="mark-label">Changed: stacked full-width buttons</span>
+        <div class="permission-queue">
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">switch_mode · <span class="mono">Approve Plan</span></p>
+            <p class="ask">Approve the plan?</p>
+            <div class="decision-actions stacked">
+              <span class="split primary"><button class="button primary" type="button">Yes, manually approve edits</button><button class="button primary more" type="button" aria-label="More allow options" aria-haspopup="menu" aria-expanded="false">▾</button></span>
+              <button class="button" type="button">No, keep planning</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Plan<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>4. Answer sent, and answer refused</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): no disabled buttons. First card: the user clicked Allow. The card switches at once to its answered layout, with a small spinner after the chosen label, while the answer is sent. It keeps the name "Permission request" until main accepts the answer; then it becomes "Permission answered". Second card: the main process refused the answer. The card goes back to its buttons and shows the reason.</p>
+  <div class="window frame" style="height:520px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+      <div class="tool"><span>◌</span><span class="tool-title">Edit src\math.ts</span><span>Pending</span></div>
+      <div class="mark"><span class="mark-label">Changed: sending shows the answered layout, no disabled buttons</span>
+        <div class="permission-queue">
+          <div class="question answered-decision" role="article" aria-label="Permission request">
+            <p class="muted">Run this command?</p>
+            <p class="chosen">Allow <span class="spin" aria-label="Sending">◌</span></p>
+          </div>
+          <div class="question" role="article" aria-label="Permission request">
+            <p class="ctx">edit · <span class="mono">Edit src\math.ts</span></p>
+            <p class="ask">Make this change?</p>
+            <div class="decision-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
+            <p class="error" role="alert">Aether cannot send this answer.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>5. After the first answer (A4)</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): the user allowed the first request. Its card stays as the answered card "Permission answered": the question in the secondary color, the answer in the primary color, and no buttons. It is a saved entry. Its tool runs. The second card stays open at the end of the log and is now the oldest.</p>
+  <div class="window frame" style="height:460px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
+      <div class="tool"><span class="spin">◌</span><span class="tool-title">npm test</span><span>Running</span></div>
+      <div class="mark"><span class="mark-label">Changed: the answered decision card stays, where Claude asked</span>
+        <div class="question answered-decision" role="article" aria-label="Permission answered">
+          <p class="muted">Run this command?</p>
+          <p class="chosen">Allow</p>
+        </div>
+      </div>
+      <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
+      <div class="permission-queue">
+        <div class="question" role="article" aria-label="Permission request">
+          <p class="ctx">read · <span class="mono">Read C:\work\logs\last-run.txt</span></p>
+          <p class="ask">Read this?</p>
+          <div class="decision-actions">
+            <button class="button primary" type="button">Allow</button>
+            <button class="button" type="button">Refuse</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>6. After Stop (A5)</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards stay as not-answered cards: the question in the secondary color, and "Not answered: you pressed Stop." in the primary color, with no buttons. The open tool calls show "Failed". The composer is ready.</p>
+  <div class="window frame" style="height:460px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
+      <div class="tool tool-failed"><span>✕</span><span class="tool-title">npm test</span><span>Failed</span></div>
+      <div class="mark"><span class="mark-label">Changed: not-answered cards with their reason after Stop, each where Claude asked</span>
+        <div class="question answered-decision" role="article" aria-label="Permission answered">
+          <p class="muted">Run this command?</p>
+          <p class="chosen">Not answered: you pressed Stop.</p>
+        </div>
+        <div class="tool tool-failed" style="margin-top:8px"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
+        <div class="question answered-decision" role="article" aria-label="Permission answered" style="margin-top:8px">
+          <p class="muted">Read this?</p>
+          <p class="chosen">Not answered: you pressed Stop.</p>
+        </div>
+      </div>
+      <p class="notice">Stopped.</p>
+    </div>
+    <div class="dock">
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>7. A request with no title and no options</h2>
+  <p class="muted">The cards have no load of their own: the snapshot of <span class="mono">sessions.open</span> holds the open requests. A request with no title shows "Tool call". A request with no options shows one button, "Cancel request", with no primary style. It answers "cancelled", which the adapter reads as "Tool use aborted".</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>◌</span><span class="tool-title">Tool call</span><span>Pending</span></div>
+      <div class="permission-queue">
+        <div class="question" role="article" aria-label="Permission request">
+          <p class="ctx">other · <span class="mono">Tool call</span></p>
+          <p class="ask">Allow this tool?</p>
+          <div class="decision-actions">
+            <button class="button" type="button">Cancel request</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>8. Questions of Claude: option rows</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): each option is a full-width row with a radio (single select) or a checkbox (multi select). The label is in the primary color, the explanation below in the secondary color. A click anywhere on the row selects it, and sends nothing. "Other" is the last row, with its text field. No row is preselected; the recommended option comes first in the order of Claude. Below the rows: "Submit" (primary, disabled until a pick) and "Skip". In a form with several questions, each question is a block, with separators. The refusal fallback is the binary case and keeps its two buttons.</p>
+  <div class="window frame" style="height:1120px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Set up the test runner.</p></div>
+      <div class="msg"><p>I have some questions first.</p></div>
+      <div class="tool"><span>◌</span><span class="tool-title">AskUserQuestion</span><span>Pending</span></div>
+      <div class="mark"><span class="mark-label">Changed: option rows with radios and checkboxes</span>
+        <div class="permission-queue">
+          <div class="question" role="article" aria-label="Claude asks">
+            <h3>Claude asks</h3>
+            <p>Which test runner do you want?</p>
+            <div class="rows" role="radiogroup" aria-label="Which test runner do you want?">
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Vitest (Recommended)</span><span class="row-sub">Fast, and the project already uses Vite.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Jest</span><span class="row-sub">Widely used. Needs a transform for ESM.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Node test runner</span><span class="row-sub">No extra package. Fewer features.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" placeholder="Type your own answer"></span></label>
+            </div>
+            <div class="question-actions">
+              <button class="button primary" type="button" disabled>Submit</button>
+              <button class="button" type="button">Skip</button>
+            </div>
+          </div>
+          <div class="question" role="article" aria-label="Claude asks">
+            <h3>Claude asks</h3>
+            <p>Please answer the following questions.</p>
+            <div class="block">
+              <p class="muted" style="font-size:12px">Reports</p>
+              <p style="font-size:13px">Which reports do you want?</p>
+              <div class="rows" role="group" aria-label="Which reports do you want?">
+                <label class="row"><input type="checkbox" checked><span><span class="row-label">Coverage</span><span class="row-sub">Lines and branches, as text and lcov.</span></span></label>
+                <label class="row"><input type="checkbox" checked><span><span class="row-label">JUnit XML</span><span class="row-sub">For the CI test view.</span></span></label>
+                <label class="row"><input type="checkbox"><span><span class="row-label">HTML</span><span class="row-sub">A local report to open in the browser.</span></span></label>
+                <label class="row"><input type="checkbox" checked><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" value="A summary in the console"></span></label>
+              </div>
+            </div>
+            <div class="block">
+              <p class="muted" style="font-size:12px">Watch</p>
+              <p style="font-size:13px">Run the tests on each save?</p>
+              <div class="rows" role="radiogroup" aria-label="Run the tests on each save?">
+                <label class="row"><input type="radio" name="q3" checked><span><span class="row-label">Yes (Recommended)</span><span class="row-sub">Faster feedback while you work.</span></span></label>
+                <label class="row"><input type="radio" name="q3"><span><span class="row-label">No</span><span class="row-sub">Run the tests on demand only.</span></span></label>
+                <label class="row"><input type="radio" name="q3"><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" placeholder="Type your own answer"></span></label>
+              </div>
+            </div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Submit</button>
+              <button class="button" type="button">Skip</button>
+            </div>
+          </div>
+          <div class="question" role="article" aria-label="Claude asks">
+            <h3>Claude asks</h3>
+            <p>claude-fake-1 declined this request. Retry with claude-fake-2?</p>
+            <div class="question-actions">
+              <button class="button primary" type="button" title="You can send a new message.">Keep the refusal</button>
+              <button class="button" type="button" title="The session continues on claude-fake-2.">Retry with claude-fake-2</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>8b. Answered question cards</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". Changed again (user decision, 2026-11-27): every answered or not-answered card shows the question in the secondary color and the answer or the reason in the primary color, also in each row of a form. Separators split the rows. A question with no answer says why, for example "Not answered: you skipped it.". The card is saved when it opens, so it stays after a restart, and after a crash it shows "Not answered: Aether stopped unexpectedly.".</p>
+  <div class="window frame" style="height:620px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Set up the test runner.</p></div>
+      <div class="mark"><span class="mark-label">Changed: answered card, one question</span>
+        <div class="question answered" role="article" aria-label="Claude asked">
+          <h3>Claude asked</h3>
+          <div class="answer-row"><p class="muted">Which test runner do you want?</p><p class="chosen">Vitest (Recommended)</p></div>
+        </div>
+      </div>
+      <div class="mark"><span class="mark-label">Changed: answered card, several questions</span>
+        <div class="question answered" role="article" aria-label="Claude asked">
+          <h3>Claude asked</h3>
+          <div class="answer-row"><p class="muted">Which reports do you want?</p><p class="chosen">Coverage, JUnit XML, A summary in the console</p></div>
+          <div class="answer-row"><p class="muted">Run the tests on each save?</p><p class="chosen">Yes (Recommended)</p></div>
+          <div class="answer-row"><p class="muted">Which folder holds the tests?</p><p class="chosen">Not answered: you skipped it.</p></div>
+        </div>
+      </div>
+      <div class="mark"><span class="mark-label">Changed: a question card that closed without an answer</span><div class="question answered" role="article" aria-label="Claude asked">
+        <h3>Claude asked</h3>
+        <p class="muted">Do you want a watch script?</p><p class="chosen">Not answered: Claude Code exited.</p>
+      </div></div>
+      <div class="mark"><span class="mark-label">New: a card that was open when Aether crashed</span><div class="question answered-decision" role="article" aria-label="Permission answered">
+        <p class="muted">Run this command?</p><p class="chosen">Not answered: Aether stopped unexpectedly.</p>
+      </div></div>
+      <div class="msg"><p>I set up Vitest with coverage and JUnit XML.</p></div>
+    </div>
+    <div class="dock">
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>9. Live mode after a plan exit</h2>
+  <p class="muted">User decision, open choice 5. The user chose "Yes, auto-accept edits" at the plan exit. The agent reports the new mode. The Mode control shows "Accept edits" at once, and Aether saves it. Approve all would show the same way, but is never saved.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>✓</span><span class="tool-title">Approve Plan</span><span>Completed</span></div>
+      <div class="msg"><p>I start with the first step.</p></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
+      <div class="mark"><span class="mark-label">Changed: the Mode control shows the live mode</span>
+        <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Accept edits<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>10. A card while the user scrolled up</h2>
+  <p class="muted">The user scrolled up to read. A new card came at the end of the log. The log does not move, and the card does not take the focus. The status line says "Waiting for your answer" and shows "Show request". A click brings the oldest open card into view and focuses it. At the bottom of the log, the card would come into view by the follow rule of S8.</p>
+  <div class="window frame" style="height:420px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Fix the failing test</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript" data-keep-top="true">
+      <div class="msg user"><p>Look at the parser first.</p></div>
+      <div class="msg"><p>The parser reads the input in two passes. The first pass splits the lines. The second pass builds the tree.</p></div>
+      <div class="tool"><span>✓</span><span class="tool-title">Read src\parser.ts</span><span>Completed</span></div>
+      <div class="msg"><p>The parser looks correct. The failure comes from the formatter.</p></div>
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests.</p></div>
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+      <div class="permission-queue">
+        <div class="question" role="article" aria-label="Permission request">
+          <p class="ctx">execute · <span class="mono">npm test</span></p>
+          <p class="ask">Run this command?</p>
+          <div class="decision-actions">
+            <button class="button primary" type="button">Allow</button>
+            <button class="button" type="button">Refuse</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">New: the jump button in the status line</span>
+        <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span><button class="jump" type="button">Show request</button></p>
+      </div>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>11. The S6 trust question: repository root and warning</h2>
+  <p class="muted">User decision, 2026-11-27. The trust question keeps the fact "Repository" and adds "Repository root" with the path. When the root holds the workspace directory, or equals it, a warning shows above the buttons. The dialog stays an app-level dialog for now (open point for the user: show it inline in a later story).</p>
+  <div class="window" style="display:grid;place-items:center;padding:32px;background:rgba(0,0,0,.5)">
+    <div role="dialog" aria-label="Trust this repository?" style="width:min(440px,100%);padding:18px 20px;background:var(--sidebar);border:1px solid var(--line);border-radius:12px;display:grid;gap:12px">
+      <h2 style="font-size:16px;font-weight:600">Trust this repository?</h2>
+      <p class="muted" style="font-size:13px">Claude Code reads the settings, the hooks and the MCP servers of a repository when a session starts, before it asks anything. Trust only a repository that you know.</p>
+      <div class="mark"><span class="mark-label">Changed: the repository root</span>
+        <dl class="facts" style="margin:0">
+          <div><dt class="muted">Repository</dt><dd>sam</dd></div>
+          <div><dt class="muted">Repository root</dt><dd class="mono">C:\Users\sam</dd></div>
+          <div><dt class="muted">Folder</dt><dd class="mono">C:\Users\sam\work\repo-a</dd></div>
+          <div><dt class="muted">Profile</dt><dd>Personal</dd></div>
+        </dl>
+      </div>
+      <p class="muted" style="font-size:13px">Aether found no .claude/settings*.json file and no .mcp.json file here.</p>
+      <div class="mark"><span class="mark-label">New: warning when the root holds the workspace directory</span>
+        <p role="note" style="display:flex;gap:8px;font-size:13px;color:var(--danger)"><span aria-hidden="true">⚠</span><span>This repository holds the workspace directory C:\Users\sam\work. Trust covers every plain folder under C:\Users\sam\work for the profile Personal.</span></p>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="button" type="button">Cancel</button>
+        <button class="button primary" type="button">Trust</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Mockup only: show each transcript scrolled to the bottom, as the app keeps it, except state 10.
+  for (const log of document.querySelectorAll('.frame > .transcript')) if (!log.dataset.keepTop) log.scrollTop = log.scrollHeight
+</script>
+</body>
+</html>

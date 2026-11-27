@@ -31,10 +31,10 @@ The user chats with Claude in an Aether session. The session runs in a profile, 
 
 | Part | Content |
 |---|---|
-| Header | Title, profile, folder, model, mode |
+| Header | Title, and the button "Delete session". User decision, 2026-11-27: "I don't think we need this header for sessions, at least this part detailing mode, folder, profile, and so on! The session name we can keep it and make it editable (not necessarily in this milestone)." Mode and model show as the controls of the composer. An editable title is a later item. |
 | Transcript | User text, agent text, thoughts (folded), tool calls with status, notices |
 | Plan widget | The latest plan of the agent, pinned above the composer |
-| Permission queue | One card per open request, oldest first, above the composer |
+| Permission queue | One card per open request, oldest first, inline in the transcript, where Claude asked. The cards scroll with the chat. User decision, 2026-11-27: "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." |
 | Composer | Text, Send, and Stop during a turn |
 
 ### Plan widget
@@ -106,7 +106,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 | A2 | A1 is done | The user sends "Say it again" | The reply comes in the same agent session. (live) |
 | A3 | A long reply streams and a tool call is open | The user clicks Stop | "Stopped." shows, the tool call shows failed, and the composer is ready. (live) |
 | A4 | The agent asks two permissions at the same time | The user allows the first and refuses the second | Both cards show. The agent receives each answer for its own request. (live) |
-| A5 | A4 is repeated, with two open requests | The user clicks Stop | Both cards close. The agent receives "cancelled" for both. |
+| A5 | A4 is repeated, with two open requests | The user clicks Stop | Both cards show as not answered, with the reason "Not answered: you pressed Stop.". The agent receives "cancelled" for both. User decision, 2026-11-27: "if the session had a question that was not answered we should make clear that it was not answered and why it was not answered." |
 | A6 | A session with two turns | The user quits and starts Aether, opens the session, and sends a message | The transcript shows both turns. The agent resumes the same session. (live) |
 | A7 | Two sessions in two repositories | The user sends in both within 100 ms | Both get replies. Each session has its own process. |
 | A8 | The agent answers "auth required" | The user sends a message | "Claude Code is not signed in." and the sign-in steps show. Aether does not crash. (live, with a profile that has no sign-in) |
