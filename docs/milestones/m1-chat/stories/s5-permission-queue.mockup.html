@@ -89,6 +89,21 @@ button:disabled { cursor: default; opacity: .5; }
 .question-actions .button:not(.primary) { background: transparent; border: 1px solid var(--line); }
 .question-actions .button:not(.primary):hover:not(:disabled) { background: var(--hover); }
 .locations li { font-size: 12px; }
+
+/* New (S8 builds it, user decision 2026-11-27): the session window is a fixed frame.
+   The header stays at the top, the transcript is the only scroll area, and the bottom dock stays in view. */
+.frame { display: flex; flex-direction: column; height: 600px; padding: 0; overflow: hidden; }
+.frame-head { flex: none; padding: 8px 32px 0; border-bottom: 1px solid var(--line); }
+.frame-head .page-head { margin-bottom: 8px; }
+.frame-head .facts { margin-bottom: 8px; }
+.frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
+.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); max-height: 70%; overflow: auto; }
+.dock > * { max-width: 760px; width: 100%; }
+.dock .agent-status, .dock .composer, .dock .permission-queue { margin-top: 0; }
+.dock-label { outline: 2px dashed var(--mark); outline-offset: 2px; }
+/* S8 plan widget, folded, to show the order of the dock. */
+.plan-widget { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.plan-widget .chev { color: var(--muted); font-weight: 400; }
 </style>
 </head>
 <body>
@@ -98,13 +113,13 @@ button:disabled { cursor: default; opacity: .5; }
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
   <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact.</p>
-  <p class="muted">Order from the top: header and facts, transcript, status line, plan widget (S8, not shown here), permission queue, composer.</p>
+  <p class="muted">Frame (user decision, 2026-11-27): the header stays at the top. The transcript is the only scroll area. It scrolls under the bottom dock and stays at the bottom while new entries arrive. S8 builds the frame. S5 adds its queue to the dock.</p>
+  <p class="muted">Bottom dock, from the top: status line, plan widget (S8), permission queue (S5), composer. The trust and directory questions of S6 use the same dock.</p>
 </header>
-
 
 <section class="state">
   <h2>0. Current screen (S4), for comparison</h2>
-  <p class="muted">Today Aether answers each request with "cancelled". The tool fails at once, and the user sees no card.</p>
+  <p class="muted">Today the whole page scrolls, and the composer scrolls with it. Aether answers each request with "cancelled". The tool fails at once, and the user sees no card.</p>
   <div class="window">
     <div class="page-head"><h1>Fix the failing test</h1></div>
     <dl class="facts">
@@ -125,136 +140,188 @@ button:disabled { cursor: default; opacity: .5; }
 
 <section class="state">
   <h2>1. Empty queue during a turn</h2>
-  <p class="muted">No request is open. The queue region does not show. This is the screen of S4 in the state Working.</p>
-  <div class="window">
-    <div class="page-head"><h1>Fix the failing test</h1></div>
+  <p class="muted">No request is open. The queue region does not show. The dock holds the status line and the composer. A long transcript scrolls under the dock.</p>
+  <div class="window frame">
+    <div class="frame-head mark"><span class="mark-label">Changed: fixed header</span>
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+      <dl class="facts">
+        <div><dt class="muted">Profile</dt><dd>Personal</dd></div>
+        <div><dt class="muted">Folder</dt><dd>C:\work\repo-a</dd></div>
+      </dl>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Look at the parser first.</p></div>
+      <div class="msg"><p>The parser reads the input in two passes. The first pass splits the lines. The second pass builds the tree.</p></div>
+      <div class="tool"><span>✓</span><span class="tool-title">Read src\parser.ts</span><span>Completed</span></div>
+      <div class="msg"><p>The parser looks correct. The failure comes from the formatter.</p></div>
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I read the test file first.</p></div>
+      <div class="tool"><span class="spin">◌</span><span class="tool-title">Read tests\format.test.ts</span><span>Running</span></div>
     </div>
-    <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    <div class="dock dock-label">
+      <span class="mark-label" style="width:auto;justify-self:start">New: bottom dock, always in view</span>
+      <p class="agent-status muted"><span class="spin">◌</span><span>Working</span></p>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
   </div>
 </section>
 
 <section class="state">
   <h2>2. Waiting: two cards at once, oldest first (A4)</h2>
-  <p class="muted">The agent asks two permissions at the same time. Each card has its own request ID. The user can answer them in any order. The labels are the labels of the agent (open choice 1). The simulated agent offers "Allow" and "Refuse".</p>
-  <div class="window">
-    <div class="page-head"><h1>Fix the failing test</h1></div>
+  <p class="muted">The agent asks two permissions at the same time. Each card has its own request ID. The user can answer them in any order. The labels are the labels of the agent (open choice 1). The simulated agent offers "Allow" and "Refuse". The full dock shows here, with the folded plan widget of S8.</p>
+  <div class="window frame">
+    <div class="frame-head">
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
     </div>
-    <div class="mark"><span class="mark-label">Changed: status text</span>
-      <p class="agent-status muted" style="margin-top:0"><span class="spin">◌</span><span>Waiting for your answer</span></p>
-    </div>
-    <div class="mark" style="margin-top:20px"><span class="mark-label">New: permission queue (region "Permission requests")</span>
-      <div class="permission-queue" role="region" aria-label="Permission requests" style="margin-top:0">
-        <div class="question" role="group" aria-label="npm test">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button">Allow</button>
-            <button class="button" type="button">Refuse</button>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">Changed: status text</span>
+        <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      </div>
+      <div class="plan-widget" aria-label="Plan"><span class="chev">›</span>Plan 1 of 3 <span class="muted" style="font-weight:400;font-size:12px">(S8)</span></div>
+      <div class="mark"><span class="mark-label">New: permission queue (region "Permission requests")</span>
+        <div class="permission-queue" role="region" aria-label="Permission requests">
+          <div class="question" role="group" aria-label="npm test">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
           </div>
-        </div>
-        <div class="question" role="group" aria-label="Read C:\work\logs\last-run.txt">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">Read C:\work\logs\last-run.txt</span><span class="muted">read</span></div>
-          <ul class="locations muted"><li class="mono">C:\work\logs\last-run.txt</li></ul>
-          <div class="question-actions">
-            <button class="button primary" type="button">Allow</button>
-            <button class="button" type="button">Refuse</button>
+          <div class="question" role="group" aria-label="Read C:\work\logs\last-run.txt">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">Read C:\work\logs\last-run.txt</span><span class="muted">read</span></div>
+            <ul class="locations muted"><li class="mono">C:\work\logs\last-run.txt</li></ul>
+            <div class="question-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
           </div>
         </div>
       </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
   </div>
 </section>
 
 <section class="state">
-  <h2>3. A card with the "always" options of real Claude</h2>
-  <p class="muted">Real Claude labels its options itself. One compact button for each option. The recommended option (the first allow-once option) comes first, as the primary button. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed.</p>
-  <div class="window">
-    <div class="mark"><span class="mark-label">New: options as the agent offers them</span>
-      <div class="permission-queue" role="region" aria-label="Permission requests" style="margin-top:0">
-        <div class="question" role="group" aria-label="npm test">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button">Yes</button>
-            <button class="button" type="button">Yes, and don't ask again for npm test commands</button>
-            <button class="button" type="button">No</button>
+  <h2>3. Cards with the "always" options of real Claude</h2>
+  <p class="muted">Real Claude labels its options itself. One compact button for each option. The recommended option (the first allow-once option) comes first, as the primary button. Open choice 2 decides if the "always" option shows. An "always" option of Claude can add a permanent rule to the settings of the repository folder. For a shell command, the destination is not confirmed. When the cards are tall, the dock scrolls inside, and the composer stays in view.</p>
+  <div class="window frame">
+    <div class="frame-head">
+      <div class="page-head"><h1>Plan the change</h1></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg"><p>The plan is ready. I wait for your answer before I code.</p></div>
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <div class="mark"><span class="mark-label">New: options as the agent offers them, recommended first</span>
+        <div class="permission-queue" role="region" aria-label="Permission requests">
+          <div class="question" role="group" aria-label="npm test">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Yes</button>
+              <button class="button" type="button">Yes, and don't ask again for npm test commands</button>
+              <button class="button" type="button">No</button>
+            </div>
           </div>
-        </div>
-        <div class="question" role="group" aria-label="Ready to code?">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">Ready to code?</span><span class="muted">switch_mode</span></div>
-          <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: two options change the mode of the agent. The recommended option (the first allow-once option) moves to the front. The others keep the order of the agent.</p>
-          <div class="question-actions">
-            <button class="button primary" type="button">Yes, manually approve edits</button>
-            <button class="button" type="button">Yes, and use auto mode</button>
-            <button class="button" type="button">Yes, and bypass permissions</button>
-            <button class="button" type="button">No, keep planning</button>
+          <div class="question" role="group" aria-label="Ready to code?">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">Ready to code?</span><span class="muted">switch_mode</span></div>
+            <p class="muted" style="font-size:13px">Plan exit in the mode Plan. Open choice 5: two options change the mode of the agent. The recommended option moves to the front. The others keep the order of the agent.</p>
+            <div class="question-actions">
+              <button class="button primary" type="button">Yes, manually approve edits</button>
+              <button class="button" type="button">Yes, and use auto mode</button>
+              <button class="button" type="button">Yes, and bypass permissions</button>
+              <button class="button" type="button">No, keep planning</button>
+            </div>
           </div>
         </div>
       </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Plan ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
   </div>
 </section>
 
 <section class="state">
   <h2>4. Answer sent, and answer refused</h2>
-  <p class="muted">Left card: the user clicked Allow. Its buttons are disabled until the card closes. Right card: the main process refused the answer. The card stays, shows the reason, and its buttons work again.</p>
-  <div class="window">
-    <div class="mark"><span class="mark-label">New: sending and error states of a card</span>
-      <div class="permission-queue" style="margin-top:0">
-        <div class="question" role="group" aria-label="npm test">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button" disabled>Allow</button>
-            <button class="button" type="button" disabled>Refuse</button>
+  <p class="muted">First card: the user clicked Allow. Its buttons are disabled until the card closes. Second card: the main process refused the answer. The card stays, shows the reason, and its buttons work again.</p>
+  <div class="window frame" style="height:520px">
+    <div class="frame-head">
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
+      <div class="tool"><span>◌</span><span class="tool-title">Edit src\math.ts</span><span>Pending</span></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <div class="mark"><span class="mark-label">New: sending and error states of a card</span>
+        <div class="permission-queue" role="region" aria-label="Permission requests">
+          <div class="question" role="group" aria-label="npm test">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
+            <div class="question-actions">
+              <button class="button primary" type="button" disabled>Allow</button>
+              <button class="button" type="button" disabled>Refuse</button>
+            </div>
           </div>
-        </div>
-        <div class="question" role="group" aria-label="Edit src\math.ts">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">Edit src\math.ts</span><span class="muted">edit</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button">Allow</button>
-            <button class="button" type="button">Refuse</button>
+          <div class="question" role="group" aria-label="Edit src\math.ts">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">Edit src\math.ts</span><span class="muted">edit</span></div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Allow</button>
+              <button class="button" type="button">Refuse</button>
+            </div>
+            <p class="error" role="alert">Aether cannot send this answer.</p>
           </div>
-          <p class="error" role="alert">Aether cannot send this answer.</p>
         </div>
       </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
   </div>
 </section>
 
 <section class="state">
   <h2>5. After the first answer (A4)</h2>
-  <p class="muted">The user allowed the first request. Its card closed, and its tool runs. The second card stays and is now the oldest.</p>
-  <div class="window">
+  <p class="muted">The user allowed the first request. Its card closed, and its tool runs. The second card stays and is now the oldest. The transcript stays at the bottom while the tool entry changes.</p>
+  <div class="window frame" style="height:460px">
+    <div class="frame-head">
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Run the tests and fix the failure.</p></div>
+      <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
       <div class="tool"><span class="spin">◌</span><span class="tool-title">npm test</span><span>Running</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Pending</span></div>
     </div>
-    <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
-    <div class="permission-queue" role="region" aria-label="Permission requests">
-      <div class="question" role="group" aria-label="Read C:\work\logs\last-run.txt">
-        <h3>Permission request</h3>
-        <div class="question-tool"><span class="mono">Read C:\work\logs\last-run.txt</span><span class="muted">read</span></div>
-        <div class="question-actions">
-          <button class="button primary" type="button">Allow</button>
-          <button class="button" type="button">Refuse</button>
+    <div class="dock">
+      <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
+      <div class="permission-queue" role="region" aria-label="Permission requests">
+        <div class="question" role="group" aria-label="Read C:\work\logs\last-run.txt">
+          <h3>Permission request</h3>
+          <div class="question-tool"><span class="mono">Read C:\work\logs\last-run.txt</span><span class="muted">read</span></div>
+          <div class="question-actions">
+            <button class="button primary" type="button">Allow</button>
+            <button class="button" type="button">Refuse</button>
+          </div>
         </div>
       </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
   </div>
 </section>
@@ -262,7 +329,10 @@ button:disabled { cursor: default; opacity: .5; }
 <section class="state">
   <h2>6. After Stop (A5)</h2>
   <p class="muted">Two cards were open. The user clicked Stop. The agent received "cancelled" for both requests. Both cards closed. The open tool calls show "Failed". The composer is ready.</p>
-  <div class="window">
+  <div class="window frame" style="height:460px">
+    <div class="frame-head">
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Run the tests and fix the failure.</p></div>
       <div class="msg"><p>I run the tests and read the log at the same time.</p></div>
@@ -270,29 +340,45 @@ button:disabled { cursor: default; opacity: .5; }
       <div class="tool tool-failed"><span>✕</span><span class="tool-title">Read C:\work\logs\last-run.txt</span><span>Failed</span></div>
       <p class="notice">Stopped.</p>
     </div>
-    <div class="mark" style="margin-top:20px"><span class="mark-label">Changed: no card after Stop</span>
-      <p class="muted" style="font-size:13px">The permission queue region does not show.</p>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">Changed: no card after Stop</span>
+        <p class="muted" style="font-size:13px">The permission queue region does not show. No status line: the session is idle.</p>
+      </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
   </div>
 </section>
 
 <section class="state">
   <h2>7. Loading and empty data</h2>
-  <p class="muted">The queue has no load of its own: the snapshot of <span class="mono">sessions.open</span> holds the open requests. A request with no title shows "Tool call". A request with no options shows one button.</p>
-  <div class="window">
-    <div class="permission-queue" style="margin-top:0">
-      <div class="question" role="group" aria-label="Tool call">
-        <h3>Permission request</h3>
-        <div class="question-tool"><span class="mono">Tool call</span><span class="muted">other</span></div>
-        <div class="question-actions">
-          <button class="button" type="button">Cancel request</button>
+  <p class="muted">The queue has no load of its own: the snapshot of <span class="mono">sessions.open</span> holds the open requests. A request with no title shows "Tool call". A request with no options shows one button, with no primary style.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head">
+      <div class="page-head"><h1>Fix the failing test</h1></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="tool"><span>◌</span><span class="tool-title">Tool call</span><span>Pending</span></div>
+    </div>
+    <div class="dock">
+      <div class="permission-queue" role="region" aria-label="Permission requests">
+        <div class="question" role="group" aria-label="Tool call">
+          <h3>Permission request</h3>
+          <div class="question-tool"><span class="mono">Tool call</span><span class="muted">other</span></div>
+          <div class="question-actions">
+            <button class="button" type="button">Cancel request</button>
+          </div>
         </div>
       </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
     </div>
   </div>
 </section>
 
+<script>
+  // Mockup only: show each transcript scrolled to the bottom, as the app keeps it.
+  for (const log of document.querySelectorAll('.frame > .transcript')) log.scrollTop = log.scrollHeight
+</script>
 </body>
 </html>

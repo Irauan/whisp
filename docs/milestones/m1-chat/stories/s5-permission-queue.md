@@ -6,7 +6,7 @@ Status: draft for the design review. Not approved.
 - Checks: A4, A5.
 - Defect fixed: "Aether cancels each permission request, so a tool that needs a question fails" (`docs/architecture.md`, Known defects).
 - Mockup: [s5-permission-queue.mockup.html](s5-permission-queue.mockup.html).
-- Depends on: S4 (merged). Shares files with S6, S7 and S9. See "Files and dependencies".
+- Depends on: S4 (merged) and S8 (the fixed frame and the bottom dock). Shares files with S6, S7, S8 and S9. See "Files and dependencies".
 
 ## Behavior
 
@@ -79,21 +79,37 @@ See the mockup. It shows these states:
 - a card with the "always" options of real Claude
 - answer sent, and answer refused
 - the screen after Stop
+- a request with no title and no options
+
+Each state shows the fixed frame of S8.
+
+### The frame and the bottom dock
+
+The user decided on 2026-11-27: "the text input for questions and chat should be anchored in the bottom of the feed."
+
+- S8 builds the fixed frame: the header at the top, the transcript as the only scroll area, and a bottom dock that stays in view. See the S8 spec, "The session window frame".
+- S5 adds the permission queue to the dock. S5 does not build the frame.
+- The transcript scrolls under the dock. It stays at the bottom while new entries arrive.
+- With many cards, the dock scrolls inside. The composer and the Stop button stay in view.
 
 Changes against the current screen:
 
-- New: the permission queue, a region below the plan widget and above the composer.
+- Changed (S8): the session window is a fixed frame with a bottom dock.
+- New: the permission queue, a region in the dock, below the plan widget and above the composer.
 - New: one permission card for each open request.
 - Changed: the status line says "Waiting for your answer" while the queue has a card.
 
 Order in the session window, from the top. The S8 mockup uses the same order.
 
-1. Header and facts
-2. Transcript
-3. Status line
-4. Plan widget (S8)
-5. Permission queue (S5)
-6. Composer
+1. Header and facts (fixed)
+2. Transcript (the only scroll area)
+3. Bottom dock:
+   1. Status line
+   2. Plan widget (S8)
+   3. Permission queue (S5)
+   4. Composer
+
+The trust and directory questions of S6 use the same dock when they show as cards in the session window.
 
 ### Card content
 
@@ -236,7 +252,7 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 - `src/features/sessions/processes.store.ts`: only if the queue needs the process of a session. Shared with S9.
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the new contract. Shared with S6, S7 and S9.
 - `src/renderer/src/session-view.ts`: the new changes.
-- `src/renderer/src/components/SessionPage.tsx`: the queue and the status line. Shared with S6 and S8.
+- `src/renderer/src/components/SessionPage.tsx`: the queue in the bottom dock of S8, and the status line. Shared with S6 and S8.
 - New `src/renderer/src/components/PermissionQueue.tsx`.
 - `src/renderer/src/styles.css`: reuse `.question` and `.question-actions`. Add a compact button variant for the cards. Shared with S8.
 - `tests/simulated-agent/agent.mjs`, `scenarios.mjs`, `control.ts`: the new steps. Shared with S7 and S9.
@@ -245,6 +261,7 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 ### Dependencies
 
 - Needs: S4 (merged).
+- Needs: S8 merged first. S8 builds the fixed frame and the bottom dock, and S5 adds its queue to the dock. This changes the plan: S5 depended on S4 only. The S5 test author can still run before S8 merges, if its tests check the place of the queue only (below the transcript, above the text field "Prompt").
 - S5, S6 and S9 touch the agent process code. The coordinator merges them one at a time. The later story updates its branch.
 - S9 reads the queue in its idle rule. The queue only exists during a turn, so S9 does not need S5 code to start.
 

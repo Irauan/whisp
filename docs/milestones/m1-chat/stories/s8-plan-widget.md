@@ -34,7 +34,27 @@ Status: draft for the design review. Not approved.
 - The widget stays after the turn ends. It stays until a new plan replaces it.
 - A plan with no steps clears the plan. The widget does not show. This holds after a restart.
 - The plan is a saved entry, so the widget shows the same plan after a restart.
-- The widget sits below the transcript and above the composer. It is not inside the log "Transcript". Later entries come above it. See open choice 3.
+- The widget sits in the bottom dock, below the transcript and above the composer. It is not inside the log "Transcript". Later entries come above it. The user decided this (open choice 3, option B).
+
+### The session window frame
+
+The user decided on 2026-11-27: "the text input for questions and chat should be anchored in the bottom of the feed." S8 builds the frame, because S8 owns "pinned" and runs before S5.
+
+- The session window is a fixed frame with three parts:
+  1. the header (title and facts) at the top
+  2. the transcript, the only scroll area
+  3. the bottom dock, always in view
+- The bottom dock holds, from the top:
+  1. the status line ("Starting Claude Code", "Working")
+  2. the plan widget (S8)
+  3. the permission queue (S5 adds it)
+  4. the composer
+- The trust and directory questions of S6 use the same dock when they show as cards in the session window.
+- The element with the role `log` and the name "Transcript" is the scroll area itself. A wrapper around it must not scroll. Reason: the locked test compares the box of the log with the box of the widget.
+- The transcript scrolls under the dock. It stays at the bottom while new entries and streamed text arrive.
+- When the user scrolls up, the transcript keeps the position of the user. When the user scrolls back to the bottom, it follows new entries again.
+- The dock has a maximum height. A tall dock scrolls inside, and the composer stays in view.
+- A draft session uses the same frame. Its dock holds only the composer.
 - Aether ignores the priority of a step.
 - The spinner stops when the system asks for reduced motion, like the other spinners of the app.
 
@@ -74,20 +94,25 @@ See the mockup. It shows these states:
 - an empty plan
 - the error state: none applies, and the mockup says why
 
+Each state of the mockup shows the fixed frame.
+
 Changes against the current screen:
 
-- New: the plan widget, between the status line and the permission queue (S5).
+- Changed: the session window is a fixed frame. The header stays at the top. Only the transcript scrolls. Today the whole page scrolls, with the composer.
+- New: the bottom dock, always in view.
+- New: the plan widget in the dock, between the status line and the permission queue (S5).
 - Changed: the transcript shows no "Updated the plan" for the first plan of a session. Today S4 shows it for each plan update.
 - Changed: a progress update no longer adds a line "Updated the plan".
 
 Order in the session window, from the top. The S5 mockup uses the same order.
 
-1. Header and facts
-2. Transcript
-3. Status line
-4. Plan widget (S8)
-5. Permission queue (S5)
-6. Composer
+1. Header and facts (fixed)
+2. Transcript (the only scroll area)
+3. Bottom dock:
+   1. Status line
+   2. Plan widget (S8)
+   3. Permission queue (S5)
+   4. Composer
 
 ### UI contract of the locked tests
 
@@ -96,6 +121,9 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - The widget is an element with the role `region` and the exact name "Plan". Use `aria-label="Plan"`. The visible header says "Plan 1 of 3".
 - It is not inside the element with the role `log` and the name "Transcript".
 - Its box starts below the end of the box of the transcript, and ends above the text field "Prompt".
+  - With the frame, this holds only when the log element is the scroll area. Then its box ends at the top of the dock.
+  - If a wrapper scrolls and the log grows to its full height, the box of the log ends below the widget, and the test fails.
+  - Playwright counts an entry that is scrolled out of the log as visible, so the text checks of the transcript still pass.
 - It has one `list` with one `listitem` for each step, in the order of the agent.
 - Each item holds its step text and its state text. It holds no other state text.
 - Only the item in progress runs an animation. The tests ask for full motion.
@@ -151,17 +179,20 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - `src/features/sessions/entry.ts`: `isSamePlan`, and the comment of `planEntry`. Shared with S5 and S7.
 - `src/features/sessions/session.store.ts`: the query of the latest plan entry.
 - `src/features/sessions/transcript.store.test.ts`, `entry.test.ts`: unit tests.
-- `src/renderer/src/components/Transcript.tsx`: the marker rule.
+- `src/renderer/src/components/Transcript.tsx`: the marker rule. The log element becomes the scroll area, and it keeps its scroll at the bottom.
 - New `src/renderer/src/components/PlanWidget.tsx`.
-- `src/renderer/src/components/SessionPage.tsx`: the place of the widget. Shared with S5 and S6.
+- `src/renderer/src/components/SessionPage.tsx`: the fixed frame (header, transcript, bottom dock) and the place of the widget in the dock. Shared with S5 and S6.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
-- `src/renderer/src/styles.css`: the widget styles. The old `.plan` rules can go. Shared with S5.
+- `src/renderer/src/styles.css`: the frame, the dock and the widget styles. The old `.plan` rules can go. The `.page` rules of the session window change. Shared with S5.
+- The layout around the page (the main area of `App.tsx`) may need a fixed height for the frame. Shared with S6.
 
 ### Dependencies
 
 - Needs: S4 (merged).
 - No dependency on S5, S6, S7 or S9. S8 does not touch the agent process code.
-- S5 and S8 both change `SessionPage.tsx`, `transcript.store.ts` and `styles.css`. They merge one at a time.
+- S8 builds the frame and the bottom dock. S5 needs S8 merged, and then adds its queue to the dock. This changes the plan: S5 depended on S4 only.
+- S5 and S8 both change `SessionPage.tsx`, `transcript.store.ts` and `styles.css`. They merge one at a time, S8 first.
+- If S6 merges first and shows its questions as cards in the session window, S8 moves them into the dock.
 
 ## Conflicts between the locked tests and the brief
 
@@ -170,7 +201,7 @@ No test contradicts the brief. The tests settle five points that the brief leave
 1. "New plan" has no definition in the brief. The tests say: the same step texts with new states are progress, not a new plan. The S4 code marks each plan update, so the builder changes the S4 write rule.
 2. The brief does not cover an empty plan. The tests say: a plan with no steps hides the widget. The brief says "It stays after the turn ends". That sentence covers a turn end, not an empty plan, so the two agree.
 3. The brief gives icons only. The tests also require a state text in each step: "Pending", "In progress", "Completed". It can be visually hidden.
-4. The brief says "pinned above the composer". The tests check the place only: below the transcript and above the composer. They do not check a sticky dock. See open choice 3.
+4. The brief says "pinned above the composer". The tests check the place only: below the transcript and above the composer. They do not check a sticky dock. The user chose the dock (open choice 3). The tests still hold, if the log element is the scroll area. See "UI contract of the locked tests".
 5. The brief says the transcript shows "Updated the plan" when a new plan replaces the old one. The tests do not decide the first plan of a session. See open choice 2.
 
 The count agrees with A11: "Plan 1 of 3" counts the completed steps. The brief example "Plan 2 of 5" fits this reading.
@@ -202,14 +233,14 @@ The advisor answered each choice. Its answer is recorded under the choice.
 
 ### 3. "Pinned": placement or a sticky dock
 
-- User column: no.
+- **Decided by the user on 2026-11-27: option B.** The user said: "the text input for questions and chat should be anchored in the bottom of the feed."
+- S8 builds the frame. S5 adds its queue to the dock. See "The session window frame".
+- User column: no, until the user decided it. It is now an approved hot item. A change of it goes to the user.
 - Hard to revert: no. A later change is in the layout only.
-- The advisor predicts that the user may disagree. So this is a hot item.
-- Options:
+- Options as they were offered:
   - A. Placement in the flow of the page. The widget comes after the transcript, and the page scrolls as today. Impact: matches the locked tests and the current page; with a long transcript, the widget and the composer scroll with the page.
   - B. A sticky dock. The transcript scrolls inside its own area. The plan widget, the permission queue and the composer stay at the bottom of the window. Impact: like the Claude desktop app; a layout change that also moves the S5 queue; the log "Transcript" must become the scroll area, or the locked test of the place fails.
-- Recommendation: A in S8. A dock can follow as its own story.
-- Advisor: A. The user may expect the dock of the Claude desktop app.
+- Earlier recommendation: A in S8. The advisor also said A, and predicted that the user may expect the dock of the Claude desktop app. The user chose B.
 
 ### 4. The fold state
 

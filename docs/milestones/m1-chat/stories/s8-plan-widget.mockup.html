@@ -85,6 +85,17 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .plan-steps li.in-progress .icon { color: var(--accent); }
 .plan-steps li.completed { color: var(--muted); text-decoration: line-through; }
 .plan-steps li.completed .icon { color: var(--accent); }
+
+/* New (S8 builds it, user decision 2026-11-27): the session window is a fixed frame.
+   The header stays at the top, the transcript is the only scroll area, and the bottom dock stays in view. */
+.frame { display: flex; flex-direction: column; height: 560px; padding: 0; overflow: hidden; }
+.frame-head { flex: none; padding: 8px 32px 0; border-bottom: 1px solid var(--line); }
+.frame-head .page-head { margin-bottom: 8px; }
+.frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
+.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); border-top: 1px solid var(--line); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); max-height: 70%; overflow: auto; }
+.dock > * { max-width: 760px; width: 100%; }
+.dock .agent-status, .dock .composer, .dock .plan-widget { margin-top: 0; }
+.dock-mark { outline: 2px dashed var(--mark); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -96,16 +107,18 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
+
 <header class="intro">
   <h1>S8 Plan widget</h1>
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
-  <p class="muted">Order from the top: header and facts, transcript, status line, plan widget, permission queue (S5, not shown here), composer. The widget is in the flow of the page, not a sticky dock (open choice 3).</p>
+  <p class="muted">Frame (user decision, 2026-11-27, open choice 3 option B): the header stays at the top. The transcript is the only scroll area. It scrolls under the bottom dock and stays at the bottom while new entries arrive. S8 builds the frame. S5 adds its queue to the dock.</p>
+  <p class="muted">Bottom dock, from the top: status line, plan widget, permission queue (S5, not shown here), composer.</p>
 </header>
 
 <section class="state">
   <h2>0. Current screen (S4), for comparison</h2>
-  <p class="muted">Today each plan update adds the line "Updated the plan" to the transcript. No widget shows the steps.</p>
+  <p class="muted">Today the whole page scrolls, and the composer scrolls with it. Each plan update adds the line "Updated the plan" to the transcript. No widget shows the steps.</p>
   <div class="window">
     <div class="page-head"><h1>Plan the change</h1></div>
     <div class="transcript" role="log" aria-label="Transcript">
@@ -122,33 +135,74 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 <section class="state">
   <h2>1. Empty: no plan</h2>
-  <p class="muted">The session has no plan entry, or the latest plan has no steps. No widget shows. The screen is the screen of today.</p>
-  <div class="window">
+  <p class="muted">The session has no plan entry, or the latest plan has no steps. No widget shows. The frame still applies: the dock holds only the composer.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head mark"><span class="mark-label">Changed: fixed header</span>
+      <div class="page-head"><h1>Say hello</h1></div>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Say hello.</p></div>
       <div class="msg"><p>Hello.</p></div>
     </div>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    <div class="dock dock-mark">
+      <span class="mark-label" style="justify-self:start;width:auto">New: bottom dock, always in view</span>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
   </div>
 </section>
 
 <section class="state">
   <h2>2. During a turn (A11): "Plan 1 of 3"</h2>
-  <p class="muted">The agent sent a plan with three steps, then marked step 1 completed and step 2 in progress. The count counts the completed steps. The step in progress has the only spinner. The first plan of the session adds no "Updated the plan" (open choice 2). The progress update adds none either.</p>
-  <div class="window">
+  <p class="muted">The agent sent a plan with three steps, then marked step 1 completed and step 2 in progress. The count counts the completed steps. The step in progress has the only spinner. The first plan of the session adds no "Updated the plan" (open choice 2). The progress update adds none either. A long transcript scrolls under the dock.</p>
+  <div class="window frame">
+    <div class="frame-head">
+      <div class="page-head"><h1>Plan the change</h1></div>
+    </div>
     <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Look at the module and tell me what it does.</p></div>
+      <div class="msg"><p>The module reads the settings file, checks each value, and gives the defaults for the missing ones. It has no tests.</p></div>
       <div class="msg user"><p>Change the module, with tests first.</p></div>
       <div class="msg"><p>I made a plan.</p></div>
       <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: no marker for the first plan and for progress</span>
         <p class="notice struck">Updated the plan</p>
         <p class="notice struck">Updated the plan</p>
       </div>
-      <div class="tool"><span>◌</span><span class="mono">Read src\module.ts</span><span style="margin-left:auto">Running</span></div>
+      <div class="tool"><span>◌</span><span class="mono">Write tests\module.test.ts</span><span style="margin-left:auto">Running</span></div>
     </div>
-    <p class="agent-status muted"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Working</span></p>
-    <div class="mark" style="margin-top:20px"><span class="mark-label">New: plan widget (region "Plan")</span>
-      <section class="plan-widget" aria-label="Plan" style="margin-top:0">
+    <div class="dock">
+      <p class="agent-status muted"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Working</span></p>
+      <div class="mark"><span class="mark-label">New: plan widget (region "Plan"), in the dock</span>
+        <section class="plan-widget" aria-label="Plan">
+          <button class="plan-head" type="button" aria-expanded="true">
+            <svg class="icon chevron"><use href="#i-chevron"/></svg>
+            <span class="plan-title">Plan 1 of 3</span>
+          </button>
+          <ol class="plan-steps" role="list">
+            <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
+            <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Write the tests</span><span class="visually-hidden">In progress</span></li>
+            <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Change the module</span><span class="visually-hidden">Pending</span></li>
+          </ol>
+        </section>
+      </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>3. After the turn: unfolded and folded</h2>
+  <p class="muted">The widget stays after the turn ends, and after a restart. The header is the one button with aria-expanded. Folded, the count stays, the list hides, and the transcript gets the space.</p>
+  <div class="window frame" style="height:420px">
+    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
+      <div class="msg"><p>The first step is done.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
         <button class="plan-head" type="button" aria-expanded="true">
           <svg class="icon chevron"><use href="#i-chevron"/></svg>
           <span class="plan-title">Plan 1 of 3</span>
@@ -159,46 +213,36 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
           <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Change the module</span><span class="visually-hidden">Pending</span></li>
         </ol>
       </section>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
   </div>
-</section>
-
-<section class="state">
-  <h2>3. After the turn: unfolded and folded</h2>
-  <p class="muted">The widget stays after the turn ends, and after a restart. The header is the one button with aria-expanded. Folded, the count stays and the list hides.</p>
-  <div class="window">
+  <p class="muted" style="margin:14px 0 6px;font-size:13px">Folded:</p>
+  <div class="window frame" style="height:340px">
+    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
       <div class="msg"><p>The first step is done.</p></div>
     </div>
-    <section class="plan-widget" aria-label="Plan">
-      <button class="plan-head" type="button" aria-expanded="true">
-        <svg class="icon chevron"><use href="#i-chevron"/></svg>
-        <span class="plan-title">Plan 1 of 3</span>
-      </button>
-      <ol class="plan-steps" role="list">
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
-        <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Write the tests</span><span class="visually-hidden">In progress</span></li>
-        <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Change the module</span><span class="visually-hidden">Pending</span></li>
-      </ol>
-    </section>
-    <p class="muted" style="margin:14px 0 0;font-size:13px">Folded:</p>
-    <section class="plan-widget" aria-label="Plan" style="margin-top:6px">
-      <button class="plan-head" type="button" aria-expanded="false">
-        <svg class="icon chevron"><use href="#i-chevron"/></svg>
-        <span class="plan-title">Plan 1 of 3</span>
-      </button>
-    </section>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="false">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 1 of 3</span>
+        </button>
+      </section>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
   </div>
 </section>
 
 <section class="state">
   <h2>4. A new plan replaces the old one</h2>
-  <p class="muted">In a later turn the agent sends other steps. The widget shows only the new plan. The transcript shows "Updated the plan" at that point.</p>
-  <div class="window">
+  <p class="muted">In a later turn the agent sends other steps. The widget shows only the new plan. The transcript shows "Updated the plan" at that point, and stays at the bottom.</p>
+  <div class="window frame" style="height:460px">
+    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Use another approach.</p></div>
       <div class="msg"><p>I change the approach.</p></div>
@@ -207,54 +251,67 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
       </div>
       <div class="msg"><p>Now I follow the new plan.</p></div>
     </div>
-    <section class="plan-widget" aria-label="Plan">
-      <button class="plan-head" type="button" aria-expanded="true">
-        <svg class="icon chevron"><use href="#i-chevron"/></svg>
-        <span class="plan-title">Plan 0 of 2</span>
-      </button>
-      <ol class="plan-steps" role="list">
-        <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Remove the old files</span><span class="visually-hidden">In progress</span></li>
-        <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Write the new files</span><span class="visually-hidden">Pending</span></li>
-      </ol>
-    </section>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="true">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 0 of 2</span>
+        </button>
+        <ol class="plan-steps" role="list">
+          <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Remove the old files</span><span class="visually-hidden">In progress</span></li>
+          <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Write the new files</span><span class="visually-hidden">Pending</span></li>
+        </ol>
+      </section>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
   </div>
 </section>
 
 <section class="state">
   <h2>5. All steps completed, with a long plan</h2>
-  <p class="muted">The widget stays with "Plan 5 of 5". A long plan scrolls inside the widget, so the composer stays near. A long step text wraps.</p>
-  <div class="window">
-    <section class="plan-widget" aria-label="Plan" style="margin-top:0">
-      <button class="plan-head" type="button" aria-expanded="true">
-        <svg class="icon chevron"><use href="#i-chevron"/></svg>
-        <span class="plan-title">Plan 5 of 5</span>
-      </button>
-      <ol class="plan-steps" role="list">
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Write the tests for the parser, the formatter and the error messages of the command line</span><span class="visually-hidden">Completed</span></li>
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Change the module</span><span class="visually-hidden">Completed</span></li>
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Run the tests</span><span class="visually-hidden">Completed</span></li>
-        <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Update the notes</span><span class="visually-hidden">Completed</span></li>
-      </ol>
-    </section>
+  <p class="muted">The widget stays with "Plan 5 of 5". A long plan scrolls inside the widget, so the composer stays in view. A long step text wraps.</p>
+  <div class="window frame" style="height:480px">
+    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg"><p>All steps are done.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="true">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 5 of 5</span>
+        </button>
+        <ol class="plan-steps" role="list" style="max-height:140px">
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Write the tests for the parser, the formatter and the error messages of the command line</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Change the module</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Run the tests</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Update the notes</span><span class="visually-hidden">Completed</span></li>
+        </ol>
+      </section>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
   </div>
 </section>
 
 <section class="state">
   <h2>6. An empty plan clears the widget</h2>
   <p class="muted">The agent sent a plan with no steps. The widget does not show, also after a restart. The transcript shows the marker at that point, because a plan existed before.</p>
-  <div class="window">
+  <div class="window frame" style="height:380px">
+    <div class="frame-head"><div class="page-head"><h1>Plan the change</h1></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <p class="notice">Updated the plan</p>
       <div class="msg"><p>I cleared the plan.</p></div>
     </div>
-    <div class="mark" style="margin-top:20px"><span class="mark-label">Changed: no widget for an empty plan</span>
-      <p class="muted" style="font-size:13px">No region "Plan".</p>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">Changed: no widget for an empty plan</span>
+        <p class="muted" style="font-size:13px">No region "Plan" in the dock.</p>
+      </div>
+      <form class="composer"><div class="composer-box"><textarea rows="2" aria-label="Prompt"></textarea>
+        <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
-    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
-      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
   </div>
 </section>
 
@@ -263,5 +320,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   <p class="muted">Neither applies. The widget has no load and no command of its own. It shows the latest plan entry of the snapshot of <span class="mono">sessions.open</span>, and each event updates it at once. The waiting state is the step in progress with its spinner (state 2). With reduced motion, the spinner stops, like the other spinners of the app.</p>
 </section>
 
+<script>
+  // Mockup only: show each transcript scrolled to the bottom, as the app keeps it.
+  for (const log of document.querySelectorAll('.frame > .transcript')) log.scrollTop = log.scrollHeight
+</script>
 </body>
 </html>
