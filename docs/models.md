@@ -27,7 +27,9 @@ Status: set by the user on 2026-11-26. The section "Models" of `docs/process.md`
 ## Advisor
 
 - Every agent can use the advisor.
-- The user sets Fable as the default advisor with `/advisor fable`, then starts a new coordinator session.
+- `.claude/settings.json` sets `advisorModel` to `fable`. Each new session in this repository starts with the Fable advisor.
+- On some plans, Fable needs the usage-credits consent first. Run `/model fable` once and accept it.
+- A choice made through Remote Control applies only to that session.
 - `/advisor` in a running conversation keeps the old advisor model until `/clear` or `/compact`.
 - Subagents inherit the advisor from the coordinator.
 - Every agent asks the advisor first. "Escalation" in `docs/process.md` says what goes to the user.
