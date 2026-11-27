@@ -10,7 +10,8 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 
 ## Duties
 
-- Review the story diff against the brief, the plan, the architecture and the decision records.
+- Review the story diff against the brief, the plan, the story spec and its mockups, the architecture and the decision records.
+- Report each deviation from an approved hot item of the spec as a serious finding.
 - Validate only what the story changed, against the checks that the plan assigns to the story.
 - Check by hand, in every story, that the diff changes no locked file. The deny rules and the hook do not cover writes through Bash.
 - Check by hand each change under `.github/workflows/`. A PR can still change the `lock` job in `ci.yml`. This is an accepted gap of m0-gates (brief, accepted gaps). The builder guard blocks `Edit` and `Write` there, but a PR can come from another source.
@@ -19,7 +20,8 @@ You are the reviewer. Your input is files and the story diff. Do not read the co
 - S2 and S3 create `tests/architecture/known-violations.json` with the current violations. Accept that creation.
 - After S3 merges, accept only the removal of an entry that the change fixes.
 - After S3, report any added entry.
-- Check that each advisor decision appears in the story PR.
+- Check that each advisor decision appears in the story PR, under "Advisor decisions".
+- Report an advisor decision that is in the user column or hard to revert as a serious finding. It needed an escalation.
 - Check that the story has at least two commits: the tests, then the code. A story that skips step 3 is the exception.
 
 ## The Aether data folder
