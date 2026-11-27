@@ -83,6 +83,26 @@
     "sha256": "b5edd0479a06424004ecf07dc3f7cabc334396c2946aa94e7098ff65d185b0ed",
     "story": "m1-chat/s4"
   },
+  "tests/acceptance/m1-chat/s7/attachments.spec.ts": {
+    "sha256": "2a19d436cb9d7661dc2ef347388617865973532cf31aa2ed88547530640417e5",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/claude-account.spec.ts": {
+    "sha256": "20f34d9a71bda1110e27415f4ed73664c27943a2b2233f113e7112b8275b8f05",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/fixture.ts": {
+    "sha256": "0e6d6d137693e4cc6a1e449913645de5a161009dc5dbbbaf1c311a79edad168a",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/refusals.spec.ts": {
+    "sha256": "41f23ce149622613383c78265466d4bc03a2d7bbf294ed33be3d36e041c6a978",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/settings.spec.ts": {
+    "sha256": "702d35ccb30b77629d48c1990a47d35db1e1ea35fa8b94a6353d027e765534a7",
+    "story": "m1-chat/s7"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
