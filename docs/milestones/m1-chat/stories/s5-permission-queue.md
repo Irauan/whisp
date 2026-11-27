@@ -91,7 +91,7 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - S5 adds the permission queue to the dock. S5 does not build the frame.
 - The transcript scrolls under the dock. It stays at the bottom while new entries arrive.
 - With many cards, the dock scrolls inside. The composer and the Stop button stay in view.
-- The composer is the slim composer of S8: one line high, the round Stop button inside the box, and the Mode control in a thin row below it. S5 does not change the composer. See the S8 spec, "The slim composer".
+- The composer is the composer of S8, like the GitHub app: a text area of 2 to 8 lines, and a control row inside the box with "+", Mode, the model and the round Send or Stop button. S5 does not change the composer. See the S8 spec, "The composer".
 
 Changes against the current screen:
 

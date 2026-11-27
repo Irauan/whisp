@@ -56,26 +56,40 @@ The user decided on 2026-11-27: "the text input for questions and chat should be
 - The dock has a maximum height. A tall dock scrolls inside, and the composer stays in view.
 - A draft session uses the same frame. Its dock holds only the composer.
 
-### The slim composer
+### The composer
 
-The user decided on 2026-11-27: make the composer of the session window slim, like the composer of the Claude Code desktop app. S8 builds it with the frame.
+The user decided on 2026-11-27: the composer of the session window follows the composer of the GitHub app. This replaces the slim composer of commit `357d125`. S8 builds it with the frame.
 
 - The composer stays at the bottom of the dock.
-- It has one rounded box, one text line high, with the placeholder "Reply to Claude" inside.
-- The text field grows with its content, up to `COMPOSER_MAX_LINES` lines. Above that, it scrolls inside.
+- It is one rounded box.
+- The text area "Prompt" is at least 2 lines high, with the placeholder "Reply to Claude" inside.
+- The text area grows with its content, up to `COMPOSER_MAX_LINES` lines. Above that, it scrolls inside.
   - Define `COMPOSER_MAX_LINES = 8` in one place in the renderer.
-- Inside the box, from the left:
-  1. A small round "+" button. Its accessible name is "Add context". It is disabled and shows "Coming soon", because a running session takes no new attachment in m1.
-  2. The text field "Prompt".
-  3. The small round button "Send", or "Stop" during a turn.
-- Below the box, outside it, is one thin row of compact controls:
-  - At the left: the Mode control. It keeps the accessible name "Mode". It has the height of the compact buttons of S5.
-  - At the right: the model of the session, as a muted label.
-- The status line stays in the dock, above the plan widget. The thin row does not repeat it.
-- No mic button. Voice input stays "coming soon" (brief, Non-goals).
-- The accessible names stay: "Prompt", "Send", "Stop", "Mode". The locked tests of S3, S4 and S8 find the controls by these names.
+- A control row sits inside the box, at its bottom.
+  - At the left, in this order:
+    1. A small "+" button. Its accessible name is "Add context". It is disabled and shows "Coming soon", because a running session takes no new attachment in m1.
+    2. The Mode control, as a small text-only button with no border. It keeps the accessible name "Mode". After the first message it is disabled, as in S3.
+    3. The model of the session, as a small text-only button with no border. It is disabled, because the model is fixed once the session starts.
+  - At the right: the small round button "Send". It shows as "Stop" during a turn.
+- No mic button. Voice input is outside m1 (brief, Non-goals).
+- The session window has no row below the box. The folder and the account are fixed once the session starts.
+- The composer of a new session keeps its row below the box. It does not change in S8.
+- The status line stays in the dock, above the plan widget.
+- The accessible names stay: "Prompt", "Send", "Stop", "Mode" and "Add context". The locked tests of S3, S4 and S8 find the controls by these names.
 - Enter sends, and Shift+Enter adds a line, as today.
-- This applies to the composer of the session window only. The composer of a new session does not change in S8.
+
+### Failed turns in the transcript
+
+The user decided on 2026-11-27, as part of the frame:
+
+- A failed turn shows as one muted line with an info icon, at its point in the transcript.
+- The style follows the reference "Execution failed: Model … is not available".
+- Today S4 shows such a notice in the danger color. S8 changes only its look.
+- The line keeps the role `alert` and the texts of S4 and S7. The S4 tests find "Claude Code is not signed in." and "exit code <n>" in an `alert`.
+- An info notice, such as "Stopped.", does not change.
+
+### More rules of the widget
+
 - Aether ignores the priority of a step.
 - The spinner stops when the system asks for reduced motion, like the other spinners of the app.
 
@@ -113,7 +127,8 @@ See the mockup. It shows these states:
 - a new plan with the marker in the transcript
 - all steps completed
 - an empty plan
-- the error state: none applies, and the mockup says why
+- a failed turn, as one muted line with an info icon
+- the error state of the widget: none applies, and the mockup says why
 
 Each state of the mockup shows the fixed frame.
 
@@ -121,7 +136,8 @@ Changes against the current screen:
 
 - Changed: the session window is a fixed frame. The header stays at the top. Only the transcript scrolls. Today the whole page scrolls, with the composer.
 - New: the bottom dock, always in view.
-- Changed: the slim composer. One line high, grows up to 8 lines. The Mode control moves to a thin row below the box.
+- Changed: the composer like the GitHub app. The text area is 2 to 8 lines high. The "+", Mode and model controls and the Send button sit in a row inside the box, at its bottom.
+- Changed: a failed turn shows as one muted line with an info icon. It keeps the role `alert`.
 - New: the plan widget in the dock, between the status line and the permission queue (S5).
 - Changed: the transcript shows no "Updated the plan" for the first plan of a session. Today S4 shows it for each plan update.
 - Changed: a progress update no longer adds a line "Updated the plan".
@@ -203,8 +219,9 @@ The builder must meet each item. The fixture `tests/acceptance/m1-chat/s8/fixtur
 - `src/features/sessions/transcript.store.test.ts`, `entry.test.ts`: unit tests.
 - `src/renderer/src/components/Transcript.tsx`: the marker rule. The log element becomes the scroll area, and it keeps its scroll at the bottom.
 - New `src/renderer/src/components/PlanWidget.tsx`.
-- `src/renderer/src/components/SessionPage.tsx`: the fixed frame (header, transcript, bottom dock), the place of the widget in the dock, and the slim composer with its thin row. Shared with S5 and S6.
-- `src/renderer/src/components/ModeMenu.tsx`: the compact look in the thin row, if its style needs a variant. Its accessible name stays "Mode".
+- `src/renderer/src/components/SessionPage.tsx`: the fixed frame (header, transcript, bottom dock), the place of the widget in the dock, and the composer with its control row inside the box. Shared with S5 and S6.
+- `src/renderer/src/components/ModeMenu.tsx`: a text-only look with no border for the control row, if its style needs a variant. Its accessible name stays "Mode".
+- `src/renderer/src/components/Transcript.tsx` and `styles.css`: the muted line with an info icon for an error notice. The role `alert` stays.
 - `COMPOSER_MAX_LINES` in the renderer, for example in `SessionPage.tsx` or a small composer module.
 - `src/renderer/src/session-view.ts`: the latest plan and the count.
 - `src/renderer/src/styles.css`: the frame, the dock and the widget styles. The old `.plan` rules can go. The `.page` rules of the session window change. Shared with S5.
