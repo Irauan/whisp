@@ -115,6 +115,19 @@ describe('SessionStore: the entries of a session', () => {
     expect(store.openTools('s1').map((view) => view.id)).toEqual(['e2', 'e3'])
   })
 
+  it('finds a tool call only in the turn that runs: an agent can reuse a call ID in the next turn', () => {
+    const { store } = setup()
+    const tool = (id: string, status: 'completed' | 'in_progress') =>
+      ({ id, entry: { kind: 'tool', toolId: 't1', title: 'Edit README.md', toolKind: 'edit', status } }) as const
+    store.insertEntry('s1', { id: 'u1', entry: { kind: 'user', text: 'first' } }, 0, '2026-01-02')
+    store.insertEntry('s1', tool('e1', 'completed'), 1, '2026-01-02')
+    expect(store.findTool('s1', 't1')?.id).toBe('e1')
+    store.insertEntry('s1', { id: 'u2', entry: { kind: 'user', text: 'second' } }, 2, '2026-01-02')
+    expect(store.findTool('s1', 't1')).toBeNull()
+    store.insertEntry('s1', tool('e2', 'in_progress'), 3, '2026-01-02')
+    expect(store.findTool('s1', 't1')?.id).toBe('e2')
+  })
+
   it('replaces the JSON of an entry', () => {
     const { store } = setup()
     store.insertEntry('s1', { id: 'e1', entry: { kind: 'tool', toolId: 'a', title: 'Run it', toolKind: 'execute', status: 'in_progress' } }, 0, '2026-01-02')

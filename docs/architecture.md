@@ -151,7 +151,7 @@ Decision 0013 records this model.
 - Two profiles can use the same GitHub account. The login of the account chooses `GH_TOKEN`.
 - A provider row holds a kind and settings as JSON. Aether validates the settings for the kind before it saves them.
 - A session has a nullable provider. Aether sets it at the first start, and the session keeps it. A later change of the provider settings applies to new sessions only.
-- The first start that creates an agent session saves three values in one transaction: the provider, a snapshot of its settings, and the agent session ID. Before that, the session uses the current settings of its profile, so a failed first start can be fixed in the profile and tried again. A resume uses the snapshot. The first start creates the provider row when the profile has none.
+- The first start that creates an agent session saves three values in one transaction: the provider, a snapshot of its settings, and the agent session ID. Before that, the session uses the current settings of its profile, so a failed first start can be fixed in the profile and tried again. A resume uses the snapshot. The first start creates the provider row when the profile has none. Story S4 reads "first start" in decision 0013 this way. The coordinator confirms the reading.
 - A session has a source path: the repository or folder that it started from. The sidebar groups sessions by it.
 - A session does not know its project. A later project refers to repositories and sessions.
 

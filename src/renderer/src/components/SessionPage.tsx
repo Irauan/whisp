@@ -15,8 +15,21 @@ import { Transcript } from './Transcript'
  * A session in its window (brief, Session window). The main process owns the conversation: this
  * window shows the snapshot and its events, and sends the commands Send, Stop and the change of
  * the mode of a draft. The composer holds only the text that the user has not sent.
+ * `onModeSaved` tells the app to load a new snapshot of the sessions, because the mode of a new
+ * session depends on the newest one.
  */
-export function SessionPage({ view, onDelete }: { view: SessionSnapshot; onDelete(): void }) {
+export function SessionPage({
+  view,
+  profileName,
+  onModeSaved,
+  onDelete
+}: {
+  view: SessionSnapshot
+  /** The name of the profile of the session, or null when the profile is not known. */
+  profileName: string | null
+  onModeSaved(): void
+  onDelete(): void
+}) {
   const { session, status, draft } = view
   // View state: the text of the composer. A draft starts with its prompt (flow 6).
   const [text, setText] = useState(draft ? session.prompt : '')
@@ -29,6 +42,7 @@ export function SessionPage({ view, onDelete }: { view: SessionSnapshot; onDelet
   const running = status !== 'idle'
   const ready = !running && !sending && text.trim() !== ''
   const rows: [string, string][] = [
+    ...(profileName === null ? [] : ([['Profile', profileName]] as [string, string][])),
     ['Folder', session.sourcePath],
     ['Model', labelOf(MODELS, session.model)]
   ]
@@ -54,7 +68,10 @@ export function SessionPage({ view, onDelete }: { view: SessionSnapshot; onDelet
     setProblem(null)
     setChosenMode(mode)
     void invokeContract(setMode, { id: session.id, mode }).then((result) => {
-      if (!result.ok) {
+      if (result.ok) {
+        // The mode that a new session starts with depends on the newest session (decision 0012).
+        onModeSaved()
+      } else {
         // The saved mode stays. Show it again.
         setChosenMode(null)
         setProblem(result.error.message)

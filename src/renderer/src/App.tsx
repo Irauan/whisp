@@ -30,7 +30,7 @@ type OpenDialog =
   | { kind: 'delete-session'; sessionId: string }
 
 export function App() {
-  const { state, error, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
+  const { state, error, reload, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
@@ -151,6 +151,8 @@ export function App() {
           <OpenSession
             key={view.sessionId}
             id={view.sessionId}
+            profileNameOf={(profileId) => profiles.find((profile) => profile.id === profileId)?.name ?? null}
+            onModeSaved={() => void reload()}
             onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
           />
         )

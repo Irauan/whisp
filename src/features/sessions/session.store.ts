@@ -178,11 +178,18 @@ export class SessionStore {
     return this.database.prepare('UPDATE entries SET kind = ?, data = ? WHERE id = ?').run(entry.kind, JSON.stringify(entry), view.id).changes > 0
   }
 
-  /** The tool entry of a call, or null. */
+  /**
+   * The tool entry of a call in the turn that runs, or null. A turn starts at the last entry of the
+   * user. An agent can reuse a call ID in the next turn, so an earlier turn never matches.
+   */
   findTool(sessionId: string, toolId: string): EntryView | null {
     const row = this.database
-      .prepare("SELECT id, data FROM entries WHERE session_id = ? AND kind = 'tool' AND json_extract(data, '$.toolId') = ?")
-      .get(sessionId, toolId)
+      .prepare(
+        `SELECT id, data FROM entries
+          WHERE session_id = ? AND kind = 'tool' AND json_extract(data, '$.toolId') = ?
+            AND position > coalesce((SELECT max(position) FROM entries WHERE session_id = ? AND kind = 'user'), -1)`
+      )
+      .get(sessionId, toolId, sessionId)
     return row ? toEntry(row) : null
   }
 

@@ -85,6 +85,8 @@ export function useProfiles() {
   return {
     state,
     error,
+    /** Loads a new snapshot. A command outside this hook calls it after a change that the snapshot holds, for example the mode of a draft. */
+    reload: load,
     chooseDirectories: async (directories: z.input<typeof chooseDirectories.input>['directories']): Outcome =>
       finish(await invokeContract(chooseDirectories, { directories })),
     add: async (input: z.input<typeof addProfile.input>): Outcome => finish(await invokeContract(addProfile, input)),

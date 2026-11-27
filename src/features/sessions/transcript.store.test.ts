@@ -102,6 +102,22 @@ describe('Transcript', () => {
     expect(events.map((event) => event.change.type)).toEqual(['entry-added', 'entry-replaced', 'entry-replaced'])
   })
 
+  it('adds a new tool entry when the next turn reuses a call ID, and leaves the earlier turn as it was', () => {
+    const { store, transcript } = setup()
+    transcript.addEntry('s1', { kind: 'user', text: 'first' })
+    transcript.announceTool('s1', { type: 'tool', id: 't1', title: 'Edit README.md', toolKind: 'edit', status: 'in_progress' })
+    transcript.updateTool('s1', { type: 'tool-update', id: 't1', title: null, toolKind: null, status: 'completed' })
+    transcript.addEntry('s1', { kind: 'user', text: 'second' })
+    transcript.announceTool('s1', { type: 'tool', id: 't1', title: 'Edit README.md', toolKind: 'edit', status: 'in_progress' })
+    transcript.updateTool('s1', { type: 'tool-update', id: 't1', title: null, toolKind: null, status: 'failed' })
+    expect(store.entriesOf('s1').map((view) => view.entry)).toMatchObject([
+      { kind: 'user' },
+      { kind: 'tool', status: 'completed' },
+      { kind: 'user' },
+      { kind: 'tool', status: 'failed' }
+    ])
+  })
+
   it('ignores the update of a tool call that it does not know', () => {
     const { store, events, transcript } = setup()
     transcript.updateTool('s1', { type: 'tool-update', id: 'unknown', title: null, toolKind: null, status: 'failed' })
