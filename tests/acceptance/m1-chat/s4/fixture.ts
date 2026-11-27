@@ -63,6 +63,7 @@ import { _electron, expect, test as base, type ElectronApplication, type Page } 
 import { ControlServer, type AcpMessage, type ProcessMessage } from '../../../simulated-agent/control'
 import { FakeGh } from '../../m0-gates/s8/fixture'
 import { answerDirectoryDialog, DATABASE, SavedData, type Mode, type Row } from '../s2/fixture'
+import { windowArgs } from '../../support/windows'
 
 export { expect }
 export { holds, holdsPath, modesOf, SavedData, type Row } from '../s2/fixture'
@@ -219,7 +220,7 @@ export const test = base.extend<{ chat: ChatApp }>({
         if (running) throw new Error('The app runs already. Stop it first.')
         starts += 1
         running = await _electron.launch({
-          args: [ROOT, `--user-data-dir=${dataDir}`],
+          args: windowArgs([ROOT, `--user-data-dir=${dataDir}`]),
           cwd: ROOT,
           env: appEnvironment(root, gh.folder, env)
         })
