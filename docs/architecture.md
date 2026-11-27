@@ -174,7 +174,7 @@ The main process asks these questions, and stores the answers. The renderer cann
 | Directory under the workspace directory of another profile | Aether asks, and names both profiles and the Claude settings that would read the files. |
 | The agent reads or writes outside the session directories | Claude asks. Aether shows the request in the permission queue. |
 
-- Trust applies to one Git repository, not to the whole workspace directory.
+- Trust applies to one Git repository. When the root of that repository holds the workspace directory, trust covers every plain folder under the workspace directory for that profile, and the question warns.
 - Aether walks up from the session directory, also past the workspace directory, to find `.git`. Trust covers that repository.
 - A Git repository always asks. A plain folder asks when it has any `.claude/settings*.json` file or any `.mcp.json` file. A plain folder without them starts at once.
 - The question lists what Aether found in the repository root and in the session directory.
@@ -234,9 +234,13 @@ The main process asks these questions, and stores the answers. The renderer cann
 - Permission requests form a queue. Each request has its own ID.
 - An answer names the request ID. Stop cancels all requests of the session.
 - A cancelled request removes only itself from the queue.
+- Each open request shows as a card inside the transcript, at the place where the agent asked. The queue lives in memory only.
+- Aether saves each card as an `answers` entry when it opens, and replaces the entry in place when the card closes. A card that was open at a crash shows as "Aether stopped unexpectedly" at the next start.
+- A question of the agent (a form elicitation, for example AskUserQuestion) shows as a card in the same way. Aether declares the form capability only.
+- A request can come outside a turn. A session with an open card is busy, and it blocks a new message.
+- The agent can change its mode, for example at a plan exit. The Mode control shows it at once, and Aether saves it, except Approve all and the mode of the fallback of Auto.
 - Aether sets the permission mode before the first message. Bypass is allowed only when the user chooses it.
 - The Mode control and the model button of a draft save the mode and the model in the session row (`sessions.set-mode`, `sessions.set-model`). After the first message both are disabled.
-- Until the permission queue exists, Aether answers each permission request with "cancelled".
 - If the agent cannot apply the chosen mode, model or permission setting, the session does not start. Aether keeps no list of valid models in the main process: the agent refuses a model that it does not know, and the session shows a start notice.
 - A model that cannot use Auto makes Claude use Accept edits. The agent reports it, and the session shows a notice that names both modes.
 - `sessions.send-message` refuses an attachment of an unknown kind and a session attachment before any agent process starts.
@@ -315,9 +319,7 @@ A plan update that only changes the states replaces the latest plan entry in pla
 
 ## Known defects in the current code
 
-| Defect | Place | Fixed in step |
-|---|---|---|
-| Aether cancels each permission request, so a tool that needs a question fails. The queue replaces this. | `src/providers/acp/acp-agents.ts` | 6, story S5 |
+None.
 
 ## Open points
 
