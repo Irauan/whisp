@@ -24,6 +24,7 @@ import {
   expectNoAgentProcess,
   expectNoQuestion,
   expectReply,
+  main,
   openNewSession,
   otherProfileQuestion,
   outside,
@@ -87,9 +88,11 @@ test.describe('A10: the directory questions', () => {
     await expect(outsideQuestion(page), 'A10 once: the directory question stays open after "Allow once".').toBeHidden()
     await expectReply(page, 'A10 once: after "Allow once"')
 
-    // The composer of the new session starts with the same folder.
+    // The composer of the new session starts with the same folder. The question can come before
+    // the session shows in the sidebar, so the test only writes the prompt and clicks.
     await openNewSession(page)
-    await startSession(page, 'Archive the old notes', 'A10 once')
+    await main(page).getByRole('textbox', { name: 'Prompt', exact: true }).fill('Archive the old notes')
+    await main(page).getByRole('button', { name: 'Start session', exact: true }).click()
     await expect(outsideQuestion(page), 'A10 once: a new session in the same folder asks nothing after "Allow once", so the answer counted for more than once.').toBeVisible()
     expect(new Set(chat.control.pids).size, 'A10 once: an agent process started for the new session before the answer.').toBe(1)
   })

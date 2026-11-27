@@ -92,6 +92,7 @@ test.describe('A9: the trust question of a repository', () => {
     await expect(trustRefused(page), 'A9 Trust: the notice of the state Trust refused shows after Trust.').toHaveCount(0)
     // The launcher ran the hook as Claude does. This shows that the check of Cancel above has a meaning.
     expect(await hookRan(repository), 'A9 Trust: the SessionStart hook did not run after Trust, so the launcher of the fixture does not work.').toBe(true)
+    expect(await mcpServerStarted(repository), 'A9 Trust: the MCP server did not start after Trust, so the launcher of the fixture does not work.').toBe(true)
 
     // A second session in the same repository asks nothing. The composer starts with repo-b.
     await openNewSession(page)
