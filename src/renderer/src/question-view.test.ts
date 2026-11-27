@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Question, QuestionEvent } from '../../features/repositories/list-questions/list-questions.contract'
 import { emptyQuestionsState, reduceQuestions, type QuestionsAction, type QuestionsState } from './question-view'
 
-const found = { hooks: [], mcpServers: [], unreadable: [] }
+const found = { hooks: [], mcpServers: [], files: [], unreadable: [] }
 const question = (id: string, sessionId = 's1'): Question => ({ kind: 'outside', id, sessionId, profileName: 'Personal', folder: 'C:\\x', ...found })
 const opened = (revision: number, id: string): QuestionEvent => ({ revision, change: { type: 'opened', question: question(id) } })
 const closed = (revision: number, id: string): QuestionEvent => ({ revision, change: { type: 'closed', id } })

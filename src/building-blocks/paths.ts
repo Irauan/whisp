@@ -22,13 +22,18 @@ function withoutLongPrefix(path: string): string {
   return path
 }
 
+/** Windows ignores dots and spaces at the end of a name: `repo.` is `repo`. Remove them, so that both spellings give one key. */
+function withoutTrailingDots(path: string): string {
+  return WINDOWS ? path.replace(/[. ]+(?=\\|$)/g, '') : path
+}
+
 /**
  * The real path of a folder: absolute, with links resolved and the letter case of the disk. A UNC
  * path is returned as it is, without a call to the network. A path that does not exist resolves
  * through its nearest folder that exists. A failure returns the absolute path.
  */
 export function resolveReal(path: string): string {
-  const absolute = withoutLongPrefix(resolve(path))
+  const absolute = withoutTrailingDots(withoutLongPrefix(resolve(path)))
   if (isUnc(absolute)) return absolute
   const rest: string[] = []
   let probe = absolute

@@ -16,6 +16,8 @@ export type AnswerOutcome = 'answered' | 'unknown' | 'not-offered'
  */
 export class Questions {
   private readonly open = new Map<string, Open>()
+  private readonly cancelled = new Map<string, number>()
+  private everything = 0
   private revision = 0
 
   constructor(
@@ -28,8 +30,21 @@ export class Questions {
     return { revision: this.revision, questions: [...this.open.values()].map((entry) => entry.question) }
   }
 
-  /** Opens a question and waits for its answer. The promise never rejects: a wake-up answers `cancel`. */
-  ask(question: NewQuestion): Promise<Answer> {
+  /**
+   * A mark of the cancel state of a session. The gate takes it before it does work that can wait, for
+   * example a scan of the folder. A cancel after the mark makes `ask` answer `cancel` at once, so a
+   * stop, a delete or a quit during that work never leaves a question open.
+   */
+  mark(sessionId: string): string {
+    return `${this.everything}:${this.cancelled.get(sessionId) ?? 0}`
+  }
+
+  /**
+   * Opens a question and waits for its answer. The promise never rejects: a wake-up answers `cancel`.
+   * With a `mark` that a cancel has passed, it opens nothing and answers `cancel`.
+   */
+  ask(question: NewQuestion, mark?: string): Promise<Answer> {
+    if (mark !== undefined && mark !== this.mark(question.sessionId)) return Promise.resolve('cancel')
     const full = { ...question, id: this.ids.next() } as Question
     return new Promise<Answer>((resolve) => {
       this.open.set(full.id, { question: full, settle: resolve })
@@ -49,12 +64,14 @@ export class Questions {
 
   /** Answers `cancel` for each open question of the session: Stop, delete and quit use it. */
   cancelSession(sessionId: string): void {
+    this.cancelled.set(sessionId, (this.cancelled.get(sessionId) ?? 0) + 1)
     for (const found of [...this.open.values()]) {
       if (found.question.sessionId === sessionId) this.close(found, 'cancel')
     }
   }
 
   cancelAll(): void {
+    this.everything += 1
     for (const found of [...this.open.values()]) this.close(found, 'cancel')
   }
 

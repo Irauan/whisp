@@ -2,12 +2,12 @@ import type { Answer } from '../../../features/repositories/answer-question/answ
 import type { Question } from '../../../features/repositories/list-questions/list-questions.contract'
 import { Modal } from './Dialogs'
 
-type Found = Pick<Question, 'hooks' | 'mcpServers' | 'unreadable'>
+type Found = Pick<Question, 'hooks' | 'mcpServers' | 'files' | 'unreadable'>
 
 /** What the agent runs in the folder when a session starts, as the main process found it. */
 function Findings({ found, emptyText }: { found: Found; emptyText: string | null }) {
-  const { hooks, mcpServers, unreadable } = found
-  const none = hooks.length === 0 && mcpServers.length === 0 && unreadable.length === 0
+  const { hooks, mcpServers, files, unreadable } = found
+  const none = hooks.length === 0 && mcpServers.length === 0 && files.length === 0 && unreadable.length === 0
   return (
     <>
       {hooks.length > 0 && (
@@ -33,6 +33,24 @@ function Findings({ found, emptyText }: { found: Found; emptyText: string | null
                   <>
                     {' '}
                     <code>{server.command}</code>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {files.length > 0 && (
+        <>
+          <h3>Files that Claude Code reads</h3>
+          <ul aria-label="Files">
+            {files.map((file) => (
+              <li key={file.name}>
+                <code>{file.name}</code>
+                {file.keys.length > 0 && (
+                  <>
+                    {' '}
+                    <span className="muted">Other keys:</span> <code>{file.keys.join(', ')}</code>
                   </>
                 )}
               </li>
@@ -78,7 +96,7 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
         <Modal label="Trust this repository?" onClose={cancel}>
           <h2>Trust this repository?</h2>
           <p className="muted">
-            Claude Code runs the hooks and the MCP servers of a repository when a session starts, before it asks anything. Trust only a repository that you know.
+            Claude Code reads the settings, the hooks and the MCP servers of a repository when a session starts, before it asks anything. Trust only a repository that you know.
           </p>
           <dl className="facts">
             <div>
@@ -94,7 +112,7 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
               <dd>{question.profileName}</dd>
             </div>
           </dl>
-          <Findings found={question} emptyText="Aether found no SessionStart hook in .claude/settings.json and no server in .mcp.json. It checked nothing else." />
+          <Findings found={question} emptyText="Aether found no .claude/settings*.json file and no .mcp.json file here." />
           <Buttons answers={[{ answer: 'trust', label: 'Trust', primary: true }]} onAnswer={onAnswer} />
         </Modal>
       )

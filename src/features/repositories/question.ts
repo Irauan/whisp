@@ -12,9 +12,11 @@ export const answerSchema = z.enum(ANSWERS)
 export type Answer = z.output<typeof answerSchema>
 
 const foundSchema = {
-  /** The commands that the agent runs at the start of a session. */
+  /** The command hooks of every event. The agent runs them without a question. */
   hooks: z.array(z.strictObject({ event: z.string(), command: z.string() })),
   mcpServers: z.array(z.strictObject({ name: z.string(), command: z.string().nullable() })),
+  /** Each settings file and `.mcp.json` that exists, with the names of its other top-level keys. */
+  files: z.array(z.strictObject({ name: z.string(), keys: z.array(z.string()) })),
   /** The files that exist but that Aether could not read. */
   unreadable: z.array(z.string())
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NewQuestion, QuestionEvent } from './question'
 import { Questions } from './questions.store'
 
-const found = { hooks: [], mcpServers: [], unreadable: [] }
+const found = { hooks: [], mcpServers: [], files: [], unreadable: [] }
 const trust = (sessionId: string): NewQuestion => ({ kind: 'trust', sessionId, profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', ...found })
 const outside = (sessionId: string): NewQuestion => ({ kind: 'outside', sessionId, profileName: 'Personal', folder: 'C:\\x', ...found })
 
@@ -71,5 +71,31 @@ describe('Questions', () => {
     questions.cancelAll()
     expect(await all).toEqual(['cancel', 'cancel'])
     expect(questions.snapshot().questions).toEqual([])
+  })
+  it('opens no question for a mark that a cancel of the session has passed, and answers cancel (F3)', async () => {
+    const { questions, events } = setup()
+    const mark = questions.mark('s1')
+    questions.cancelSession('s1')
+    expect(await questions.ask(trust('s1'), mark)).toBe('cancel')
+    expect(questions.snapshot()).toEqual({ revision: 0, questions: [] })
+    expect(events).toEqual([])
+  })
+
+  it('opens no question for a mark that a cancel of everything has passed (F3)', async () => {
+    const { questions } = setup()
+    const mark = questions.mark('s1')
+    questions.cancelAll()
+    expect(await questions.ask(outside('s1'), mark)).toBe('cancel')
+    expect(questions.snapshot().questions).toEqual([])
+  })
+
+  it('opens a question for a current mark, also after an earlier cancel, and for a cancel of another session', () => {
+    const { questions } = setup()
+    questions.cancelSession('s1')
+    questions.cancelAll()
+    const mark = questions.mark('s1')
+    questions.cancelSession('s2')
+    void questions.ask(trust('s1'), mark)
+    expect(questions.snapshot().questions).toHaveLength(1)
   })
 })

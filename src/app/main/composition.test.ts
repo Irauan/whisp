@@ -9,6 +9,7 @@ import type { GithubPort, GithubTokenPort } from '../../building-blocks/github.p
 import { ControlServer } from '../../../tests/simulated-agent/control'
 import { AcpAgents } from '../../providers/acp/acp-agents'
 import { claudeCodeRecipe } from '../../providers/claude-code/claude-code'
+import type { ProjectScanner } from '../../building-blocks/project-scanner.port'
 import { contracts } from '../contracts'
 import { composeMain, DATABASE_FILE, type Composition } from './composition'
 import { createInvoke } from './ipc'
@@ -63,12 +64,13 @@ interface Event {
 const events = () => published.map((entry) => entry.payload as Event)
 const isIdle = (event: Event) => event.change.type === 'status' && event.change.status === 'idle'
 
-function start(agents: AgentPort = noAgents) {
+function start(agents: AgentPort = noAgents, scanner?: ProjectScanner) {
   published = []
   const composed = composeMain({
     dataDir,
     github,
     agents,
+    scanner,
     publish: (name, payload) => {
       published.push({ name, payload })
       wake?.()
@@ -417,11 +419,11 @@ describe('composeMain', () => {
 
     type Listed = { ok: true; value: { revision: number; questions: { id: string; sessionId: string; kind: string }[] } }
 
-    async function setupRepository() {
+    async function setupRepository(scanner?: ProjectScanner) {
       const { starts, port } = countingAgents()
       const repository = join(rootDir, 'repo-b')
       await mkdir(join(repository, '.git'), { recursive: true })
-      const composed = start(port)
+      const composed = start(port, scanner)
       await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null, claudeProfileName: null })
       const [profile] = (await snapshotOf(composed.call)).profiles
       const create = async (prompt: string) => {
@@ -504,6 +506,58 @@ describe('composeMain', () => {
       await composition.shutdown()
       expect((await list()).value.questions).toEqual([])
       expect(starts).toHaveLength(0)
+    })
+    describe('a stop, a delete or a quit during the scan of the folder (F3)', () => {
+      /** The reproduction of the reviewer: the scan waits for the test, and the user cancels in that time. */
+      async function duringScan(cancel: (ctx: Awaited<ReturnType<typeof setupRepository>>, id: string) => Promise<void>) {
+        let release: () => void = () => undefined
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const scanner: ProjectScanner = {
+          scan: async () => {
+            await gate
+            return { hooks: [], mcpServers: [], files: [], unreadable: [] }
+          }
+        }
+        const ctx = await setupRepository(scanner)
+        const id = await ctx.create('Fix the login page')
+        await ctx.call('sessions.send-message', { id, text: 'Fix the login page' })
+        for (let wait = 0; wait < 30; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        await cancel(ctx, id)
+        release()
+        for (let wait = 0; wait < 30; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        return { ...ctx, id }
+      }
+
+      it('opens no question after Stop, and the turn ends with "Stopped."', async () => {
+        const ctx = await duringScan(async ({ call }, id) => void (await call('sessions.stop', { id })))
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        expect(await ctx.call('sessions.open', { id: ctx.id })).toMatchObject({
+          ok: true,
+          value: { status: 'idle', entries: [{ entry: { kind: 'user' } }, { entry: { text: 'Stopped.' } }] }
+        })
+      })
+
+      it('opens no question after a delete of the session', async () => {
+        const ctx = await duringScan(async ({ call }, id) => void (await call('sessions.delete', { id })))
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+      })
+
+      it('opens no question after a shutdown, and the shutdown ends', async () => {
+        let ended = false
+        const ctx = await duringScan(async ({ composition }) => {
+          void composition.shutdown().then(() => {
+            ended = true
+          })
+        })
+        expect((await ctx.list()).value.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        for (let wait = 0; wait < 30 && !ended; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(ended).toBe(true)
+      })
     })
   })
 })

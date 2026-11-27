@@ -4,7 +4,7 @@ import { Questions } from '../questions.store'
 import { listQuestions, questionEventSchema } from './list-questions.contract'
 import { listQuestionsController } from './list-questions.controller'
 
-const found = { hooks: [{ event: 'SessionStart', command: 'node a.js' }], mcpServers: [], unreadable: [] }
+const found = { hooks: [{ event: 'SessionStart', command: 'node a.js' }], mcpServers: [], files: [], unreadable: [] }
 
 describe('contract', () => {
   it('accepts its valid examples and rejects its invalid ones', () => {

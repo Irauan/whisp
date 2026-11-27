@@ -4,7 +4,7 @@ import { Questions } from '../questions.store'
 import { answerQuestion } from './answer-question.contract'
 import { answerQuestionHandler } from './answer-question.handler'
 
-const found = { hooks: [], mcpServers: [], unreadable: [] }
+const found = { hooks: [], mcpServers: [], files: [], unreadable: [] }
 const trust: NewQuestion = { kind: 'trust', sessionId: 's1', profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', ...found }
 
 const setup = () => {

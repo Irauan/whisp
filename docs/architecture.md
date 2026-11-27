@@ -168,20 +168,29 @@ The main process asks these questions, and stores the answers. The renderer cann
 | Case | Behavior |
 |---|---|
 | Session directory in a trusted repository | The session starts. |
-| Repository under the workspace directory, first use | Aether asks for trust. It shows the hooks and MCP servers that it finds. |
+| Repository under the workspace directory, first use | Aether asks for trust. It shows the settings, hooks and MCP servers that it finds. |
 | Directory outside the workspace directory | Aether asks: once, always for this profile, or cancel. |
 | Directory under the workspace directory of another profile | Aether asks, and names both profiles and the Claude settings that would read the files. |
 | The agent reads or writes outside the session directories | Claude asks. Aether shows the request in the permission queue. |
 
-- Trust applies to one repository, not to the whole workspace directory.
-- A plain folder under the workspace directory with a `SessionStart` hook or an `.mcp.json` server also asks for trust, for that folder. A plain folder without them starts at once.
+- Trust applies to one Git repository, not to the whole workspace directory.
+- Aether walks up from the session directory, also past the workspace directory, to find `.git`. Trust covers that repository.
+- A Git repository always asks. A plain folder asks when it has any `.claude/settings*.json` file or any `.mcp.json` file. A plain folder without them starts at once.
+- The question lists what Aether found in the repository root and in the session directory.
+  - Hooks of every event, by event and command.
+  - MCP servers.
+  - The other keys of each settings file, by name.
+- The most specific workspace directory wins. With profile A at `X` and profile B at `X\client`, a session of A in `X\client` gets the question for another profile.
 - Answers belong to one profile. Trust of a repository in one profile does not trust it in another.
 - "Allow once" covers one session and lives in memory. "Always allow for this profile" covers that folder and stays after a restart.
-- A directory question also lists the hooks and MCP servers that Aether finds. No second question follows.
-- Before it compares paths, Aether resolves `..`, junctions and symbolic links. On Windows it ignores the letter case.
-- A UNC path is outside every workspace directory. A profile without a workspace directory has every folder outside.
+- The question for another profile offers the same answers as the question for a directory outside.
+- A directory question also lists what Aether finds in the folder. No second question follows.
+- Trust stays after the files change. This is a known limit: a hook that a later commit adds runs without a new question.
+- Before it compares paths, Aether resolves `..`, junctions and symbolic links. On Windows it ignores the letter case and the dots and spaces at the end of a name.
+- A UNC path is outside every workspace directory. Aether does not read it before the answer. A profile without a workspace directory has every folder outside.
 - The feature `repositories` holds the questions and the answers (migration `003`).
-- `send-message` calls the gate through a function that the composition root passes. Stop, delete and quit answer `cancel`.
+- `send-message` calls the gate through a function that the composition root passes.
+- Stop, delete and quit answer `cancel`. A cancel during the scan of the folder opens no question.
 - No agent process starts before the trust answer. This includes an early start and a resume.
 - "Approve all" also removes the last question in the table.
 - After an approval, an agent shell command can reach any directory of the user.

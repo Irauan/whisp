@@ -9,6 +9,7 @@ import { createInvoke, createSubscribe } from '../app/main/ipc'
 import { AcpAgents } from '../providers/acp/acp-agents'
 import { claudeCodeRecipe } from '../providers/claude-code/claude-code'
 import { GithubCli } from '../providers/github-cli/github-cli'
+import { waitAtMost } from '../building-blocks/wait-at-most'
 import { INVOKE_CHANNEL, SUBSCRIBE_CHANNEL } from '../shared/channels'
 import { AgentRegistry } from './agents/registry'
 import { chooseFiles, chooseFolder, chooseFolders, inspectFolder } from './folders'
@@ -114,19 +115,19 @@ ipcMain.handle('repository:issues', (_event, folder: unknown, login: unknown) =>
 )
 
 // Before Aether quits, end the agent processes: cancel, close, and kill the process trees after a limit.
-// The quit goes on when they are gone. Each change is one transaction, so no save is in progress at the exit.
+// The quit goes on when they are gone, or when the limit of the whole wait passes: one hang must not
+// keep Aether open for ever. Each change is one transaction, so no save is in progress at the exit.
+const QUIT_LIMIT_MS = 15_000
 let quitting = false
 app.on('before-quit', (event) => {
   if (quitting || !main) return
   quitting = true
   event.preventDefault()
-  void main.shutdown().then(
-    () => app.quit(),
-    (cause: unknown) => {
-      console.error('Aether could not end the agent processes.', cause)
-      app.quit()
-    }
-  )
+  const shutdown = main.shutdown().catch((cause: unknown) => console.error('Aether could not end the agent processes.', cause))
+  void waitAtMost(shutdown, QUIT_LIMIT_MS).then((outcome) => {
+    if (outcome === 'timeout') console.error('Aether could not end the agent processes in time. It quits anyway.')
+    app.quit()
+  })
 })
 
 // Close the database.

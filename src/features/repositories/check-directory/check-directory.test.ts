@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openDatabase, type Database } from '../../../building-blocks/database'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
@@ -55,10 +55,10 @@ function addProfile(id: string, name: string, directory: string | null, claudeFo
   }
 }
 
-function setup() {
+function setup(options: { scanner?: ProjectScanner } = {}) {
   const questions = new Questions(() => undefined, { next: (() => { let n = 0; return () => `q${++n}` })() })
   const store = new TrustStore(database)
-  const scanner: ProjectScanner = {
+  const scanner: ProjectScanner = options.scanner ?? {
     scan: async (path) => {
       scanned.push(path)
       return findingsOf[pathKey(path)] ?? noFindings()
@@ -68,9 +68,10 @@ function setup() {
   let session = 0
   const check = (request: Partial<DirectoryRequest> & { folder: string }) =>
     checkDirectoryHandler(deps, { sessionId: `s${++session}`, profileId: 'personal', ...request })
-  /** Waits for the question of the check, with no timer: the check reaches it after a few microtasks. */
+  /** Waits for the question of the check. The real scanner reads files, so the wait yields to the event loop and ends after a limit. */
   const nextQuestion = async (): Promise<Question> => {
-    for (let wait = 0; wait < 200 && questions.snapshot().questions.length === 0; wait += 1) await Promise.resolve()
+    const limit = Date.now() + 5000
+    while (questions.snapshot().questions.length === 0 && Date.now() < limit) await new Promise<void>((resolve) => setImmediate(resolve))
     const [question] = questions.snapshot().questions
     if (!question) throw new Error('No question opened.')
     return question
@@ -242,12 +243,27 @@ describe('checkDirectoryHandler: inside the workspace directory', () => {
     expect((await second).ok).toBe(false)
   })
 
-  it('does not count a repository above the workspace directory', async () => {
-    mkdirSync(join(folder('home'), '.git'))
-    addProfile('personal', 'Personal', folder('home', 'workspace'))
-    const { check, questions } = setup()
-    expect((await check({ folder: folder('home', 'workspace', 'notes') })).ok).toBe(true)
-    expect(questions.snapshot().questions).toEqual([])
+  it('walks up past the workspace directory: a repository above it asks for trust, and the question lists the files at its root and in the session folder (decision 3)', async () => {
+    const top = repository('mono')
+    addProfile('personal', 'Personal', folder('mono', 'packages'))
+    const inside = folder('mono', 'packages', 'app')
+    findingsOf[pathKey(top)] = { ...noFindings(), files: [{ name: '.mcp.json', keys: [] }], mcpServers: [{ name: 'root-server', command: null }] }
+    findingsOf[pathKey(inside)] = { ...noFindings(), files: [{ name: join('.claude', 'settings.local.json'), keys: ['env'] }] }
+    const { check, answer, store } = setup()
+    const result = check({ folder: inside })
+    expect(await answer('trust')).toMatchObject({
+      kind: 'trust',
+      repository: 'mono',
+      mcpServers: [{ name: 'root-server' }],
+      files: [
+        { name: '.mcp.json', keys: [] },
+        { name: join('packages', 'app', '.claude', 'settings.local.json'), keys: ['env'] }
+      ]
+    })
+    expect((await result).ok).toBe(true)
+    expect(store.isTrusted('personal', pathKey(top))).toBe(true)
+    // Trust covers the repository: another folder in it asks nothing.
+    expect((await check({ folder: folder('mono', 'packages', 'other') })).ok).toBe(true)
   })
 
   it('matches the workspace directory and the repository without regard to letter case on Windows', async () => {
@@ -383,5 +399,169 @@ describe('checkDirectoryHandler: outside the workspace directory', () => {
     const { check, answer } = setup()
     void check({ folder: '\\\\aether-no-such-server\\share\\repo' })
     expect(await answer('cancel')).toMatchObject({ kind: 'outside' })
+  })
+})
+
+describe('checkDirectoryHandler: what makes a plain folder ask (decision 1)', () => {
+  // The scanner of Claude Code decides what a file holds (its own test covers it). The gate asks
+  // whenever the scan finds any file, hook, server or unreadable file.
+  const file = (name: string, keys: string[] = []) => ({ name, keys })
+  const found = (part: Partial<ProjectFindings>): ProjectFindings => ({ ...noFindings(), ...part })
+
+  it.each([
+    ['settings.local.json with a SessionStart hook', found({ files: [file('.claude/settings.local.json')], hooks: [{ event: 'SessionStart', command: 'node evil.js' }] })],
+    ['a UserPromptSubmit hook', found({ files: [file('.claude/settings.json')], hooks: [{ event: 'UserPromptSubmit', command: 'node evil.js' }] })],
+    ['a PreToolUse hook', found({ hooks: [{ event: 'PreToolUse', command: 'node evil.js' }] })],
+    ['an apiKeyHelper key', found({ files: [file('.claude/settings.json', ['apiKeyHelper'])] })],
+    ['an empty settings file', found({ files: [file('.claude/settings.json')] })],
+    ['an empty .mcp.json', found({ files: [file('.mcp.json')] })],
+    ['a server', found({ mcpServers: [{ name: 'a', command: null }] })],
+    ['a file that does not parse', found({ unreadable: ['.claude/settings.local.json'] })]
+  ])('asks for trust in a plain folder with %s, and lists it', async (_name, findings) => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const plain = folder('personal', 'tool')
+    findingsOf[pathKey(plain)] = findings
+    const { check, answer } = setup()
+    void check({ folder: plain })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', repository: 'tool', ...findings })
+  })
+
+  it('asks nothing for a plain folder with no finding', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const { check, questions } = setup()
+    expect((await check({ folder: folder('personal', 'notes') })).ok).toBe(true)
+    expect(questions.snapshot().questions).toEqual([])
+  })
+
+  it('asks for a Git repository with no finding, and lists nothing', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const repo = repository('personal', 'repo-a')
+    const { check, answer } = setup()
+    void check({ folder: repo })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', hooks: [], mcpServers: [], files: [], unreadable: [] })
+  })
+
+  it('lists the files of a repository root and of the session folder inside it, with the path of the folder', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const repo = repository('personal', 'repo-a')
+    const inside = folder('personal', 'repo-a', 'packages', 'app')
+    findingsOf[pathKey(repo)] = found({ files: [file('.claude/settings.json')] })
+    findingsOf[pathKey(inside)] = found({ files: [file('.claude/settings.local.json')] })
+    const { check, answer } = setup()
+    void check({ folder: inside })
+    expect(await answer('cancel')).toMatchObject({
+      files: [{ name: '.claude/settings.json' }, { name: `${join('packages', 'app')}${sep}.claude/settings.local.json` }]
+    })
+  })
+
+  it('gives a path with a trailing dot the key of the repository', async () => {
+    if (process.platform !== 'win32') return
+    addProfile('personal', 'Personal', folder('personal'))
+    const repo = repository('personal', 'repo-a')
+    const { check, answer, store } = setup()
+    const first = check({ folder: repo })
+    await answer('trust')
+    await first
+    expect(store.isTrusted('personal', pathKey(`${repo}.`))).toBe(true)
+    expect((await check({ folder: `${repo}.` })).ok).toBe(true)
+  })
+})
+
+describe('checkDirectoryHandler: nested workspace directories (decision 2)', () => {
+  it('lets the most specific workspace directory win: a session of A in the directory of B gets the question for another profile', async () => {
+    addProfile('personal', 'Personal', folder('x'))
+    addProfile('client', 'Client Example', folder('x', 'client'))
+    const { check, answer } = setup()
+    void check({ folder: folder('x', 'client', 'contracts') })
+    expect(await answer('cancel')).toMatchObject({ kind: 'other-profile', profileName: 'Personal', otherProfileName: 'Client Example' })
+    // A folder of A outside the directory of B stays inside A.
+    expect((await check({ folder: folder('x', 'notes') })).ok).toBe(true)
+  })
+
+  it('treats the outer profile as the other one only for a folder of the outer profile, when the inner profile asks', async () => {
+    addProfile('personal', 'Personal', folder('x'))
+    addProfile('client', 'Client Example', folder('x', 'client'))
+    const { check } = setup()
+    expect((await check({ profileId: 'client', folder: folder('x', 'client', 'contracts') })).ok).toBe(true)
+  })
+})
+
+describe('checkDirectoryHandler: a cancel during the scan (F3)', () => {
+  /** A scanner that waits for the test, so that a cancel can come while the gate scans. */
+  function slowScanner() {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const scanner: ProjectScanner = {
+      scan: async () => {
+        await gate
+        return noFindings()
+      }
+    }
+    return { scanner, release }
+  }
+  const ticks = async () => {
+    for (let wait = 0; wait < 20; wait += 1) await Promise.resolve()
+  }
+
+  it.each([
+    ['a stop or a delete of the session', (questions: Questions) => questions.cancelSession('s1')],
+    ['a quit', (questions: Questions) => questions.cancelAll()]
+  ])('opens no question after %s that came during the scan, and refuses', async (_name, cancel) => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const repo = repository('personal', 'repo-b')
+    const { scanner, release } = slowScanner()
+    const { check, questions } = setup({ scanner })
+    const result = check({ sessionId: 's1', folder: repo })
+    await ticks()
+    cancel(questions)
+    release()
+    expect(await result).toMatchObject({ ok: false })
+    expect(questions.snapshot().questions).toEqual([])
+    expect(questions.snapshot().revision).toBe(0)
+  })
+
+  it('opens no directory question after a cancel during the scan, and saves no answer', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const outside = folder('outside', 'notes')
+    const { scanner, release } = slowScanner()
+    const { check, questions, store } = setup({ scanner })
+    const result = check({ sessionId: 's1', folder: outside })
+    await ticks()
+    questions.cancelSession('s1')
+    release()
+    expect(await result).toMatchObject({ ok: false })
+    expect(questions.snapshot().questions).toEqual([])
+    expect(store.isAllowed('personal', 's1', pathKey(outside))).toBe(false)
+  })
+
+  it('still asks when the cancel came for another session, or before the check began', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    const repo = repository('personal', 'repo-b')
+    const { scanner, release } = slowScanner()
+    const { check, questions, nextQuestion } = setup({ scanner })
+    questions.cancelSession('s1')
+    questions.cancelAll()
+    void check({ sessionId: 's1', folder: repo })
+    await ticks()
+    questions.cancelSession('other')
+    release()
+    expect(await nextQuestion()).toMatchObject({ kind: 'trust', sessionId: 's1' })
+  })
+
+  it('does not read a network folder before the answer', async () => {
+    addProfile('personal', 'Personal', folder('personal'))
+    let scans = 0
+    const counting: ProjectScanner = {
+      scan: async () => {
+        scans += 1
+        return noFindings()
+      }
+    }
+    const { check, answer } = setup({ scanner: counting })
+    void check({ folder: '\\\\aether-no-such-server\\share\\repo' })
+    expect(await answer('cancel')).toMatchObject({ kind: 'outside', unreadable: ['this network folder'] })
+    expect(scans).toBe(0)
   })
 })

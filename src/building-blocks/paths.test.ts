@@ -58,6 +58,12 @@ describe('resolveReal and pathKey', () => {
     expect(pathKey(real)).toBe(real.toLowerCase())
   })
 
+  it.runIf(WINDOWS)('gives a path with a trailing dot or space the key of the folder', () => {
+    const real = folder('workspace', 'repo-b')
+    expect(pathKey(`${real}.`)).toBe(pathKey(real))
+    expect(pathKey(`${real}. `)).toBe(pathKey(real))
+  })
+
   it('does not call the network for a UNC path', () => {
     expect(resolveReal('\\\\aether-no-such-server\\share\\folder')).toBe('\\\\aether-no-such-server\\share\\folder')
   })
