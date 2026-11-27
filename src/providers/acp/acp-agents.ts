@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { Readable, Writable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import {
@@ -9,7 +10,10 @@ import {
   RequestError,
   type ClientConnection,
   type ContentBlock,
+  type CreateElicitationResponse,
   type InitializeResponse,
+  type RequestPermissionRequest,
+  type RequestPermissionResponse,
   type SessionUpdate
 } from '@agentclientprotocol/sdk'
 import { allowedEnvironment } from '../../building-blocks/agent-environment'
@@ -19,6 +23,11 @@ import type {
   AgentProcess,
   AgentStartInput,
   AgentUpdate,
+  Elicitation,
+  ElicitationAnswer,
+  ElicitationField,
+  PermissionOptionKind,
+  PermissionRequest,
   PromptErrorCode,
   PromptLink,
   StartErrorCode,
@@ -26,9 +35,11 @@ import type {
   StopReason,
   ToolStatus
 } from '../../building-blocks/agent.port'
+import { fitsFields } from '../../building-blocks/elicitation'
 import type { Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
 import { LOG_MARKER } from '../../shared/log-marker'
+import { fieldsOfSchema } from './forms'
 import { endSurvivors, processTree, system32, TOOL_LIMIT_MS, type Log, type Powershell, type ProcessRow } from './process-tree'
 import type { AcpRecipe } from './recipe'
 
@@ -125,6 +136,63 @@ export function translateUpdate(update: SessionUpdate, modeOf: (id: string) => M
   }
 }
 
+/** The JSON-RPC code of a request that the peer cancelled with `$/cancel_request`. */
+const REQUEST_CANCELLED = -32800
+
+const PERMISSION_KINDS: Readonly<Record<string, PermissionOptionKind>> = {
+  allow_once: 'allow-once',
+  allow_always: 'allow-always',
+  reject_once: 'refuse-once',
+  reject_always: 'refuse-always'
+}
+
+const CANCELLED: RequestPermissionResponse = { outcome: { outcome: 'cancelled' } }
+
+/** The option that a request with no option gets: the only way to close its card. It answers "cancelled". */
+const CANCEL_OPTION = { id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once', cancel: true } as const
+
+/** What Aether remembers about a tool call that the agent announced, for the request that asks about it. */
+interface KnownTool {
+  title: string | null
+  kind: string | null
+  locations: string[] | null
+}
+
+/** A permission request that waits for the user. The promise of the handler resolves with `resolve`. */
+interface PendingPermission {
+  request: PermissionRequest
+  resolve(response: RequestPermissionResponse): void
+}
+
+/** A form that waits for the user. */
+interface PendingElicitation {
+  form: Elicitation
+  resolve(response: CreateElicitationResponse): void
+}
+
+/** The parameters of `elicitation/create` that Aether reads. */
+interface FormRequest {
+  mode?: unknown
+  sessionId?: unknown
+  toolCallId?: unknown
+  message?: unknown
+  requestedSchema?: unknown
+}
+
+/** The value of the option `model` in a list of configuration options of the agent, or null. */
+function modelOfOptions(options: unknown): string | null {
+  if (!Array.isArray(options)) return null
+  for (const option of options as unknown[]) {
+    if (typeof option !== 'object' || option === null) continue
+    const { id, currentValue } = option as { id?: unknown; currentValue?: unknown }
+    if (id === 'model' && typeof currentValue === 'string') return currentValue
+  }
+  return null
+}
+
+/** True when the signal aborted because the agent cancelled the request, not because the connection closed. */
+const cancelledByPeer = (signal: AbortSignal): boolean => signal.reason instanceof RequestError && signal.reason.code === REQUEST_CANCELLED
+
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 /** Resolves true when the promise settles within the limit, and false after it. The promise never rejects here. */
@@ -162,6 +230,16 @@ class AcpProcess implements AgentProcess {
   private isReady = false
   private aborted = false
   private turnActive = false
+  /** True from the cancel of a running turn until the turn ends. A request that comes then gets "cancelled" at once. */
+  private cancelling = false
+  /** The number of calls of `cancel` that run. A request that comes during one gets "cancelled" at once, turn or not. */
+  private cancelCalls = 0
+  private readonly permissions = new Map<string, PendingPermission>()
+  private readonly elicitations = new Map<string, PendingElicitation>()
+  /** The tool calls that the agent announced, by ID. A permission request of the real adapter names only the ID. */
+  private readonly tools = new Map<string, KnownTool>()
+  /** The model that the agent reported last. A later report of another model is a change. */
+  private modelBase: string | null = null
   private stderr = ''
   private closing: Promise<void> | null = null
   /** The Unix times, in ms, of the call of `spawn` and of its `spawn` event. The process of the agent started between them. */
@@ -242,7 +320,8 @@ class AcpProcess implements AgentProcess {
         protocolVersion: PROTOCOL_VERSION,
         clientInfo: { name: 'aether', title: 'Aether', version: '0.1.0' },
         // Agents use their own tools for files and commands. Aether shows what they do.
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }
+        // Aether shows the forms of the agent as cards (story S5). It declares no URL elicitation.
+        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, elicitation: { form: {} } }
       })
       this.capabilities = response
 
@@ -281,6 +360,9 @@ class AcpProcess implements AgentProcess {
       child.stdin.on('error', () => undefined)
       child.once('error', (error) => resolve(this.refuse('unavailable', `${this.name} did not start. ${error.message}`)))
       child.once('close', (code) => {
+        // A request that is still open ends with the process. The caller names the reason of a close that
+        // it started, so only an exit that it did not start reports here.
+        this.reportExit()
         this.markEnded()
         this.listener.exited({ code, logTail: this.logLines() })
       })
@@ -289,11 +371,16 @@ class AcpProcess implements AgentProcess {
         this.connection = client({ name: 'Aether' })
           .onNotification(methods.client.session.update, ({ params }) => {
             if (params.sessionId !== this.sessionId) return
+            this.remember(params.update)
             const update = translateUpdate(params.update, (id) => this.options.recipe.modeOf(id))
             if (update) this.listener.update(update)
+            const model = this.modelChange(params.update)
+            if (model !== null) this.listener.update({ type: 'model', model })
           })
-          // Story S5 builds the permission queue. Until then no request is allowed.
-          .onRequest(methods.client.session.requestPermission, () => ({ outcome: { outcome: 'cancelled' } }))
+          // The requests stay open until the user answers, the agent withdraws them or the process ends.
+          // Any session ID is accepted: one process serves one session (spec S5, open choice 6).
+          .onRequest(methods.client.session.requestPermission, ({ params, signal }) => this.askPermission(params, signal))
+          .onRequest(methods.client.elicitation.create, ({ params, signal }) => this.askElicitation(params as unknown as FormRequest, signal))
           .connect(
             ndJsonStream(
               Writable.toWeb(child.stdin) as WritableStream<Uint8Array>,
@@ -315,17 +402,19 @@ class AcpProcess implements AgentProcess {
     let resumeError: string | null = null
     if (resume !== null) {
       const abilities = this.capabilities?.agentCapabilities
+      let resumed: { configOptions?: unknown } | void = undefined
       try {
         if (abilities?.sessionCapabilities?.resume) {
-          await this.context.request(methods.agent.session.resume, { sessionId: resume, mcpServers: [], ...folders })
+          resumed = await this.context.request(methods.agent.session.resume, { sessionId: resume, mcpServers: [], ...folders })
         } else if (abilities?.loadSession) {
           // Loading replays the conversation, which Aether has saved. The updates of the replay
           // find no session ID yet, so Aether drops them.
-          await this.context.request(methods.agent.session.load, { sessionId: resume, mcpServers: [], ...folders })
+          resumed = await this.context.request(methods.agent.session.load, { sessionId: resume, mcpServers: [], ...folders })
         } else {
           throw new Error(`${this.name} cannot continue an earlier session.`)
         }
         this.sessionId = resume
+        this.modelBase = modelOfOptions(resumed?.configOptions)
         return { agentSessionId: resume, resumed: true, resumeError: null }
       } catch (error) {
         // A missing sign-in is not a reason to start a new session.
@@ -336,6 +425,7 @@ class AcpProcess implements AgentProcess {
     }
     const created = await this.context.request(methods.agent.session.new, { mcpServers: [], ...folders })
     this.sessionId = created.sessionId
+    this.modelBase = modelOfOptions(created.configOptions)
     return { agentSessionId: created.sessionId, resumed: false, resumeError }
   }
 
@@ -353,11 +443,12 @@ class AcpProcess implements AgentProcess {
     }
     if (this.input.model !== 'default') {
       try {
-        await this.context.request(methods.agent.session.setConfigOption, {
+        const changed = await this.context.request(methods.agent.session.setConfigOption, {
           sessionId,
           configId: 'model',
           value: this.input.model
         })
+        this.modelBase = modelOfOptions(changed.configOptions) ?? this.modelBase
       } catch (error) {
         if (this.aborted || !(error instanceof RequestError)) throw error
         if (error.code === AUTH_REQUIRED) throw error
@@ -390,6 +481,7 @@ class AcpProcess implements AgentProcess {
       return this.refuse('agent-stopped', `${this.name} stopped (exit code ${this.exitCode ?? 'unknown'}).${this.logTail()}`)
     } finally {
       this.turnActive = false
+      this.cancelling = false
     }
   }
 
@@ -406,7 +498,179 @@ class AcpProcess implements AgentProcess {
     }
     const sessionId = this.sessionId
     if (sessionId === null || !this.connection) return
-    await this.connection.agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
+    // A request that comes while the cancel of the turn runs gets "cancelled" at once. The guard also holds
+    // for the whole call outside a turn: a card that opens between the cancel and its answers would be answered
+    // in silence, and stay open with no request behind it.
+    if (this.turnActive) this.cancelling = true
+    this.cancelCalls += 1
+    try {
+      // The agent gets the cancel first, so it ends the turn as cancelled when its tools get their answers.
+      await this.connection.agent.notify(methods.agent.session.cancel, { sessionId }).catch(() => undefined)
+      // Each request that the agent did not withdraw on the cancel gets "cancelled". The agent waits for it.
+      await this.cancelRequests()
+    } finally {
+      this.cancelCalls -= 1
+    }
+  }
+
+  answer(requestId: string, optionId: string): Result<true, 'unknown-request' | 'unknown-option'> {
+    const pending = this.permissions.get(requestId)
+    if (!pending) return err('unknown-request', 'This permission request is closed.')
+    if (!pending.request.options.some((option) => option.id === optionId)) return err('unknown-option', 'The request did not offer this option.')
+    this.permissions.delete(requestId)
+    pending.resolve(optionId === CANCEL_OPTION.id ? CANCELLED : { outcome: { outcome: 'selected', optionId } })
+    return ok(true)
+  }
+
+  answerElicitation(id: string, answer: ElicitationAnswer): Result<true, 'unknown-request' | 'invalid-answer'> {
+    const pending = this.elicitations.get(id)
+    if (!pending) return err('unknown-request', 'This question of the agent is closed.')
+    if (!fitsFields(pending.form.fields, answer)) return err('invalid-answer', 'The form did not offer this answer.')
+    this.elicitations.delete(id)
+    pending.resolve(answer.action === 'skip' ? { action: 'decline' } : { action: 'accept', content: answer.values })
+    return ok(true)
+  }
+
+  /**
+   * Answers each open request with "cancelled" (a form with "cancel"), and reports nothing: the caller
+   * of `cancel` and `close` names the reason. It waits one turn of the event loop, so that the
+   * answers are written before the caller writes anything else.
+   */
+  private async cancelRequests(): Promise<void> {
+    const permissions = [...this.permissions.values()]
+    const elicitations = [...this.elicitations.values()]
+    this.permissions.clear()
+    this.elicitations.clear()
+    for (const pending of permissions) pending.resolve(CANCELLED)
+    for (const pending of elicitations) pending.resolve({ action: 'cancel' })
+    if (permissions.length + elicitations.length > 0) await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+
+  /** Reports each request that the process left open when it exited by itself. A close that the caller started reports nothing. */
+  private reportExit(): void {
+    if (this.aborted) return
+    const permissions = [...this.permissions.keys()]
+    const elicitations = [...this.elicitations.keys()]
+    this.permissions.clear()
+    this.elicitations.clear()
+    for (const id of permissions) this.tell(() => this.listener.permissionClosed(id, 'exited'))
+    for (const id of elicitations) this.tell(() => this.listener.elicitationClosed(id, 'exited'))
+  }
+
+  /** Calls the listener. A defect of the caller never breaks the connection. */
+  private tell(call: () => void): void {
+    try {
+      call()
+    } catch (cause) {
+      const log = this.options.log ?? ((message: string, detail?: unknown) => console.error(message, detail ?? ''))
+      log('Aether could not handle a request of the agent.', cause)
+    }
+  }
+
+  /** Remembers the kind, the title and the locations of a tool call, for the request that names only its ID. */
+  private remember(update: SessionUpdate): void {
+    if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') return
+    const known = this.tools.get(update.toolCallId)
+    this.tools.set(update.toolCallId, {
+      title: update.title || known?.title || null,
+      kind: update.kind || known?.kind || null,
+      locations: update.locations ? update.locations.map((location) => location.path) : (known?.locations ?? null)
+    })
+  }
+
+  /** The new model of a `config_option_update`, or null when the model did not change. Only a started session reports it. */
+  private modelChange(update: SessionUpdate): string | null {
+    if (update.sessionUpdate !== 'config_option_update' || !this.isReady) return null
+    const model = modelOfOptions(update.configOptions)
+    if (model === null) return null
+    const changed = this.modelBase !== null && model !== this.modelBase
+    this.modelBase = model
+    return changed ? model : null
+  }
+
+  private askPermission(params: RequestPermissionRequest, signal: AbortSignal): Promise<RequestPermissionResponse> {
+    // After Stop, while the cancel runs, or while the process closes: no card.
+    if (this.aborted || this.cancelling || this.cancelCalls > 0 || signal.aborted) return Promise.resolve(CANCELLED)
+    const known = this.tools.get(params.toolCall.toolCallId)
+    const options = params.options.flatMap((option) => {
+      const kind = PERMISSION_KINDS[option.kind]
+      return kind === undefined ? [] : [{ id: option.optionId, label: option.name, kind }]
+    })
+    const request: PermissionRequest = {
+      id: randomUUID(),
+      toolId: params.toolCall.toolCallId,
+      title: params.toolCall.title || known?.title || null,
+      toolKind: params.toolCall.kind || known?.kind || null,
+      locations: params.toolCall.locations ? params.toolCall.locations.map((location) => location.path) : (known?.locations ?? []),
+      options: options.length > 0 ? options : [CANCEL_OPTION]
+    }
+    return new Promise((resolve) => {
+      const pending: PendingPermission = { request, resolve }
+      this.permissions.set(request.id, pending)
+      signal.addEventListener(
+        'abort',
+        () => {
+          // The agent withdrew the request. A closed connection is an exit, which the exit of the process reports.
+          if (!cancelledByPeer(signal) || this.permissions.get(request.id) !== pending) return
+          this.permissions.delete(request.id)
+          // The agent waits for an answer to a request that it withdrew, so it gets "cancelled".
+          resolve(CANCELLED)
+          if (!this.aborted) this.tell(() => this.listener.permissionClosed(request.id, 'withdrawn'))
+        },
+        { once: true }
+      )
+      try {
+        this.listener.permission(request)
+      } catch (cause) {
+        this.permissions.delete(request.id)
+        this.tell(() => {
+          throw cause
+        })
+        resolve(CANCELLED)
+      }
+    })
+  }
+
+  private askElicitation(params: FormRequest, signal: AbortSignal): Promise<CreateElicitationResponse> {
+    if (params.mode !== 'form' || typeof params.message !== 'string') throw RequestError.invalidParams(undefined, 'Aether shows only forms.')
+    const parsed = fieldsOfSchema(params.requestedSchema)
+    if (parsed === null) throw RequestError.invalidParams(undefined, 'Aether cannot show this form.')
+    if (this.aborted || this.cancelling || this.cancelCalls > 0 || signal.aborted) return Promise.resolve({ action: 'cancel' })
+    const toolId = typeof params.toolCallId === 'string' ? params.toolCallId : null
+    const facts = this.options.recipe.formFacts({
+      toolId,
+      fields: parsed.map((field) => ({ key: field.key, kind: field.kind, values: field.kind === 'text' ? [] : field.options.map((option) => option.value) }))
+    })
+    const fields: ElicitationField[] = parsed.map((field) => {
+      if (field.kind === 'text') return { ...field, completes: facts.completes[field.key] ?? null }
+      // The recommended option comes first. The others keep the order of the agent.
+      const options = [...field.options.filter((option) => option.value === facts.recommended), ...field.options.filter((option) => option.value !== facts.recommended)]
+      return { ...field, options }
+    })
+    const form: Elicitation = { id: randomUUID(), toolId, message: params.message, fields, recommended: facts.recommended, keepsText: facts.keepsText }
+    return new Promise((resolve) => {
+      const pending: PendingElicitation = { form, resolve }
+      this.elicitations.set(form.id, pending)
+      signal.addEventListener(
+        'abort',
+        () => {
+          if (!cancelledByPeer(signal) || this.elicitations.get(form.id) !== pending) return
+          this.elicitations.delete(form.id)
+          resolve({ action: 'cancel' })
+          if (!this.aborted) this.tell(() => this.listener.elicitationClosed(form.id, 'withdrawn'))
+        },
+        { once: true }
+      )
+      try {
+        this.listener.elicitation(form)
+      } catch (cause) {
+        this.elicitations.delete(form.id)
+        this.tell(() => {
+          throw cause
+        })
+        resolve({ action: 'cancel' })
+      }
+    })
   }
 
   close(): Promise<void> {
@@ -432,6 +696,8 @@ class AcpProcess implements AgentProcess {
    */
   private async shutdown(): Promise<void> {
     this.aborted = true
+    // The open requests get "cancelled" before anything else, as the agent still runs.
+    await this.cancelRequests()
     const child = this.child
     if (!child) return
     if (child.exitCode === null && child.signalCode === null) {

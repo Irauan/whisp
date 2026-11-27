@@ -3,7 +3,7 @@ import type { AgentProcess } from '../../../building-blocks/agent.port'
 import type { Clock } from '../../../building-blocks/clock.port'
 import { openDatabase } from '../../../building-blocks/database'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
-import { ok } from '../../../building-blocks/result'
+import { err, ok } from '../../../building-blocks/result'
 import { RELEASE_LIMITS } from '../idle-release'
 import { Processes } from '../processes.store'
 import { SessionStore } from '../session.store'
@@ -26,6 +26,14 @@ class FakeProcess implements AgentProcess {
 
   cancel(): Promise<void> {
     return Promise.resolve()
+  }
+
+  answer(): ReturnType<AgentProcess['answer']> {
+    return err('unknown-request', 'This request is closed.')
+  }
+
+  answerElicitation(): ReturnType<AgentProcess['answerElicitation']> {
+    return err('unknown-request', 'This request is closed.')
   }
 
   close(): Promise<void> {
@@ -60,7 +68,7 @@ function setup(sessions: { id: string; startedBy?: 'person' | 'automation' }[]) 
     processes.markIdle(id, clock.now())
     return process
   }
-  const deps: RetireIdleDeps = { store, transcript, processes, clock, limits: RELEASE_LIMITS, log: (message, cause) => logged.push(`${message} ${String(cause)}`) }
+  const deps: RetireIdleDeps = { store, transcript, processes, clock, limits: RELEASE_LIMITS, openRequests: () => 0, log: (message, cause) => logged.push(`${message} ${String(cause)}`) }
   return { deps, store, transcript, processes, logged, open, advance: (ms: number) => void (time += ms), database }
 }
 
@@ -156,6 +164,23 @@ describe('retireIdleHandler', () => {
     const process = open('s1')
     advance(30 * MINUTE)
     await Promise.all([retireIdleHandler(deps), retireIdleHandler(deps)])
+    expect(process.closes).toBe(1)
+  })
+
+  it('never closes a session that shows a card, and closes it after its last card closed and the time passed', async () => {
+    const { deps, open, advance, processes, transcript } = setup([{ id: 'asked' }])
+    const process = open('asked')
+    transcript.openPermission('asked', { id: 'r1', toolId: 't1', title: null, toolKind: null, locations: [], options: [] })
+    const withCards = { ...deps, openRequests: (id: string) => transcript.openCardCount(id) }
+    advance(24 * 60 * MINUTE)
+    await retireIdleHandler(withCards)
+    expect(process.closes).toBe(0)
+    transcript.closeCard('asked', 'r1', (card) => card.entry)
+    processes.markIdle('asked', deps.clock.now())
+    await retireIdleHandler(withCards)
+    expect(process.closes).toBe(0)
+    advance(30 * MINUTE)
+    await retireIdleHandler(withCards)
     expect(process.closes).toBe(1)
   })
 })

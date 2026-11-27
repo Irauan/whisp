@@ -3,7 +3,7 @@ import type { NewQuestion, QuestionEvent } from './question'
 import { Questions } from './questions.store'
 
 const found = { hooks: [], mcpServers: [], files: [], unreadable: [] }
-const trust = (sessionId: string): NewQuestion => ({ kind: 'trust', sessionId, profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', ...found })
+const trust = (sessionId: string): NewQuestion => ({ kind: 'trust', sessionId, profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', repositoryRoot: 'C:\\r\\repo-b', holdsWorkspace: false, workspaceDirectory: 'C:\\r', ...found })
 const outside = (sessionId: string): NewQuestion => ({ kind: 'outside', sessionId, profileName: 'Personal', folder: 'C:\\x', ...found })
 
 function setup() {

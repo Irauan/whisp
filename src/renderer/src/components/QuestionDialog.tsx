@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react'
 import type { Answer } from '../../../features/repositories/answer-question/answer-question.contract'
 import type { Question } from '../../../features/repositories/list-questions/list-questions.contract'
 import { Modal } from './Dialogs'
@@ -103,6 +104,12 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
               <dt className="muted">Repository</dt>
               <dd>{question.repository}</dd>
             </div>
+            {question.repositoryRoot !== null && (
+              <div>
+                <dt className="muted">Repository root</dt>
+                <dd>{question.repositoryRoot}</dd>
+              </div>
+            )}
             <div>
               <dt className="muted">Folder</dt>
               <dd>{question.folder}</dd>
@@ -113,6 +120,12 @@ export function QuestionDialog({ question, onAnswer }: { question: Question; onA
             </div>
           </dl>
           <Findings found={question} emptyText="Aether found no .claude/settings*.json file and no .mcp.json file here." />
+          {question.holdsWorkspace && question.workspaceDirectory !== null && (
+            <p className="warning" role="note">
+              <TriangleAlert size={16} aria-hidden="true" />
+              <span>{`This repository holds the workspace directory ${question.workspaceDirectory}. Trust covers every plain folder under ${question.workspaceDirectory} for the profile ${question.profileName}.`}</span>
+            </p>
+          )}
           <Buttons answers={[{ answer: 'trust', label: 'Trust', primary: true }]} onAnswer={onAnswer} />
         </Modal>
       )

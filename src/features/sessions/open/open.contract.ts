@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { defineContract } from '../../../building-blocks/contract'
-import { entryViewSchema, SESSIONS_CHANGED, sessionEventSchema, sessionStatusSchema } from '../entry'
+import { elicitationViewSchema, entryViewSchema, modeSchema, permissionViewSchema, SESSIONS_CHANGED, sessionEventSchema, sessionStatusSchema } from '../entry'
 import { sessionSchema } from '../session'
 
 /**
@@ -18,7 +18,13 @@ export const openSession = defineContract(
     status: sessionStatusSchema,
     revision: z.number().int().min(0),
     /** True while the user can still change the mode: no entry, no agent session and no turn. */
-    draft: z.boolean()
+    draft: z.boolean(),
+    /** The open permission requests, in the order of arrival. Each one has its `answers` entry among the entries. */
+    permissions: z.array(permissionViewSchema),
+    /** The open forms of the agent, in the order of arrival. */
+    elicitations: z.array(elicitationViewSchema),
+    /** The mode that the agent uses, when it differs from the saved mode (Approve all, or the fallback of Auto). Memory only. */
+    liveMode: modeSchema.nullable()
   }),
   ['unknown-session'],
   {

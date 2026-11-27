@@ -31,7 +31,21 @@ const base = {
 
 export const questionSchema = z.discriminatedUnion('kind', [
   /** A Git repository, or a plain folder with a settings file or an `.mcp.json`, in the workspace directory of the profile. */
-  z.strictObject({ kind: z.literal('trust'), ...base, repository: z.string(), ...foundSchema }),
+  z.strictObject({
+    kind: z.literal('trust'),
+    ...base,
+    repository: z.string(),
+    /** The path of the root of the Git repository, or null for a plain folder that asks because of its settings files. */
+    repositoryRoot: z.string().nullable(),
+    /**
+     * True when the repository root holds the workspace directory of the profile (it is that directory, or it
+     * lies above it). Trust then covers every plain folder under the workspace directory, and the dialog warns.
+     */
+    holdsWorkspace: z.boolean(),
+    /** The workspace directory of the profile, for the warning. Null when the profile has none. */
+    workspaceDirectory: z.string().nullable(),
+    ...foundSchema
+  }),
   /** A folder outside the workspace directory of the profile. */
   z.strictObject({ kind: z.literal('outside'), ...base, ...foundSchema }),
   /** A folder under the workspace directory of another profile. */

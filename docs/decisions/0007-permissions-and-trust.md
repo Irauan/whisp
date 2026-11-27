@@ -38,3 +38,12 @@ Decided by the user, during story S6 of milestone m1-chat. The text above stays 
 - "Allow once" covers one session. "Always allow for this profile" covers that folder for that profile, also after a restart.
 - The question for another profile offers "Allow once", "Always allow for this profile" and "Cancel".
 - Known limit: trust stays after the files change. A hook that a later commit adds runs without a new question.
+
+## Note of 2026-11-27, trust and the workspace directory
+
+Decided by the user, during story S5 of milestone m1-chat. The decision and the rejected alternatives stay as they were.
+
+- The walk up from the session directory squares with the rejected alternative "Trust for the whole root". Aether still never trusts the root without a question. It trusts one repository.
+- A repository above the workspace directory covers that directory by containment. The question names the repository root before the user answers.
+- When the root holds the workspace directory, the question warns: "Trust covers every plain folder under <workspace directory> for the profile <name>."
+- The warning does not show for a repository inside the workspace directory.

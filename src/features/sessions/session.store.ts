@@ -119,7 +119,10 @@ export class SessionStore {
     return typeof row?.github_login === 'string' ? row.github_login : null
   }
 
-  /** Saves the mode of a draft. Returns false when the session does not exist. */
+  /**
+   * Saves the mode of a session: the mode that the user chose in a draft, or the live mode that the agent
+   * reports after the first message (spec S5, "Live mode"). Returns false when the session does not exist.
+   */
   setMode(id: string, mode: Mode): boolean {
     return this.database.prepare('UPDATE sessions SET mode = ? WHERE id = ?').run(mode, id).changes > 0
   }
@@ -127,6 +130,22 @@ export class SessionStore {
   /** Saves the model of a draft. Returns false when the session does not exist. */
   setModel(id: string, model: string): boolean {
     return this.database.prepare('UPDATE sessions SET model = ? WHERE id = ?').run(model, id).changes > 0
+  }
+
+  /**
+   * Changes each card that was open when Aether stopped to the outcome `interrupted`. It runs at each
+   * start, before any window loads: the requests of the old process are gone with it. It is a repair,
+   * not a migration. Returns the number of cards that it changed.
+   */
+  interruptOpenCards(): number {
+    return Number(
+      this.database
+        .prepare(
+          `UPDATE entries SET data = json_set(data, '$.outcome', 'interrupted')
+            WHERE kind = 'answers' AND json_extract(data, '$.outcome') = 'open'`
+        )
+        .run().changes
+    )
   }
 
   /** The newest agent run of the session, with the settings of its account. Null before the first start. */

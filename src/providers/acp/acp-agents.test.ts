@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ControlServer } from '../../../tests/simulated-agent/control'
 import { err, ok } from '../../building-blocks/result'
-import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate } from '../../building-blocks/agent.port'
+import type { AgentListener, AgentProcess, AgentStartInput, AgentUpdate, Elicitation, PermissionRequest } from '../../building-blocks/agent.port'
 import { splitLog } from '../../shared/log-marker'
 import { claudeCodeRecipe } from '../claude-code/claude-code'
 import { AcpAgents, translateUpdate, type AcpOptions } from './acp-agents'
@@ -47,13 +47,35 @@ const input = (part: Partial<AgentStartInput> = {}): AgentStartInput => ({
 interface Listened {
   updates: AgentUpdate[]
   exits: { code: number | null; logTail: string }[]
+  /** The permission requests that opened, and the forms. */
+  permissions: PermissionRequest[]
+  elicitations: Elicitation[]
+  /** The requests that closed by themselves, in order: `permission` or `elicitation`, the ID, the reason. */
+  closed: [string, string, string][]
   listener: AgentListener
 }
 
 function listen(): Listened {
   const updates: AgentUpdate[] = []
   const exits: Listened['exits'] = []
-  return { updates, exits, listener: { update: (update) => updates.push(update), exited: (info) => exits.push(info) } }
+  const permissions: PermissionRequest[] = []
+  const elicitations: Elicitation[] = []
+  const closed: Listened['closed'] = []
+  return {
+    updates,
+    exits,
+    permissions,
+    elicitations,
+    closed,
+    listener: {
+      update: (update) => updates.push(update),
+      exited: (info) => exits.push(info),
+      permission: (request) => permissions.push(request),
+      permissionClosed: (id, reason) => closed.push(['permission', id, reason]),
+      elicitation: (form) => elicitations.push(form),
+      elicitationClosed: (id, reason) => closed.push(['elicitation', id, reason])
+    }
+  }
 }
 
 function start(part: Partial<AgentStartInput> = {}, listened: Listened = listen(), extra: Partial<AcpOptions> = {}): AgentProcess {
@@ -496,16 +518,6 @@ describe('AcpAgents', () => {
     await turn
     expect(isRunning(control.pids[0]!)).toBe(false)
   }, 30_000)
-
-  it('answers a permission request with "cancelled" until the permission queue exists', async () => {
-    await control.scenario('tool', { title: 'Edit README.md' })
-    const listened = listen()
-    const process = start({}, listened)
-    await process.ready
-    await process.prompt('go')
-    // The simulated agent says "Skipped" when the client did not allow the tool.
-    expect(listened.updates.filter((update) => update.type === 'text')).toEqual([{ type: 'text', text: 'Skipped' }])
-  })
 })
 
 describe('translateUpdate', () => {
@@ -525,5 +537,361 @@ describe('translateUpdate', () => {
   it('gives an unknown tool status as null in an update, and as pending in a new call', () => {
     expect(translateUpdate({ sessionUpdate: 'tool_call_update', toolCallId: 'a', status: 'weird' as never })).toMatchObject({ status: null })
     expect(translateUpdate({ sessionUpdate: 'tool_call', toolCallId: 'a', title: 't', status: 'weird' as never })).toMatchObject({ status: 'pending' })
+  })
+})
+
+describe('AcpAgents, permission requests', () => {
+  const ASK_ONE = [{ do: 'ask', requests: [{ id: 'run-tests', title: 'npm test', kind: 'execute', locations: ['C:\\work\\a.txt'] }] }]
+  const waitFor = async <T>(read: () => T | undefined, what: string): Promise<T> => {
+    for (let wait = 0; wait < 400; wait += 1) {
+      const value = read()
+      if (value !== undefined) return value
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    throw new Error(`Timeout: ${what}`)
+  }
+
+  it('declares the form elicitation and no other kind', async () => {
+    const process = start()
+    expect((await process.ready).ok).toBe(true)
+    const capabilities = (control.received('initialize')[0]?.params as { clientCapabilities?: { elicitation?: unknown } }).clientCapabilities
+    expect(capabilities?.elicitation).toEqual({ form: {} })
+  })
+
+  it('keeps a request open, maps its options and its tool, and answers that request only', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'ask', requests: [{ id: 'a' , title: 'npm test', kind: 'execute', locations: ['C:\\work\\a.txt'] }, { id: 'b', title: 'Read log', kind: 'read' }] }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    await waitFor(() => (listened.permissions.length === 2 ? true : undefined), 'two requests')
+    const [first, second] = listened.permissions as [PermissionRequest, PermissionRequest]
+    expect(first).toMatchObject({
+      toolId: 'a',
+      title: 'npm test',
+      toolKind: 'execute',
+      locations: ['C:\\work\\a.txt'],
+      options: [
+        { id: 'yes', label: 'Allow', kind: 'allow-once' },
+        { id: 'no', label: 'Refuse', kind: 'refuse-once' }
+      ]
+    })
+    expect(first.id).not.toBe(second.id)
+    expect(control.permissionAnswers).toEqual([])
+
+    expect(process.answer(second.id, 'yes')).toEqual({ ok: true, value: true })
+    expect(await control.waitForPermission('b')).toEqual({ id: 'b', outcome: { outcome: 'selected', optionId: 'yes' } })
+    expect(control.permissionAnswers.map(({ id }) => id)).toEqual(['b'])
+    expect(process.answer(first.id, 'no')).toEqual({ ok: true, value: true })
+    expect(await turn).toEqual({ ok: true, value: 'end_turn' })
+    expect(control.permissionAnswers).toHaveLength(2)
+  })
+
+  it('refuses an unknown request, an option that was not offered and a second answer, and the agent gets nothing', async () => {
+    await control.scenario('steps', { prompt: [...ASK_ONE, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    const request = await waitFor(() => listened.permissions[0], 'the request')
+    expect(process.answer('nope', 'yes')).toMatchObject({ ok: false, error: { code: 'unknown-request' } })
+    expect(process.answer(request.id, 'other')).toMatchObject({ ok: false, error: { code: 'unknown-option' } })
+    expect(control.permissionAnswers).toEqual([])
+    expect(process.answer(request.id, 'yes').ok).toBe(true)
+    expect(process.answer(request.id, 'yes')).toMatchObject({ ok: false, error: { code: 'unknown-request' } })
+    await turn
+    expect(control.permissionAnswers).toHaveLength(1)
+  })
+
+  it('reads the kind, the title and the locations from the tool call that came before, when the request names only the ID', async () => {
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const internals = process as unknown as {
+      remember(update: unknown): void
+      askPermission(params: unknown, signal: AbortSignal): Promise<unknown>
+    }
+    internals.remember({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'npm test', kind: 'execute', locations: [{ path: 'C:\\work\\a.txt' }], status: 'pending' })
+    internals.remember({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'in_progress' })
+    const options = [{ optionId: 'yes', name: 'Yes', kind: 'allow_once' }]
+    const first = internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 't1', rawInput: {} }, options }, new AbortController().signal)
+    // The request of the adapter has its own fields, which win over the remembered ones.
+    const second = internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 't1', title: 'Other title', kind: 'read' }, options }, new AbortController().signal)
+    // A call that nobody announced: the card falls back to the defaults of the window.
+    const third = internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'unknown' }, options }, new AbortController().signal)
+    expect(listened.permissions.map(({ toolId, title, toolKind, locations }) => ({ toolId, title, toolKind, locations }))).toEqual([
+      { toolId: 't1', title: 'npm test', toolKind: 'execute', locations: ['C:\\work\\a.txt'] },
+      { toolId: 't1', title: 'Other title', toolKind: 'read', locations: ['C:\\work\\a.txt'] },
+      { toolId: 'unknown', title: null, toolKind: null, locations: [] }
+    ])
+    for (const request of listened.permissions) process.answer(request.id, 'yes')
+    await Promise.all([first, second, third])
+  })
+
+  it('gives a request with no option the option "Cancel request", which answers cancelled', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'ask', requests: [{ id: 'a', title: 'Odd tool', kind: 'other', options: [] }] }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    const request = await waitFor(() => listened.permissions[0], 'the request')
+    expect(request.options).toEqual([{ id: 'aether-cancel-request', label: 'Cancel request', kind: 'refuse-once', cancel: true }])
+    expect(process.answer(request.id, 'aether-cancel-request').ok).toBe(true)
+    expect(await control.waitForPermission('a')).toEqual({ id: 'a', outcome: { outcome: 'cancelled' } })
+    await turn
+  })
+
+  it('sends the cancel, then answers cancelled to each open request that the agent did not withdraw, and reports nothing', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'ask', withdrawOnCancel: true, requests: [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }] }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    await waitFor(() => (listened.permissions.length === 2 ? true : undefined), 'two requests')
+    await process.cancel()
+    expect(await control.waitForPermission('a')).toEqual({ id: 'a', outcome: { outcome: 'cancelled' } })
+    expect(await control.waitForPermission('b')).toEqual({ id: 'b', outcome: { outcome: 'cancelled' } })
+    // The turn ends by the cancel, or by the answers when they came first. Both are normal.
+    expect(await turn).toMatchObject({ ok: true })
+    // The agent withdrew the requests on the cancel (withdrawOnCancel), and each of them still got exactly one answer.
+    expect(control.permissionAnswers.map((answer) => answer.outcome)).toEqual([{ outcome: 'cancelled' }, { outcome: 'cancelled' }])
+    expect(listened.closed).toEqual([])
+    expect(process.answer(listened.permissions[0]!.id, 'yes')).toMatchObject({ ok: false, error: { code: 'unknown-request' } })
+  })
+
+  it('reports a request that the agent withdrew, and answers it with cancelled', async () => {
+    await control.scenario('steps', { prompt: [...ASK_ONE, { do: 'gate', name: 'withdraw' }, { do: 'withdraw', id: 'run-tests' }, { do: 'gate', name: 'end' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    const request = await waitFor(() => listened.permissions[0], 'the request')
+    await control.waitForGate('withdraw')
+    await control.open('withdraw')
+    await waitFor(() => (listened.closed.length === 1 ? true : undefined), 'the withdraw')
+    expect(listened.closed).toEqual([['permission', request.id, 'withdrawn']])
+    expect(await control.waitForPermission('run-tests')).toEqual({ id: 'run-tests', outcome: { outcome: 'cancelled' } })
+    expect(process.answer(request.id, 'yes')).toMatchObject({ ok: false, error: { code: 'unknown-request' } })
+    await control.waitForGate('end')
+    await process.close()
+    await turn
+  })
+
+  it('reports each open request as exited when the process ends by itself, and before it reports the exit', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'ask', requests: [{ id: 'a', title: 'A' }] }, { do: 'elicit', id: 'f', request: { mode: 'form', message: 'm', requestedSchema: { type: 'object', properties: { x: { type: 'string' } } } } }, { do: 'gate', name: 'never' }] })
+    const order: string[] = []
+    const listened = listen()
+    const inner = listened.listener
+    listened.listener = {
+      ...inner,
+      permissionClosed: (id, reason) => {
+        order.push(`permission ${reason}`)
+        inner.permissionClosed(id, reason)
+      },
+      elicitationClosed: (id, reason) => {
+        order.push(`elicitation ${reason}`)
+        inner.elicitationClosed(id, reason)
+      },
+      exited: (info) => {
+        order.push('exited')
+        inner.exited(info)
+      }
+    }
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    await waitFor(() => (listened.permissions.length === 1 && listened.elicitations.length === 1 ? true : undefined), 'both requests')
+    globalThis.process.kill(control.pids[0]!)
+    expect((await turn).ok).toBe(false)
+    expect(order).toEqual(['permission exited', 'elicitation exited', 'exited'])
+  })
+
+  it('reports nothing when the caller closes the process, and the agent gets cancelled for each open request', async () => {
+    await control.scenario('steps', { prompt: [...ASK_ONE, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Run it')
+    await waitFor(() => listened.permissions[0], 'the request')
+    await process.close()
+    await turn
+    expect(await control.waitForPermission('run-tests')).toEqual({ id: 'run-tests', outcome: { outcome: 'cancelled' } })
+    expect(listened.closed).toEqual([])
+    // A request after the close gets cancelled at once and opens no card.
+    const internals = process as unknown as { askPermission(params: unknown, signal: AbortSignal): Promise<unknown> }
+    expect(await internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'late' }, options: [] }, new AbortController().signal)).toEqual({ outcome: { outcome: 'cancelled' } })
+    expect(listened.permissions).toHaveLength(1)
+  })
+})
+
+describe('AcpAgents, forms of the agent', () => {
+  const QUESTION = {
+    toolCallId: 'ask-1',
+    message: 'Which test runner do you want?',
+    requestedSchema: {
+      type: 'object',
+      properties: {
+        question_0: {
+          type: 'string',
+          title: 'Runner',
+          oneOf: [
+            { const: 'Vitest', title: 'Vitest (Recommended)', description: 'Fast.' },
+            { const: 'Jest', title: 'Jest', description: 'Widely used.' }
+          ]
+        },
+        question_0_custom: { type: 'string', title: 'Other', description: 'Type your own answer.' }
+      }
+    }
+  }
+  const FALLBACK = {
+    message: 'claude-fable-5-2 declined this request. Retry with claude-opus-5-5?',
+    requestedSchema: {
+      type: 'object',
+      properties: {
+        choice: {
+          type: 'string',
+          oneOf: [
+            { const: 'retry_fallback', title: 'Retry with claude-opus-5-5' },
+            { const: 'cancelled', title: 'Keep the refusal' }
+          ]
+        }
+      }
+    }
+  }
+  const waitFor = async <T>(read: () => T | undefined, what: string): Promise<T> => {
+    for (let wait = 0; wait < 400; wait += 1) {
+      const value = read()
+      if (value !== undefined) return value
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+    throw new Error(`Timeout: ${what}`)
+  }
+
+  it('shows a question of AskUserQuestion: fields in the order of the agent, the text linked to its question, and the text kept', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'elicit', id: 'q', request: { mode: 'form', ...QUESTION } }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Set up the tests')
+    const form = await waitFor(() => listened.elicitations[0], 'the form')
+    expect(form).toMatchObject({ toolId: 'ask-1', message: 'Which test runner do you want?', recommended: null, keepsText: true })
+    expect(form.fields).toEqual([
+      {
+        key: 'question_0',
+        kind: 'choice',
+        title: 'Runner',
+        description: null,
+        options: [
+          { value: 'Vitest', label: 'Vitest (Recommended)', description: 'Fast.' },
+          { value: 'Jest', label: 'Jest', description: 'Widely used.' }
+        ]
+      },
+      { key: 'question_0_custom', kind: 'text', title: 'Other', description: 'Type your own answer.', completes: 'question_0' }
+    ])
+    expect(process.answerElicitation(form.id, { action: 'submit', values: { question_0: 'Mocha' } })).toMatchObject({ ok: false, error: { code: 'invalid-answer' } })
+    expect(process.answerElicitation('nope', { action: 'skip' })).toMatchObject({ ok: false, error: { code: 'unknown-request' } })
+    expect(control.elicitationAnswers).toEqual([])
+    expect(process.answerElicitation(form.id, { action: 'submit', values: { question_0: 'Jest', question_0_custom: 'for e2e' } }).ok).toBe(true)
+    expect(await control.waitForElicitation('q')).toEqual({ id: 'q', response: { action: 'accept', content: { question_0: 'Jest', question_0_custom: 'for e2e' } } })
+    await turn
+  })
+
+  it('sends decline for a skip and cancel for a cancel of the process', async () => {
+    await control.scenario('steps', {
+      prompt: [{ do: 'elicit', id: 'one', request: { mode: 'form', ...QUESTION } }, { do: 'answers' }, { do: 'elicit', id: 'two', request: { mode: 'form', ...QUESTION } }, { do: 'answers' }]
+    })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Set up the tests')
+    const first = await waitFor(() => listened.elicitations[0], 'the first form')
+    expect(process.answerElicitation(first.id, { action: 'skip' }).ok).toBe(true)
+    expect(await control.waitForElicitation('one')).toEqual({ id: 'one', response: { action: 'decline' } })
+    await waitFor(() => listened.elicitations[1], 'the second form')
+    await process.cancel()
+    expect(await control.waitForElicitation('two')).toEqual({ id: 'two', response: { action: 'cancel' } })
+    expect(listened.closed).toEqual([])
+    await turn
+  })
+
+  it('answers -32602 for a form with a field that Aether does not render, and for a form with no field, and opens no card', async () => {
+    const number = { mode: 'form', message: 'How many workers?', requestedSchema: { type: 'object', properties: { workers: { type: 'number', title: 'Workers' } } } }
+    const empty = { mode: 'form', message: 'Nothing to ask.', requestedSchema: { type: 'object', properties: {} } }
+    await control.scenario('steps', { prompt: [{ do: 'elicit', id: 'n', request: number }, { do: 'elicit', id: 'e', request: empty }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    await process.prompt('Go')
+    expect((await control.waitForElicitation('n')).error?.code).toBe(-32602)
+    expect((await control.waitForElicitation('e')).error?.code).toBe(-32602)
+    expect(listened.elicitations).toEqual([])
+  })
+
+  it('puts the recommended option of the refusal fallback first, and keeps the order of the agent for the rest', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'elicit', id: 'f', request: { mode: 'form', ...FALLBACK } }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Review it')
+    const form = await waitFor(() => listened.elicitations[0], 'the form')
+    expect(form.recommended).toBe('cancelled')
+    expect(form.fields[0]).toMatchObject({ kind: 'choice', options: [{ value: 'cancelled' }, { value: 'retry_fallback' }] })
+    expect(process.answerElicitation(form.id, { action: 'skip' }).ok).toBe(true)
+    await turn
+  })
+
+  it('keeps no typed text of a form of an MCP server, which has no tool call', async () => {
+    const token = { mode: 'form', message: 'The example service needs a token.', requestedSchema: { type: 'object', properties: { token: { type: 'string', title: 'Token' } } } }
+    await control.scenario('steps', { prompt: [{ do: 'elicit', id: 't', request: token }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const turn = process.prompt('Connect')
+    const form = await waitFor(() => listened.elicitations[0], 'the form')
+    expect(form).toMatchObject({ toolId: null, keepsText: false, recommended: null })
+    expect(process.answerElicitation(form.id, { action: 'skip' }).ok).toBe(true)
+    await turn
+  })
+
+  it('reports the model only when the agent reports another model after the start', async () => {
+    await control.scenario('steps', { prompt: [{ do: 'elicit', id: 'f', request: { mode: 'form', ...FALLBACK }, fallbackModel: 'claude-opus-5-5' }, { do: 'answers' }] })
+    const listened = listen()
+    const process = start({ model: 'claude-fable-5-2' }, listened)
+    await process.ready
+    // The start sets the model through a request, so it reports nothing.
+    expect(listened.updates.filter((update) => update.type === 'model')).toEqual([])
+    const turn = process.prompt('Review it')
+    const form = await waitFor(() => listened.elicitations[0], 'the form')
+    expect(process.answerElicitation(form.id, { action: 'submit', values: { choice: 'retry_fallback' } }).ok).toBe(true)
+    await turn
+    await waitFor(() => (listened.updates.some((update) => update.type === 'model') ? true : undefined), 'the model update')
+    expect(listened.updates.filter((update) => update.type === 'model')).toEqual([{ type: 'model', model: 'claude-opus-5-5' }])
+  })
+})
+
+describe('AcpAgents, a request while cancel runs outside a turn', () => {
+  it('answers cancelled at once and opens no card, for a request and for a form, while a cancel with no turn is sent', async () => {
+    const listened = listen()
+    const process = start({}, listened)
+    await process.ready
+    const internals = process as unknown as {
+      askPermission(params: unknown, signal: AbortSignal): Promise<unknown>
+      askElicitation(params: unknown, signal: AbortSignal): Promise<unknown>
+    }
+    // No prompt runs: the cancel is Stop with no turn. The calls below come while `cancel` is still sending.
+    const cancelling = process.cancel()
+    const permission = internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'late' }, options: [{ optionId: 'yes', name: 'Yes', kind: 'allow_once' }] }, new AbortController().signal)
+    const form = internals.askElicitation(
+      { mode: 'form', message: 'm', requestedSchema: { type: 'object', properties: { x: { type: 'string' } } } },
+      new AbortController().signal
+    )
+    expect(await permission).toEqual({ outcome: { outcome: 'cancelled' } })
+    expect(await form).toEqual({ action: 'cancel' })
+    await cancelling
+    expect(listened.permissions).toEqual([])
+    expect(listened.elicitations).toEqual([])
+    // After the cancel ended, a new request opens a card again.
+    void internals.askPermission({ sessionId: 's1', toolCall: { toolCallId: 'next' }, options: [{ optionId: 'yes', name: 'Yes', kind: 'allow_once' }] }, new AbortController().signal)
+    expect(listened.permissions.map((request) => request.toolId)).toEqual(['next'])
   })
 })

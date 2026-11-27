@@ -1,12 +1,20 @@
 import { z } from 'zod'
 import type { AgentUpdate } from '../../building-blocks/agent.port'
-import { MODE_LABELS, type Mode } from '../../building-blocks/mode'
+import { MODE_LABELS, MODES, type Mode } from '../../building-blocks/mode'
 
 /** The states of a tool call (ACP names them the same way). */
 export const TOOL_STATUSES = ['pending', 'in_progress', 'completed', 'failed'] as const
 
 /** The states of a step of a plan. Aether ignores the priority of a step. */
 export const STEP_STATUSES = ['pending', 'in_progress', 'completed'] as const
+
+/**
+ * How a card of the agent ended (spec S5, "Data"). `open` is a card that waits, and the start of the
+ * next run changes it to `interrupted`: Aether stopped before the card closed.
+ */
+export const ANSWER_OUTCOMES = ['open', 'submitted', 'skipped', 'stopped', 'withdrawn', 'exited', 'quit', 'interrupted'] as const
+
+export type AnswerOutcome = (typeof ANSWER_OUTCOMES)[number]
 
 /**
  * One entry of a conversation (architecture, Terms). The database holds each entry as one row with
@@ -34,17 +42,78 @@ export const entrySchema = z.discriminatedUnion('kind', [
     text: z.string(),
     /** A short name for the cause, for example `not-signed-in` and `agent-stopped`. */
     code: z.string().optional()
+  }),
+  // A card of the agent: a permission request (`decision`) or a form (`question`). The main process saves
+  // it when the card opens, with the outcome `open`, and replaces it in place when the card closes. A
+  // row holds what the card shows: the question, and the answer or null when there is none. The renderer
+  // turns a null answer into the text of its outcome. The format is approved (spec S5, "Data").
+  z.strictObject({
+    kind: z.literal('answers'),
+    card: z.enum(['decision', 'question']),
+    /** The tool call of the card, if any. */
+    toolId: z.string().nullable(),
+    outcome: z.enum(ANSWER_OUTCOMES),
+    rows: z.array(z.strictObject({ question: z.string(), answer: z.string().nullable() }))
   })
 ])
 
 export type Entry = z.output<typeof entrySchema>
 export type ToolEntry = Extract<Entry, { kind: 'tool' }>
+export type AnswersEntry = Extract<Entry, { kind: 'answers' }>
 export type TextKind = 'agent' | 'thought'
 
 /** An entry with its ID. The ID is stable, so that an event can name the entry that it changes. */
 export const entryViewSchema = z.strictObject({ id: z.string(), entry: entrySchema })
 
 export type EntryView = z.output<typeof entryViewSchema>
+
+/** The permission mode of a session, for a change and for the snapshot. */
+export const modeSchema = z.enum(MODES)
+
+/** A permission request that waits for the user, as the window shows it. The title is resolved. */
+export const permissionViewSchema = z.strictObject({
+  id: z.string(),
+  /** The ID of the `answers` entry that the card saved when it opened. */
+  entryId: z.string(),
+  toolId: z.string(),
+  title: z.string(),
+  toolKind: z.string().nullable(),
+  locations: z.array(z.string()),
+  options: z.array(
+    z.strictObject({ id: z.string(), label: z.string(), kind: z.enum(['allow-once', 'allow-always', 'refuse-once', 'refuse-always']), cancel: z.boolean().optional() })
+  )
+})
+
+export type PermissionView = z.output<typeof permissionViewSchema>
+
+const choiceSchema = z.strictObject({ value: z.string(), label: z.string(), description: z.string().nullable() })
+
+export const elicitationFieldSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ key: z.string(), kind: z.literal('choice'), title: z.string().nullable(), description: z.string().nullable(), options: z.array(choiceSchema) }),
+  z.strictObject({ key: z.string(), kind: z.literal('choices'), title: z.string().nullable(), description: z.string().nullable(), options: z.array(choiceSchema) }),
+  z.strictObject({ key: z.string(), kind: z.literal('text'), title: z.string().nullable(), description: z.string().nullable(), completes: z.string().nullable() })
+])
+
+/** A form of the agent that waits for the user, as the window shows it. */
+export const elicitationViewSchema = z.strictObject({
+  id: z.string(),
+  entryId: z.string(),
+  toolId: z.string().nullable(),
+  message: z.string(),
+  fields: z.array(elicitationFieldSchema),
+  /** The value of the option that shows first and primary, or null. */
+  recommended: z.string().nullable()
+})
+
+export type ElicitationView = z.output<typeof elicitationViewSchema>
+
+/** The open request of a card, with its kind. */
+export const cardSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('permission'), permission: permissionViewSchema }),
+  z.strictObject({ kind: z.literal('elicitation'), elicitation: elicitationViewSchema })
+])
+
+export type Card = z.output<typeof cardSchema>
 
 /** What the session does now. The main process owns it, and it lives in memory only. */
 export const SESSION_STATUSES = ['idle', 'starting', 'working'] as const
@@ -57,7 +126,18 @@ export const changeSchema = z.discriminatedUnion('type', [
   /** Text that the agent added at the end of a text or thought entry. */
   z.strictObject({ type: z.literal('entry-text'), id: z.string(), text: z.string() }),
   z.strictObject({ type: z.literal('entry-replaced'), entry: entryViewSchema }),
-  z.strictObject({ type: z.literal('status'), status: sessionStatusSchema })
+  z.strictObject({ type: z.literal('status'), status: sessionStatusSchema }),
+  /**
+   * A card opens. The new `answers` entry (outcome `open`) and its request come together, so the window
+   * never sees one without the other. No other change adds or replaces an `answers` entry.
+   */
+  z.strictObject({ type: z.literal('card-opened'), entry: entryViewSchema, card: cardSchema }),
+  /** A card closes: its `answers` entry, replaced in place with the final outcome, and the ID of its request. */
+  z.strictObject({ type: z.literal('card-closed'), entry: entryViewSchema, id: z.string() }),
+  /** The agent uses this mode now (the live mode). */
+  z.strictObject({ type: z.literal('mode'), mode: modeSchema }),
+  /** The session uses this model now, after the refusal fallback. */
+  z.strictObject({ type: z.literal('model'), model: z.string() })
 ])
 
 export type Change = z.output<typeof changeSchema>

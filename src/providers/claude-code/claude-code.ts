@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { MODES, type Mode } from '../../building-blocks/mode'
 import { err, ok, type Result } from '../../building-blocks/result'
-import type { AcpRecipe, Launch } from '../acp/recipe'
+import type { AcpRecipe, FormFacts, FormShape, Launch } from '../acp/recipe'
 
 /** The permission mode of Claude for each mode of the port (decision 0012). */
 export const CLAUDE_MODES: Record<Mode, string> = {
@@ -83,6 +83,40 @@ export function signInSteps(settings: Readonly<Record<string, unknown>>): string
   return steps.join(' ')
 }
 
+/** The key of a question of AskUserQuestion, and of its free text ("Other"): `question_<n>` and `question_<n>_custom`. */
+const QUESTION_KEY = /^question_(\d+)(_custom)?$/
+
+/** The values of the two options of the refusal fallback dialog of the adapter (`elicitation.js`). */
+const RETRY_FALLBACK = 'retry_fallback'
+const KEEP_REFUSAL = 'cancelled'
+
+/**
+ * What Aether knows about the forms of the Claude Code adapter. A question of AskUserQuestion has a
+ * tool call and keys `question_<n>`, with an optional `question_<n>_custom` that completes the
+ * question. The refusal fallback dialog has one field `choice` with the two options above, and
+ * "Keep the refusal" is the default of the adapter, so it is recommended. Any other form comes from an
+ * MCP server and can hold a secret: Aether keeps no text of it.
+ */
+export function claudeFormFacts(form: FormShape): FormFacts {
+  const isQuestion =
+    form.toolId !== null && form.fields.length > 0 && form.fields.every((field) => QUESTION_KEY.test(field.key))
+  if (isQuestion) {
+    const completes: Record<string, string> = {}
+    for (const field of form.fields) {
+      const match = QUESTION_KEY.exec(field.key)
+      if (field.kind === 'text' && match?.[2] !== undefined && form.fields.some((other) => other.key === `question_${match[1]}`)) {
+        completes[field.key] = `question_${match[1]}`
+      }
+    }
+    return { recommended: null, keepsText: true, completes }
+  }
+  const only = form.fields.length === 1 ? form.fields[0] : undefined
+  if (only?.key === 'choice' && only.kind === 'choice' && only.values.length === 2 && only.values.includes(RETRY_FALLBACK) && only.values.includes(KEEP_REFUSAL)) {
+    return { recommended: KEEP_REFUSAL, keepsText: true, completes: {} }
+  }
+  return { recommended: null, keepsText: false, completes: {} }
+}
+
 /** The launch recipe of Claude Code (decision 0006, 0012). */
 export function claudeCodeRecipe(options: ClaudeCodeOptions = {}): AcpRecipe {
   return {
@@ -103,6 +137,7 @@ export function claudeCodeRecipe(options: ClaudeCodeOptions = {}): AcpRecipe {
     },
     modeId: (mode) => CLAUDE_MODES[mode],
     modeOf: (id) => MODES.find((mode) => CLAUDE_MODES[mode] === id) ?? null,
+    formFacts: claudeFormFacts,
     notSignedIn: signInSteps
   }
 }

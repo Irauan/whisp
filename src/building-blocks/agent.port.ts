@@ -52,10 +52,89 @@ export type AgentUpdate =
   | { type: 'plan'; steps: { text: string; status: PlanStepStatus }[] }
   /** The agent uses this mode now. Aether asked for a mode at the start, and the agent can use another one. */
   | { type: 'mode'; mode: Mode }
+  /** The agent uses another model now, for example after the refusal fallback. It comes only when the model changes. */
+  | { type: 'model'; model: string }
+
+export type PermissionOptionKind = 'allow-once' | 'allow-always' | 'refuse-once' | 'refuse-always'
+
+/** One choice of a permission request. */
+export interface PermissionOption {
+  /** The ID of the choice, as the agent gave it. */
+  id: string
+  /** The name of the choice, as the agent wrote it. */
+  label: string
+  kind: PermissionOptionKind
+  /** True for the option that the provider adds to a request with no option. It only cancels, and it is never recommended. */
+  cancel?: boolean
+}
+
+/** A question of the agent: may it use a tool? It stays open until the user answers or the agent withdraws it. */
+export interface PermissionRequest {
+  /** Made by Aether, unique in the process. */
+  id: string
+  /** The ID of the tool call of the agent. */
+  toolId: string
+  /** The title of the tool call. Null when neither the request nor an earlier announcement of the call gave one. */
+  title: string | null
+  /** The kind of the tool call, from the request or from the earlier announcement of the call. Null when neither gave one. */
+  toolKind: string | null
+  locations: string[]
+  options: PermissionOption[]
+}
+
+export interface ElicitationChoice {
+  value: string
+  label: string
+  description: string | null
+}
+
+/**
+ * One field of a form of the agent. A `choice` is a single select, `choices` a multi select, and
+ * `text` a line of free text. `other` links a text field to the choice field that it completes
+ * (for example the "Other" row of a question): the provider sets it, the window shows the text in
+ * the row of that field.
+ */
+export type ElicitationField =
+  | { key: string; kind: 'choice'; title: string | null; description: string | null; options: ElicitationChoice[] }
+  | { key: string; kind: 'choices'; title: string | null; description: string | null; options: ElicitationChoice[] }
+  | { key: string; kind: 'text'; title: string | null; description: string | null; completes: string | null }
+
+/** A form that the agent asks the user to fill (an elicitation of mode form). */
+export interface Elicitation {
+  /** Made by Aether, unique in the process. */
+  id: string
+  /** The ID of the tool call that asks, or null for a form of an MCP server. */
+  toolId: string | null
+  message: string
+  fields: ElicitationField[]
+  /**
+   * The value of the choice that Aether shows first and as the primary button, or null. The recipe
+   * of the agent decides it (for example "Keep the refusal"); the provider puts that option first.
+   */
+  recommended: string | null
+  /** True when the answer can be saved as the user typed it. False for a form that can hold a secret. */
+  keepsText: boolean
+}
+
+export type ElicitationAnswer = { action: 'submit'; values: Record<string, string | string[]> } | { action: 'skip' }
+
+export type CloseReason = 'withdrawn' | 'exited'
 
 /** What the process tells Aether without being asked. */
 export interface AgentListener {
   update(update: AgentUpdate): void
+  /** A new permission request is open. */
+  permission(request: PermissionRequest): void
+  /**
+   * The agent withdrew a request, or the process exited with the request open. The provider calls it
+   * only for a close that the caller did not start: `cancel` and `close` report nothing, because the
+   * caller names the reason of a close that it starts.
+   */
+  permissionClosed(requestId: string, reason: CloseReason): void
+  /** A new form is open. */
+  elicitation(request: Elicitation): void
+  /** As `permissionClosed`, for a form. */
+  elicitationClosed(id: string, reason: CloseReason): void
   /** The process ended. `logTail` holds the last lines of its log, with the secrets removed. */
   exited(info: { code: number | null; logTail: string }): void
 }
@@ -93,11 +172,19 @@ export interface AgentProcess {
    * file or folder that the message names. The caller sends links with the first message only.
    */
   prompt(text: string, links?: readonly PromptLink[]): Promise<Result<StopReason, PromptErrorCode>>
-  /** Cancels the turn. Before `ready` it cancels the start. It never rejects. */
-  cancel(): Promise<void>
   /**
-   * Ends the process: it cancels the turn, closes the session, closes stdin, and kills the whole
-   * process tree after a limit. It never rejects.
+   * Cancels the turn, and answers each open permission request and form with "cancelled". Before
+   * `ready` it cancels the start. It never rejects. It reports no closed request.
+   */
+  cancel(): Promise<void>
+  /** Answers one open permission request with one of its options. Nothing changes on an error. */
+  answer(requestId: string, optionId: string): Result<true, 'unknown-request' | 'unknown-option'>
+  /** Answers one open form. Nothing changes on an error. */
+  answerElicitation(id: string, answer: ElicitationAnswer): Result<true, 'unknown-request' | 'invalid-answer'>
+  /**
+   * Ends the process: it answers each open request with "cancelled", cancels the turn, closes the
+   * session, closes stdin, and kills the whole process tree after a limit. It never rejects. It
+   * reports no closed request.
    */
   close(): Promise<void>
 }

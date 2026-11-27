@@ -21,6 +21,11 @@
 //                   { type: 'exit', code }                      the agent ends on a scenario step
 //                   { type: 'child', pid, parent }              a step started a child process that
 //                                                               outlives the agent (step 'child')
+//                   { type: 'permission', id, outcome | error } the client answered the permission
+//                                                               request of the tool call `id`
+//                   { type: 'elicitation', id, response | error }
+//                                                               the client answered the elicitation
+//                                                               `id` (see `requests.mjs`)
 //                   { type: 'ack', id, error? }                 a command took effect
 //   test -> agent   { type: 'start', scenario, opened }         answer to hello. The agent
 //                                                               handles no ACP request before it.
@@ -32,6 +37,7 @@ import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 import { agent, methods, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk'
 import { resolveScenario } from './scenarios.mjs'
+import { REQUEST_STEPS, runRequestStep } from './requests.mjs'
 
 const pipeName = process.argv[2]
 if (!pipeName) {
@@ -180,8 +186,26 @@ async function runSteps(steps, { signal, sessionId, client }) {
       case 'child':
         await startChild()
         break
-      default:
-        throw new Error(`Unknown step "${step.do}".`)
+      default: {
+        // The permission requests and the elicitations (story S5 of m1-chat): see `requests.mjs`.
+        if (!REQUEST_STEPS.has(step.do)) throw new Error(`Unknown step "${step.do}".`)
+        const outcome = await runRequestStep(step, {
+          signal,
+          sessionId,
+          client,
+          report,
+          update,
+          runSteps,
+          setMode: (mode) => {
+            settingsOf(sessionId).mode = mode
+          },
+          setModel: (model) => {
+            settingsOf(sessionId).model = model
+            return stateOf(sessionId).configOptions
+          }
+        })
+        if (outcome === 'cancelled') return 'cancelled'
+      }
     }
   }
   return 'end_turn'

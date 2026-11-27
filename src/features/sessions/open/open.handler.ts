@@ -1,5 +1,6 @@
 import { err, ok, type Result } from '../../../building-blocks/result'
-import { isDraft, type EntryView, type SessionStatus } from '../entry'
+import type { Mode } from '../../../building-blocks/mode'
+import { isDraft, type ElicitationView, type EntryView, type PermissionView, type SessionStatus } from '../entry'
 import { MESSAGES, type Session } from '../session'
 import type { SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
@@ -16,12 +17,15 @@ export interface OpenedSession {
   status: SessionStatus
   revision: number
   draft: boolean
+  permissions: PermissionView[]
+  elicitations: ElicitationView[]
+  liveMode: Mode | null
 }
 
 export function openSessionHandler({ store, transcript }: OpenSessionDeps, { id }: { id: string }): Result<OpenedSession, OpenSessionError> {
   const session = store.find(id)
   if (!session) return err('unknown-session', MESSAGES.unknownSession)
-  const { entries, status, revision } = transcript.snapshot(id)
+  const { entries, status, revision, permissions, elicitations, liveMode } = transcript.snapshot(id)
   const agentSessionId = store.agentRunOf(id)?.externalId ?? null
-  return ok({ session, entries, status, revision, draft: isDraft({ entryCount: entries.length, agentSessionId, status }) })
+  return ok({ session, entries, status, revision, draft: isDraft({ entryCount: entries.length, agentSessionId, status }), permissions, elicitations, liveMode })
 }

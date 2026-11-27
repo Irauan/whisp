@@ -6,8 +6,10 @@ import {
   isAtBottom,
   latestPlan,
   markedPlanIds,
+  oldestOpenCard,
   planCount,
   reduceSessionWindow,
+  shownMode,
   shownModel,
   splitFailedTurn,
   type SessionEvent,
@@ -35,10 +37,14 @@ const snapshot = (part: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
   status: 'idle',
   revision: 0,
   draft: true,
+  permissions: [],
+  elicitations: [],
+  liveMode: null,
   ...part
 })
 
 const event = (revision: number, change: SessionEvent['change']): SessionEvent => ({ sessionId: 's1', revision, change })
+type EntryView = SessionSnapshot['entries'][number]
 const user = { id: 'e1', entry: { kind: 'user', text: 'Say hello' } } as const
 
 const run = (actions: SessionWindowAction[], from: SessionWindowState = emptyWindowState) => actions.reduce(reduceSessionWindow, from)
@@ -245,5 +251,61 @@ describe('shownModel', () => {
     expect(shownModel('claude-opus-5-5', afterSend?.session.model ?? '')).toBe('claude-opus-5-5')
     // With no choice in this window, the button shows the saved model.
     expect(shownModel(null, 'claude-opus-5-5')).toBe('claude-opus-5-5')
+  })
+})
+
+describe('the cards, the live mode and the model in the view', () => {
+  const open: EntryView = { id: 'a1', entry: { kind: 'answers', card: 'decision', toolId: 't1', outcome: 'open', rows: [{ question: 'Run this command?', answer: null }] } }
+  const permission: SessionSnapshot['permissions'][number] = { id: 'r1', entryId: 'a1', toolId: 't1', title: 'npm test', toolKind: 'execute', locations: [], options: [{ id: 'yes', label: 'Yes', kind: 'allow-once' }] }
+  const form: SessionSnapshot['elicitations'][number] = { id: 'f1', entryId: 'a2', toolId: null, message: 'Which runner?', fields: [], recommended: null }
+  const openForm: EntryView = { id: 'a2', entry: { kind: 'answers', card: 'question', toolId: null, outcome: 'open', rows: [{ question: 'Which runner?', answer: null }] } }
+
+  it('adds the entry and its request together when a card opens', () => {
+    const view = applyChange(snapshot({ entries: [user], draft: false }), { type: 'card-opened', entry: open, card: { kind: 'permission', permission } })
+    expect(view).toMatchObject({ entries: [user, open], permissions: [permission], elicitations: [] })
+    const both = view && applyChange(view, { type: 'card-opened', entry: openForm, card: { kind: 'elicitation', elicitation: form } })
+    expect(both).toMatchObject({ permissions: [permission], elicitations: [form] })
+  })
+
+  it('replaces the entry in place and drops the request when the card closes', () => {
+    const answered: EntryView = { id: 'a1', entry: { kind: 'answers', card: 'decision', toolId: 't1', outcome: 'submitted', rows: [{ question: 'Run this command?', answer: 'Yes' }] } }
+    const start = snapshot({ entries: [open, user], permissions: [permission], draft: false })
+    const view = applyChange(start, { type: 'card-closed', entry: answered, id: 'r1' })
+    expect(view?.entries).toEqual([answered, user])
+    expect(view?.permissions).toEqual([])
+    expect(start.permissions).toHaveLength(1)
+  })
+
+  it('asks for a new snapshot when a card closes whose entry the view does not hold', () => {
+    expect(applyChange(snapshot(), { type: 'card-closed', entry: open, id: 'r1' })).toBeNull()
+  })
+
+  it('shows the live mode and the model of the agent at once', () => {
+    expect(applyChange(snapshot(), { type: 'mode', mode: 'approve-all' })?.liveMode).toBe('approve-all')
+    expect(applyChange(snapshot(), { type: 'model', model: 'claude-opus-5-5' })?.session.model).toBe('claude-opus-5-5')
+  })
+
+  it('applies a card change by its revision, like any other change', () => {
+    const state = run([
+      { type: 'snapshot', snapshot: snapshot({ revision: 1, draft: false }) },
+      { type: 'event', event: event(2, { type: 'card-opened', entry: open, card: { kind: 'permission', permission } }) },
+      { type: 'event', event: event(2, { type: 'card-opened', entry: open, card: { kind: 'permission', permission } }) },
+      { type: 'event', event: event(4, { type: 'mode', mode: 'plan' }) }
+    ])
+    expect(state.view?.permissions).toEqual([permission])
+    expect(state.needsSnapshot).toBe(true)
+  })
+
+  it('names the oldest open card by its entry, in the order of the entries', () => {
+    expect(oldestOpenCard(snapshot())).toBeNull()
+    expect(oldestOpenCard(snapshot({ entries: [user, openForm, open], permissions: [permission], elicitations: [form] }))).toBe('a2')
+    // A closed card has an entry but no request: it is not open.
+    expect(oldestOpenCard(snapshot({ entries: [open, user], permissions: [] }))).toBeNull()
+  })
+
+  it('shows the mode of the agent before the choice of the draft, and the choice before the saved mode', () => {
+    expect(shownMode('approve-all', 'plan', 'ask')).toBe('approve-all')
+    expect(shownMode(null, 'plan', 'ask')).toBe('plan')
+    expect(shownMode(null, null, 'ask')).toBe('ask')
   })
 })

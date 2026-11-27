@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentProcess } from '../../building-blocks/agent.port'
-import { ok } from '../../building-blocks/result'
+import { err, ok } from '../../building-blocks/result'
 import { Processes } from './processes.store'
 
 /** One deferred value, so that a test decides when a process finishes its close. */
@@ -25,6 +25,14 @@ class FakeProcess implements AgentProcess {
 
   cancel(): Promise<void> {
     return Promise.resolve()
+  }
+
+  answer(): ReturnType<AgentProcess['answer']> {
+    return err('unknown-request', 'This request is closed.')
+  }
+
+  answerElicitation(): ReturnType<AgentProcess['answerElicitation']> {
+    return err('unknown-request', 'This request is closed.')
   }
 
   close(): Promise<void> {
@@ -160,5 +168,32 @@ describe('Processes: retire', () => {
     second.end.resolve()
     await quitting
     expect(quit).toBe(true)
+  })
+})
+
+describe('Processes: the hook of a process that is gone', () => {
+  it('tells the caller when a process leaves by a crash, a release or a close, and not when a newer process stays', async () => {
+    const gone: string[] = []
+    const processes = new Processes((id) => gone.push(id))
+    const one = new FakeProcess()
+    const two = new FakeProcess()
+    processes.set('a', one)
+    processes.drop('a', two)
+    expect(gone).toEqual([])
+    processes.drop('a', one)
+    expect(gone).toEqual(['a'])
+
+    processes.set('b', new FakeProcess())
+    processes.retire('b')?.catch(() => undefined)
+    expect(gone).toEqual(['a', 'b'])
+
+    const last = new FakeProcess()
+    processes.set('c', last)
+    const released = processes.release('c')
+    last.end.resolve()
+    await released
+    expect(gone).toEqual(['a', 'b', 'c'])
+    await processes.release('nothing')
+    expect(gone).toEqual(['a', 'b', 'c'])
   })
 })

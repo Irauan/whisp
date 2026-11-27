@@ -1,4 +1,5 @@
 import type { AgentUpdate } from '../../../building-blocks/agent.port'
+import { closedWithout, type AgentRequestEvent } from '../cards'
 import { noticeOfModeChange } from '../entry'
 import type { SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
@@ -36,10 +37,43 @@ export function recordAgentUpdateHandler({ transcript, store }: RecordAgentUpdat
     case 'mode': {
       // Aether asked for the mode of the row. A report of another mode is a notice only for the
       // fallback of Auto (decision 0012, item 2).
-      const asked = store.find(sessionId)?.mode
-      const notice = asked === undefined ? null : noticeOfModeChange(asked, update.mode)
+      const saved = store.find(sessionId)?.mode
+      if (saved === undefined) return
+      const notice = noticeOfModeChange(saved, update.mode)
       if (notice) transcript.addEntry(sessionId, notice)
+      // The window shows the mode that the agent uses. A report of the mode that it already shows changes nothing.
+      if (update.mode === (transcript.liveModeOf(sessionId) ?? saved)) return
+      // Spec S5, "Live mode": the agent's mode is saved, so that a new process starts in it. Approve all is
+      // never saved, and neither is the mode of the fallback of Auto: the user chose Auto, so it stays saved.
+      if (update.mode !== 'approve-all' && notice === null) store.setMode(sessionId, update.mode)
+      transcript.setLiveMode(sessionId, update.mode)
       return
     }
+    case 'model':
+      // The agent moved the session to another model (the refusal fallback). The next process starts with it.
+      store.setModel(sessionId, update.model)
+      transcript.setModel(sessionId, update.model)
+      return
+  }
+}
+
+/**
+ * The other event consumer of an agent: its permission requests and its forms. A request opens a card,
+ * which saves its entry. A request that the agent withdrew, or that the process left open when it exited,
+ * closes its card with that reason. The slice that starts a close (Stop, quit, delete) names its own reason.
+ */
+export function recordAgentRequestHandler({ transcript }: RecordAgentUpdateDeps, input: { sessionId: string; event: AgentRequestEvent }): void {
+  const { sessionId, event } = input
+  switch (event.type) {
+    case 'permission':
+      transcript.openPermission(sessionId, event.request)
+      return
+    case 'elicitation':
+      transcript.openElicitation(sessionId, event.form)
+      return
+    case 'permission-closed':
+    case 'elicitation-closed':
+      transcript.closeCard(sessionId, event.id, (card) => closedWithout(card.entry, event.reason))
+      return
   }
 }

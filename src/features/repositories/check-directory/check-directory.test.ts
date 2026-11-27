@@ -553,3 +553,42 @@ describe('checkDirectoryHandler: a cancel during the scan (F3)', () => {
     expect(scans).toBe(0)
   })
 })
+
+describe('checkDirectoryHandler: the repository root in the trust question (S5)', () => {
+  it('names the repository root, and holds no workspace directory when the repository lies inside it (S5-14)', async () => {
+    const workspace = folder('personal')
+    addProfile('personal', 'Personal', workspace)
+    const repo = repository('personal', 'repo-b')
+    const { check, answer } = setup()
+    const result = check({ folder: folder('personal', 'repo-b', 'app') })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', repository: 'repo-b', repositoryRoot: repo, holdsWorkspace: false, workspaceDirectory: workspace })
+    expect((await result).ok).toBe(false)
+  })
+
+  it('holds the workspace directory when the repository root is above it, as a dotfiles repository in the home folder (S5-13)', async () => {
+    const workspace = folder('home', 'directories')
+    addProfile('personal', 'Personal', workspace)
+    const root = repository('home')
+    const { check, answer } = setup()
+    void check({ folder: folder('home', 'directories', 'repo-a') })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', repository: 'home', repositoryRoot: root, holdsWorkspace: true, workspaceDirectory: workspace })
+  })
+
+  it('holds the workspace directory when the repository root is that directory (S5-13)', async () => {
+    const workspace = repository('personal')
+    addProfile('personal', 'Personal', workspace)
+    const { check, answer } = setup()
+    void check({ folder: folder('personal', 'repo-a') })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', repositoryRoot: workspace, holdsWorkspace: true })
+  })
+
+  it('names no repository root for a plain folder that asks because of its settings files', async () => {
+    const workspace = folder('personal')
+    addProfile('personal', 'Personal', workspace)
+    const notes = folder('personal', 'notes')
+    findingsOf[pathKey(notes)] = hook()
+    const { check, answer } = setup()
+    void check({ folder: notes })
+    expect(await answer('cancel')).toMatchObject({ kind: 'trust', repository: 'notes', repositoryRoot: null, holdsWorkspace: false })
+  })
+})

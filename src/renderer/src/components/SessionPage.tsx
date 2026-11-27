@@ -1,17 +1,17 @@
 import { Loader, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sendMessage } from '../../../features/sessions/send-message/send-message.contract'
 import { setMode } from '../../../features/sessions/set-mode/set-mode.contract'
 import { setModel } from '../../../features/sessions/set-model/set-model.contract'
 import { stopSession } from '../../../features/sessions/stop/stop.contract'
 import { invokeContract } from '../invoke'
-import { latestPlan, shownModel, type SessionSnapshot } from '../session-view'
+import { latestPlan, oldestOpenCard, shownMode, shownModel, type SessionSnapshot } from '../session-view'
 import type { Mode } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
 import { Dock } from './Dock'
 import { PlanWidget } from './PlanWidget'
 import { ReplyComposer } from './ReplyComposer'
-import { Transcript } from './Transcript'
+import { Transcript, type TranscriptHandle } from './Transcript'
 
 /**
  * A session in its window (brief, Session window). The window is a fixed frame (story S8): the
@@ -35,6 +35,8 @@ export function SessionPage({
   onDelete(): void
 }) {
   const { session, status, draft } = view
+  // The cards that wait for the user (story S5). They show in the transcript, never in the dock.
+  const openCards = view.permissions.length + view.elicitations.length
   // View state: the text of the composer. A draft starts with its prompt (flow 6).
   const [text, setText] = useState(draft ? session.prompt : '')
   // View state: the mode and the model that the user chose in a draft, until the snapshot shows them.
@@ -43,8 +45,16 @@ export function SessionPage({
   // View state: the text of the last command that failed, or null.
   const [problem, setProblem] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  // View state: whether the transcript shows its end. The button "Show request" shows only when it does not.
+  const [atBottom, setAtBottom] = useState(true)
+  const transcript = useRef<TranscriptHandle>(null)
 
-  const running = status !== 'idle'
+  // After the refusal fallback the agent moves the session to another model. The choice of a draft
+  // then makes way for the model of the window.
+  useEffect(() => setChosenModel(null), [session.model])
+
+  // A card also keeps the session busy outside a turn: Stop shows, and the status line says that Claude waits.
+  const running = status !== 'idle' || openCards > 0
   const ready = !running && !sending && text.trim() !== ''
   const steps = latestPlan(view.entries)
 
@@ -57,6 +67,11 @@ export function SessionPage({
       if (result.ok) setText('')
       else setProblem(result.error.message)
     })
+  }
+
+  const showRequest = () => {
+    const entryId = oldestOpenCard(view)
+    if (entryId !== null) transcript.current?.reveal(entryId)
   }
 
   const stop = () => {
@@ -124,19 +139,38 @@ export function SessionPage({
           <p className="muted description">This session has not started. Send starts it with the prompt below.</p>
         </div>
       ) : (
-        <Transcript entries={view.entries} lead={attachments} />
+        <Transcript
+          ref={transcript}
+          sessionId={session.id}
+          entries={view.entries}
+          permissions={view.permissions}
+          elicitations={view.elicitations}
+          lead={attachments}
+          onAtBottom={setAtBottom}
+        />
       )}
       <Dock>
-        {status === 'starting' && !asking && (
+        {openCards === 0 && status === 'starting' && !asking && (
           <p className="agent-status muted">
             <Loader size={16} className="spin" aria-hidden="true" />
             <span>Starting Claude Code</span>
           </p>
         )}
-        {status === 'working' && (
+        {openCards === 0 && status === 'working' && (
           <p className="agent-status muted">
             <Loader size={16} className="spin" aria-hidden="true" />
             <span>Working</span>
+          </p>
+        )}
+        {openCards > 0 && (
+          <p className="agent-status muted">
+            <Loader size={16} className="spin" aria-hidden="true" />
+            <span>Waiting for your answer</span>
+            {!atBottom && (
+              <button type="button" className="jump" onClick={showRequest}>
+                Show request
+              </button>
+            )}
           </p>
         )}
         {steps && <PlanWidget steps={steps} />}
@@ -147,7 +181,8 @@ export function SessionPage({
         )}
         <ReplyComposer
           text={text}
-          mode={chosenMode ?? session.mode}
+          // The mode that the agent reports (the live mode) beats the choice of the draft.
+          mode={shownMode(view.liveMode, chosenMode, session.mode)}
           // The chosen model stays after Send: the snapshot of this window holds the model of its load.
           model={shownModel(chosenModel, session.model)}
           draft={draft}

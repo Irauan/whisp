@@ -5,7 +5,7 @@ import { answerQuestion } from './answer-question.contract'
 import { answerQuestionHandler } from './answer-question.handler'
 
 const found = { hooks: [], mcpServers: [], files: [], unreadable: [] }
-const trust: NewQuestion = { kind: 'trust', sessionId: 's1', profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', ...found }
+const trust: NewQuestion = { kind: 'trust', sessionId: 's1', profileName: 'Personal', folder: 'C:\\r\\repo-b', repository: 'repo-b', repositoryRoot: 'C:\\r\\repo-b', holdsWorkspace: false, workspaceDirectory: 'C:\\r', ...found }
 
 const setup = () => {
   const questions = new Questions(() => undefined, { next: () => 'q1' })

@@ -10,6 +10,12 @@ export interface Turn {
  * A session has at most one process. A turn does not survive a restart of Aether.
  */
 export class Processes {
+  /**
+   * `gone` is called when the process of a session leaves: a crash, a release and a close. The
+   * composition root uses it to drop what only the process knew, such as the live mode.
+   */
+  constructor(private readonly gone: (sessionId: string) => void = () => undefined) {}
+
   private readonly processes = new Map<string, AgentProcess>()
   private readonly turns = new Map<string, Turn>()
   private readonly running = new Set<Promise<void>>()
@@ -38,6 +44,7 @@ export class Processes {
     if (this.processes.get(sessionId) !== process) return
     this.processes.delete(sessionId)
     this.idleTimes.delete(sessionId)
+    this.gone(sessionId)
   }
 
   /**
@@ -92,6 +99,7 @@ export class Processes {
     if (!process) return null
     this.processes.delete(sessionId)
     this.idleTimes.delete(sessionId)
+    this.gone(sessionId)
     const closed: Promise<void> = process.close().finally(() => {
       if (this.closing.get(sessionId) === closed) this.closing.delete(sessionId)
     })
@@ -111,6 +119,7 @@ export class Processes {
     const process = this.processes.get(sessionId)
     this.processes.delete(sessionId)
     this.idleTimes.delete(sessionId)
+    if (process) this.gone(sessionId)
     await process?.close()
     // A release of the idle rule can be in flight: wait for it, so that no process outlives a delete or a quit.
     await this.closed(sessionId)

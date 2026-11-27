@@ -1,6 +1,6 @@
 # S5 Permission queue: story spec
 
-Status: draft for the design review. Not approved.
+Status: Approved by the user in the design review on 2026-11-27 (PR #31). The tests are locked. The builder follows this spec.
 
 - Milestone: m1-chat. Path step 6.
 - Checks: A4, A5.

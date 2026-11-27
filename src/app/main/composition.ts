@@ -35,10 +35,15 @@ import { listQuestionsController } from '../../features/repositories/list-questi
 import { QUESTIONS_CHANGED } from '../../features/repositories/question'
 import { Questions } from '../../features/repositories/questions.store'
 import { TrustStore } from '../../features/repositories/trust.store'
+import { closedWithout, type AgentRequestEvent } from '../../features/sessions/cards'
 import { SESSIONS_CHANGED } from '../../features/sessions/entry'
+import { answerElicitation } from '../../features/sessions/answer-elicitation/answer-elicitation.contract'
+import { answerElicitationController } from '../../features/sessions/answer-elicitation/answer-elicitation.controller'
+import { answerPermission } from '../../features/sessions/answer-permission/answer-permission.contract'
+import { answerPermissionController } from '../../features/sessions/answer-permission/answer-permission.controller'
 import { RELEASE_LIMITS } from '../../features/sessions/idle-release'
 import { Processes } from '../../features/sessions/processes.store'
-import { recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
+import { recordAgentRequestHandler, recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
 import { retireIdleHandler } from '../../features/sessions/retire-idle/retire-idle.handler'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import { sendMessageController } from '../../features/sessions/send-message/send-message.controller'
@@ -138,14 +143,24 @@ export function composeMain({
 
   // The state of the sessions that lives in memory: the conversation and the agent processes.
   const sessionStore = new SessionStore(database)
-  const transcript = new Transcript(sessionStore, (event) => publish(SESSIONS_CHANGED, event), clock, ids)
-  const processes = new Processes()
+  // A card that was open when Aether stopped cannot be answered any more: its request died with the old
+  // process. Before any window loads, each such card becomes "interrupted" (spec S5, "Data").
+  sessionStore.interruptOpenCards()
+  // The last card of a session closed. A session with no turn is idle from now on (spec S9, rule 3): a
+  // card that closes outside a turn starts the idle time. A turn marks its own end.
+  const cardsClosed = (sessionId: string) => {
+    if (processes.turnOf(sessionId) === undefined) processes.markIdle(sessionId, clock.now())
+  }
+  const transcript = new Transcript(sessionStore, (event) => publish(SESSIONS_CHANGED, event), clock, ids, cardsClosed)
+  // The live mode lives with the process. When the process is gone, the window shows the saved mode again.
+  const processes: Processes = new Processes((sessionId) => transcript.clearLiveMode(sessionId, sessionStore.find(sessionId)?.mode))
   // The edit of an account and the first start of a session share this set (decision 0014).
   const startingAccounts = new AccountsInStart()
   // The slices never call each other, so the composition root connects them: the agent process of a
   // session reports its progress to `record-agent-update`.
   const record = (sessionId: string, update: Parameters<typeof recordAgentUpdateHandler>[1]['update']) =>
     recordAgentUpdateHandler({ transcript, store: sessionStore }, { sessionId, update })
+  const recordRequest = (sessionId: string, event: AgentRequestEvent) => recordAgentRequestHandler({ transcript, store: sessionStore }, { sessionId, event })
   // The questions of the main process (decision 0007): the trust question and the directory questions.
   const questions = new Questions((event) => publish(QUESTIONS_CHANGED, event), ids)
   const trust = new TrustStore(database)
@@ -164,7 +179,9 @@ export function composeMain({
   // each turn for rule 2. It never rejects. A tick after the shutdown does nothing.
   let stopped = false
   const retireIdle = () => {
-    if (!stopped) void retireIdleHandler({ store: sessionStore, transcript, processes, clock, limits: RELEASE_LIMITS, log })
+    if (!stopped) {
+      void retireIdleHandler({ store: sessionStore, transcript, processes, clock, limits: RELEASE_LIMITS, log, openRequests: (id) => transcript.openCardCount(id) })
+    }
   }
   const retireTimer = setInterval(retireIdle, RETIRE_INTERVAL_MS)
   retireTimer.unref()
@@ -192,13 +209,15 @@ export function composeMain({
       [listSessions.name]: listSessionsController(database),
       [createSession.name]: createSessionController(database, clock, ids),
       [openSession.name]: openSessionController(database, transcript),
-      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, guard, turnEnded: retireIdle, clock, ids, log }),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, recordRequest, guard, turnEnded: retireIdle, clock, ids, log }),
       // Stop also answers "cancel" for the open question of the session. The turn then ends with "Stopped.".
       [stopSession.name]: async (input: { id: string }) => {
         const result = await stop(input)
         questions.cancelSession(input.id)
         return result
       },
+      [answerPermission.name]: answerPermissionController({ store: sessionStore, transcript, processes }),
+      [answerElicitation.name]: answerElicitationController({ store: sessionStore, transcript, processes }),
       [listQuestions.name]: listQuestionsController(questions),
       [answerQuestion.name]: answerQuestionController({ questions }),
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
@@ -211,6 +230,8 @@ export function composeMain({
       stopRetiring()
       // A turn that waits for an answer never ends by itself. Answer "cancel" first, or the quit waits for ever.
       questions.cancelAll()
+      // Each card that waits saves its reason first. The close of the processes then answers "cancelled" to the agents.
+      for (const sessionId of transcript.sessionsWithCards()) transcript.closeAllCards(sessionId, (card) => closedWithout(card.entry, 'quit'))
       return processes.releaseAll()
     },
     close: () => {

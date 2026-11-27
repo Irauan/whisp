@@ -315,6 +315,8 @@ describe('composeMain', () => {
           ready: readyPromise,
           prompt: async () => ok('end_turn' as const),
           cancel: async () => undefined,
+          answer: () => err('unknown-request', 'This request is closed.'),
+          answerElicitation: () => err('unknown-request', 'This request is closed.'),
           close: async () => undefined
         }
       }
@@ -381,6 +383,8 @@ describe('composeMain', () => {
             ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
             prompt: async () => ok('end_turn' as const),
             cancel: async () => undefined,
+          answer: () => err('unknown-request', 'This request is closed.'),
+          answerElicitation: () => err('unknown-request', 'This request is closed.'),
             close: async () => void (closed += 1)
           }
         }
@@ -411,6 +415,53 @@ describe('composeMain', () => {
     }
   })
 
+  it('keeps the process of a session with an open card, and starts its idle time when the last card closes outside a turn (S9 with S5)', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      let closed = 0
+      let listener: Parameters<AgentPort['start']>[1] | null = null
+      const agents: AgentPort = {
+        start: (_input, given) => {
+          listener = given
+          return {
+            ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
+            prompt: async () => ok('end_turn' as const),
+            cancel: async () => undefined,
+            answer: () => ok(true),
+            answerElicitation: () => err('unknown-request', 'This request is closed.'),
+            close: async () => void (closed += 1)
+          }
+        }
+      }
+      let time = new Date('2026-03-01T09:00:00.000Z').getTime()
+      const { composition, call } = start(agents, undefined, { now: () => new Date(time) })
+      await call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+      const [profile] = (await snapshotOf(call)).profiles
+      const created = (await call('sessions.create', { profileId: profile!.id, prompt: 'Say hello', mode: 'ask', model: 'default', sourcePath: rootDir, attachments: [] })) as { ok: true; value: { id: string } }
+      const id = created.value.id
+      expect(await call('sessions.send-message', { id, text: 'Say hello' })).toEqual({ ok: true, value: {} })
+      await until(() => events().some(isIdle))
+
+      // A request that comes after the turn shows a card. A card that shows is never released.
+      listener!.permission({ id: 'r1', toolId: 't1', title: 'npm test', toolKind: 'execute', locations: [], options: [{ id: 'yes', label: 'Yes', kind: 'allow-once' }] })
+      time += 40 * 60_000
+      await vi.advanceTimersByTimeAsync(RETIRE_INTERVAL_MS)
+      expect(closed).toBe(0)
+
+      // The last card closes outside a turn: the idle time starts now, and not at the end of the old turn.
+      expect(await call('sessions.answer-permission', { id, requestId: 'r1', optionId: 'yes' })).toEqual({ ok: true, value: {} })
+      time += 29 * 60_000
+      await vi.advanceTimersByTimeAsync(RETIRE_INTERVAL_MS)
+      expect(closed).toBe(0)
+      time += 60_000
+      await vi.advanceTimersByTimeAsync(RETIRE_INTERVAL_MS)
+      expect(closed).toBe(1)
+      await composition.shutdown()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('closes the processes of a removed profile together, not one by one (M1)', async () => {
     let started = 0
     let ended = 0
@@ -420,6 +471,8 @@ describe('composeMain', () => {
         ready: Promise.resolve(ok({ agentSessionId: 'agent-1', resumed: false, resumeError: null })),
         prompt: async () => ok('end_turn' as const),
         cancel: async () => undefined,
+          answer: () => err('unknown-request', 'This request is closed.'),
+          answerElicitation: () => err('unknown-request', 'This request is closed.'),
         close: () =>
           new Promise<void>((resolve) => {
             started += 1
@@ -494,6 +547,8 @@ describe('composeMain', () => {
             ready: Promise.resolve(ok({ agentSessionId: `agent-${starts.length}`, resumed: false, resumeError: null })),
             prompt: async () => ok('end_turn' as const),
             cancel: async () => undefined,
+          answer: () => err('unknown-request', 'This request is closed.'),
+          answerElicitation: () => err('unknown-request', 'This request is closed.'),
             close: async () => undefined
           }
         }

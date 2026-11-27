@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentUpdate } from '../../../building-blocks/agent.port'
+import type { AgentUpdate, Elicitation, PermissionRequest } from '../../../building-blocks/agent.port'
 import { openDatabase } from '../../../building-blocks/database'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
 import type { SessionEvent } from '../entry'
 import { SessionStore } from '../session.store'
 import { Transcript } from '../transcript.store'
-import { recordAgentUpdateHandler } from './record-agent-update.handler'
+import type { AgentRequestEvent } from '../cards'
+import { recordAgentRequestHandler, recordAgentUpdateHandler } from './record-agent-update.handler'
 
 function setup() {
   const opened = openDatabase(':memory:', MIGRATIONS)
@@ -24,7 +25,8 @@ function setup() {
   const record = (...updates: AgentUpdate[]) => {
     for (const update of updates) recordAgentUpdateHandler({ transcript, store }, { sessionId: 's1', update })
   }
-  return { store, database, events, transcript, record }
+  const recordRequest = (event: AgentRequestEvent) => recordAgentRequestHandler({ transcript, store }, { sessionId: 's1', event })
+  return { store, database, events, transcript, record, recordRequest }
 }
 
 describe('record-agent-update', () => {
@@ -119,5 +121,82 @@ describe('record-agent-update', () => {
     record({ type: 'text', text: 'late' }, { type: 'plan', steps: [] })
     expect(events).toEqual([])
     expect(store.entriesOf('s1')).toEqual([])
+  })
+})
+
+describe('record-agent-update: the live mode and the model', () => {
+  const modes = (events: SessionEvent[]) => events.flatMap((event) => (event.change.type === 'mode' ? [event.change.mode] : []))
+
+  it('saves the mode that the agent reports, and shows it as the live mode, so a new process starts in it', () => {
+    const { store, events, transcript, record } = setup()
+    record({ type: 'mode', mode: 'accept-edits' })
+    expect(store.find('s1')?.mode).toBe('accept-edits')
+    expect(transcript.liveModeOf('s1')).toBe('accept-edits')
+    expect(modes(events)).toEqual(['accept-edits'])
+  })
+
+  it('shows Approve all, but never saves it: the saved mode stays the last saved mode', () => {
+    const { store, events, transcript, record } = setup()
+    record({ type: 'mode', mode: 'accept-edits' }, { type: 'mode', mode: 'approve-all' })
+    expect(store.find('s1')?.mode).toBe('accept-edits')
+    expect(transcript.liveModeOf('s1')).toBe('approve-all')
+    expect(modes(events)).toEqual(['accept-edits', 'approve-all'])
+  })
+
+  it('keeps Auto saved when the report comes with the notice of the fallback, and still shows the live mode', () => {
+    const { store, database, events, transcript, record } = setup()
+    database.prepare("UPDATE sessions SET mode = 'auto' WHERE id = 's1'").run()
+    record({ type: 'mode', mode: 'accept-edits' })
+    expect(store.find('s1')?.mode).toBe('auto')
+    expect(transcript.liveModeOf('s1')).toBe('accept-edits')
+    expect(modes(events)).toEqual(['accept-edits'])
+    expect(store.entriesOf('s1').map((view) => view.entry)).toMatchObject([{ kind: 'notice', code: 'auto-fallback' }])
+  })
+
+  it('sends no change for a report of the mode that the window already shows', () => {
+    const { events, record } = setup()
+    record({ type: 'mode', mode: 'ask' }, { type: 'mode', mode: 'plan' }, { type: 'mode', mode: 'plan' })
+    expect(modes(events)).toEqual(['plan'])
+  })
+
+  it('saves the model of the refusal fallback and tells the window', () => {
+    const { store, events, record } = setup()
+    record({ type: 'model', model: 'claude-opus-5-5' })
+    expect(store.find('s1')?.model).toBe('claude-opus-5-5')
+    expect(events.map((event) => event.change)).toEqual([{ type: 'model', model: 'claude-opus-5-5' }])
+  })
+})
+
+describe('record-agent-update: the requests of the agent', () => {
+  const permission: PermissionRequest = {
+    id: 'r1',
+    toolId: 't1',
+    title: 'npm test',
+    toolKind: 'execute',
+    locations: [],
+    options: [{ id: 'yes', label: 'Yes', kind: 'allow-once' }]
+  }
+  const form: Elicitation = { id: 'f1', toolId: 'a1', message: 'Which runner?', fields: [], recommended: null, keepsText: true }
+
+  it('opens a card for a request and for a form', () => {
+    const { store, transcript, recordRequest } = setup()
+    recordRequest({ type: 'permission', request: permission })
+    recordRequest({ type: 'elicitation', form })
+    expect(transcript.openCardCount('s1')).toBe(2)
+    expect(store.entriesOf('s1').map((view) => view.entry)).toMatchObject([
+      { kind: 'answers', card: 'decision', outcome: 'open' },
+      { kind: 'answers', card: 'question', outcome: 'open' }
+    ])
+  })
+
+  it('closes a card with the reason that the provider gives, and a second close changes nothing', () => {
+    const { store, transcript, recordRequest } = setup()
+    recordRequest({ type: 'permission', request: permission })
+    recordRequest({ type: 'elicitation', form })
+    recordRequest({ type: 'permission-closed', id: 'r1', reason: 'withdrawn' })
+    recordRequest({ type: 'permission-closed', id: 'r1', reason: 'exited' })
+    recordRequest({ type: 'elicitation-closed', id: 'f1', reason: 'exited' })
+    expect(transcript.openCardCount('s1')).toBe(0)
+    expect(store.entriesOf('s1').map((view) => (view.entry.kind === 'answers' ? view.entry.outcome : null))).toEqual(['withdrawn', 'exited'])
   })
 })

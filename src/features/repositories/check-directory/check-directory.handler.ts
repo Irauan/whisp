@@ -83,16 +83,26 @@ export async function checkDirectoryHandler(deps: CheckDirectoryDeps, request: D
   const profileName = profile?.name ?? ''
 
   if (placement.kind === 'inside') {
-    return trustQuestion(deps, request, { folder, profileName, mark })
+    return trustQuestion(deps, request, { folder, profileName, mark, workspaceDirectory: profile?.workspaceDirectory ?? null })
   }
   if (store.isAllowed(request.profileId, request.sessionId, key)) return allowed
   return directoryQuestion(deps, request, { folder, key, profileName, placement, mark })
 }
 
+/**
+ * True when the repository root holds the workspace directory of the profile: the root is that directory,
+ * or the directory lies inside the root (user decision, 2026-11-27). Trust of such a repository covers every
+ * plain folder under the workspace directory, so the question warns. The keys come from `pathKey`.
+ */
+export function holdsWorkspace(root: string | null, workspaceDirectory: string | null): boolean {
+  if (root === null || workspaceDirectory === null) return false
+  return isInside(pathKey(workspaceDirectory), pathKey(root))
+}
+
 async function trustQuestion(
   deps: CheckDirectoryDeps,
   request: DirectoryRequest,
-  { folder, profileName, mark }: { folder: string; profileName: string; mark: string }
+  { folder, profileName, mark, workspaceDirectory }: { folder: string; profileName: string; mark: string; workspaceDirectory: string | null }
 ): Promise<DirectoryCheck> {
   const { store, questions } = deps
   // The walk goes up past the workspace directory (user decision, 2026-11-27): trust covers the repository.
@@ -110,6 +120,9 @@ async function trustQuestion(
     profileName,
     folder: request.folder,
     repository: basename(trusted),
+    repositoryRoot: root,
+    holdsWorkspace: holdsWorkspace(root, workspaceDirectory),
+    workspaceDirectory,
     ...findings
   }, mark)
   if (answer !== 'trust') return err(REFUSALS.trust.code, REFUSALS.trust.message)
