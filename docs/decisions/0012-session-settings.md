@@ -1,7 +1,7 @@
 # 0012 Session settings
 
 Date: 2026-11-25
-Decided by: the user, during the brief of milestone m1-chat. The builder of story S3 wrote this record from the brief.
+Decided by: the user, during the brief of milestone m1-chat. The builder of story S3 wrote this record from the brief. The section "Readings in story S3" lists the points that the user did not decide.
 Status: accepted
 
 ## Context
@@ -34,11 +34,7 @@ The words follow decision 0013: a profile owns its sessions.
 
    If the model cannot use `auto`, Claude uses `acceptEdits`, and Aether shows a notice.
 
-3. A new session copies the mode of the newest created session of the current profile. "Newest" means the latest creation time. Two sessions with one creation time keep the order of insertion.
-   - Approve all is never copied. A new session then starts with Ask.
-   - A profile without sessions starts with Ask.
-   - A session that the user creates with Approve all keeps Approve all. Only the next new session shows Ask.
-   - The rule is a pure function of the domain of the feature `sessions`.
+3. A new session copies the mode of the newest created session of the current profile. Approve all is never copied: a new session then starts with Ask.
 
 4. The import of an old draft maps its old settings in this order. The first line that matches wins:
 
@@ -69,6 +65,15 @@ The words follow decision 0013: a profile owns its sessions.
    | Attachment: session | Disabled, "coming soon" |
 
 6. Aether sets the permission mode before the first message. If the agent cannot apply the mode or the model, the session does not start (decision 0007).
+
+## Readings in story S3
+
+The user did not decide these points. The builder of story S3 recorded them, with their source.
+
+- "Newest" means the latest creation time. Source: the test author and the coordinator.
+- Two sessions with one creation time keep the order of insertion. A profile without sessions starts with Ask. Source: the advisor.
+- A session that the user creates with Approve all keeps Approve all. Only the next new session shows Ask. Source: the locked test of check A14.
+- The rule of item 3 is a pure function of the domain of the feature `sessions`. Source: the coordinator.
 
 ## Rejected
 

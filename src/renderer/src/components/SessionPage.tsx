@@ -9,12 +9,14 @@ const SEND_UNAVAILABLE = 'Send is coming soon. Aether cannot run sessions yet.'
 
 /**
  * A session in its window. Until the chat story, every session is a draft: the composer holds
- * the prompt and the mode of the session, and Send waits. The mode cannot change, because no
- * slice saves it yet.
+ * the prompt and the mode of the session, and Send waits. The user can edit both, but Aether does
+ * not save the change: no slice saves it yet.
  */
 export function SessionPage({ session, onDelete }: { session: SessionView; onDelete(): void }) {
   // View state: the text of the composer. The user can edit it, and Aether does not save it.
   const [text, setText] = useState(session.prompt)
+  // View state: the mode in the Mode control, like the text.
+  const [mode, setMode] = useState(session.mode)
   const rows: [string, string][] = [
     ['Folder', session.sourcePath],
     ['Model', labelOf(MODELS, session.model)]
@@ -54,7 +56,7 @@ export function SessionPage({ session, onDelete }: { session: SessionView; onDel
         <div className="composer-box">
           <textarea aria-label="Prompt" rows={3} value={text} onChange={(event) => setText(event.target.value)} />
           <div className="composer-actions session-actions">
-            <ModeMenu mode={session.mode} disabled onChange={() => undefined} />
+            <ModeMenu mode={mode} onChange={setMode} />
             <span className="spacer" />
             <button type="submit" className="send" aria-label="Send" title={SEND_UNAVAILABLE} disabled>
               <ArrowUp size={20} />
