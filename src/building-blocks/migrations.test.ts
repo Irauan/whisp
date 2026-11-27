@@ -8,7 +8,8 @@ import { MIGRATIONS, orderMigrations } from './migrations'
  * so a change of one of these files fails this test. A later change is a new file: add its hash.
  */
 const HASHES: Record<number, string> = {
-  1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708'
+  1: '51676470525ed96ce90e5107854c7456f8ad6a9dbdb3fc71a4b8b72e39e91708',
+  2: '5529b8a94e6395cf696ce17d525a5eba372719527f355d91eed13db144869bc0'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -73,6 +74,40 @@ describe('the migrations of the product', () => {
     database.prepare('DELETE FROM profiles WHERE id = ?').run('p1')
     expect(database.prepare('SELECT count(*) AS total FROM sessions').get()).toMatchObject({ total: 0 })
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
+    database.close()
+  })
+
+  it('version 2 keeps the snapshot and the agent session of a session, and the entries of its conversation', () => {
+    const opened = openDatabase(':memory:', MIGRATIONS)
+    if (!opened.ok) throw new Error(opened.error.message)
+    const { database } = opened.value
+    database.prepare("INSERT INTO profiles (id, name, created_at) VALUES ('p1', 'Personal', '2026-01-01')").run()
+    database
+      .prepare(
+        "INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, created_at) VALUES ('s1', 'p1', 't', 'p', 'ask', 'f', 'default', '2026-01-01')"
+      )
+      .run()
+    expect(database.prepare('SELECT provider_snapshot, agent_session_id FROM sessions').get()).toMatchObject({
+      provider_snapshot: null,
+      agent_session_id: null
+    })
+    const snapshot = database.prepare('UPDATE sessions SET provider_snapshot = ?, agent_session_id = ? WHERE id = ?')
+    expect(() => snapshot.run('not json', 'a1', 's1')).toThrow()
+    expect(() => snapshot.run('[]', 'a1', 's1')).toThrow()
+    snapshot.run('{"configFolder":"claude"}', 'a1', 's1')
+
+    const insertEntry = database.prepare(
+      "INSERT INTO entries (id, session_id, position, kind, data, created_at) VALUES (?, ?, ?, 'user', ?, '2026-01-01')"
+    )
+    insertEntry.run('e1', 's1', 0, '{"kind":"user","text":"Say hello"}')
+    expect(() => insertEntry.run('e2', 's1', 0, '{}')).toThrow() // The position is unique in a session.
+    expect(() => insertEntry.run('e3', 's1', 1, 'not json')).toThrow()
+    expect(() => insertEntry.run('e4', 's1', 1, '[]')).toThrow()
+    expect(() => insertEntry.run('e5', 'missing', 0, '{}')).toThrow()
+
+    // Removing a session removes its entries.
+    database.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+    expect(database.prepare('SELECT count(*) AS total FROM entries').get()).toMatchObject({ total: 0 })
     database.close()
   })
 })

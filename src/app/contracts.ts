@@ -2,7 +2,11 @@ import type { Contract } from '../building-blocks/contract'
 import { createSession } from '../features/sessions/create/create.contract'
 import { deleteSession } from '../features/sessions/delete/delete.contract'
 import { listSessions } from '../features/sessions/list/list.contract'
+import { SESSIONS_CHANGED } from '../features/sessions/entry'
 import { openSession } from '../features/sessions/open/open.contract'
+import { sendMessage } from '../features/sessions/send-message/send-message.contract'
+import { setMode } from '../features/sessions/set-mode/set-mode.contract'
+import { stopSession } from '../features/sessions/stop/stop.contract'
 import { addProfile } from '../features/profiles/add/add.contract'
 import { chooseDirectories } from '../features/profiles/choose-directories/choose-directories.contract'
 import { editProfile } from '../features/profiles/edit/edit.contract'
@@ -23,8 +27,14 @@ export const contracts: readonly Contract[] = [
   listSessions,
   createSession,
   openSession,
+  sendMessage,
+  stopSession,
+  setMode,
   deleteSession
 ]
 
-/** The registry of events. `subscribe` accepts only these names. No event exists yet. */
-export const events: readonly string[] = []
+/**
+ * The registry of events. `subscribe` accepts only these names.
+ * `sessions.changed` carries one change of a session and its revision (decision 0002).
+ */
+export const events: readonly string[] = [SESSIONS_CHANGED]

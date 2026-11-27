@@ -1,67 +1,32 @@
 import { constants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
-import type { AgentInfo } from '../../shared/agent'
+import { delimiter, isAbsolute, join } from 'node:path'
 
 /** How to start an ACP agent: a program that speaks ACP on stdin and stdout. */
 export interface AgentDefinition {
   id: string
   name: string
   command: string
-  args: string[]
-  env: Record<string, string>
-  /** What to tell the user when the agent says that nobody is signed in. */
-  signInHint?: string
+  args?: string[]
 }
 
-export interface ResolvedAgent extends AgentDefinition {
+export interface ResolvedAgent extends Omit<AgentDefinition, 'args'> {
+  args: string[]
   available: boolean
   detail: string
 }
 
-const require = createRequire(__filename)
-
 /**
- * Claude Code, through the ACP adapter that Aether ships with. The adapter
- * runs the Claude Code that comes with it, signed in the way Claude Code is
- * signed in on this machine.
- *
- * `--hide-claude-auth` keeps Aether off claude.ai subscriptions: Anthropic does
- * not allow other products to use them. Claude Code then runs on an API key
- * (ANTHROPIC_API_KEY) or an Anthropic Console sign-in.
+ * The id of the Claude Code recipe. An entry with this id in `agents.json` replaces only the program
+ * and the arguments of that recipe. Everything else stays with the Claude provider.
  */
-function claudeCode(): ResolvedAgent {
-  const base = {
-    id: 'claude-code',
-    name: 'Claude Code',
-    signInHint:
-      'Set ANTHROPIC_API_KEY before you start Aether, or sign in with an Anthropic Console account: ' +
-      'run `claude auth login --console` in a terminal ' +
-      '(without Claude Code installed: `npx @agentclientprotocol/claude-agent-acp --cli auth login --console`).'
-  }
-  let script: string
-  try {
-    script = join(dirname(require.resolve('@agentclientprotocol/claude-agent-acp/package.json')), 'dist/index.js')
-  } catch {
-    return { ...base, command: '', args: [], env: {}, available: false, detail: 'The Claude Code adapter is not installed.' }
-  }
-  return {
-    ...base,
-    // Electron runs the adapter as plain Node, so the user needs no Node install.
-    command: process.execPath,
-    args: [script, '--hide-claude-auth'],
-    env: { ELECTRON_RUN_AS_NODE: '1' },
-    available: true,
-    detail: 'Built in'
-  }
-}
+export const CLAUDE_CODE_ID = 'claude-code'
 
 interface CustomAgentFile {
   agents?: unknown
 }
 
-function isDefinition(value: unknown): value is Omit<AgentDefinition, 'env' | 'args'> & Partial<AgentDefinition> {
+function isDefinition(value: unknown): value is AgentDefinition {
   if (typeof value !== 'object' || value === null) return false
   const agent = value as Record<string, unknown>
   return (
@@ -69,8 +34,7 @@ function isDefinition(value: unknown): value is Omit<AgentDefinition, 'env' | 'a
     /^[\w-]{1,64}$/.test(agent.id) &&
     typeof agent.name === 'string' &&
     typeof agent.command === 'string' &&
-    (agent.args === undefined || (Array.isArray(agent.args) && agent.args.every((arg) => typeof arg === 'string'))) &&
-    (agent.env === undefined || (typeof agent.env === 'object' && agent.env !== null))
+    (agent.args === undefined || (Array.isArray(agent.args) && agent.args.every((arg) => typeof arg === 'string')))
   )
 }
 
@@ -98,19 +62,23 @@ async function findProgram(command: string): Promise<string | null> {
 }
 
 /**
- * The agents Aether knows: Claude Code, and the agents in `agents.json` in the
- * data folder. Any program that speaks ACP can be added there, for example:
+ * The agents in `agents.json` in the data folder. Aether only reads this file: no call of the
+ * renderer writes it (architecture, IPC). Any program that speaks ACP can be added, for example:
  *
  *   { "agents": [{ "id": "gemini", "name": "Gemini CLI", "command": "gemini", "args": ["--acp"] }] }
  *
- * Check each agent's documentation for the arguments that start its ACP mode.
+ * Only the entry `claude-code` has an effect in this version: it replaces the program and the
+ * arguments of the Claude Code recipe. Check each agent's documentation for the arguments that
+ * start its ACP mode.
  */
 export class AgentRegistry {
   constructor(private readonly customFile: string) {}
 
+  /** The valid entries of the file. A missing or unreadable file gives an empty list. The program of an entry is resolved on PATH. */
   async list(): Promise<ResolvedAgent[]> {
-    const agents: ResolvedAgent[] = [claudeCode()]
+    const agents: ResolvedAgent[] = []
     for (const custom of await this.readCustom()) {
+      // The first entry of an id wins.
       if (agents.some((agent) => agent.id === custom.id)) continue
       const program = await findProgram(custom.command)
       agents.push({
@@ -118,10 +86,6 @@ export class AgentRegistry {
         name: custom.name,
         command: program ?? custom.command,
         args: custom.args ?? [],
-        env: Object.fromEntries(
-          Object.entries(custom.env ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-        ),
-        signInHint: typeof custom.signInHint === 'string' ? custom.signInHint : undefined,
         available: program !== null,
         detail: program ?? `Cannot find ${custom.command}`
       })
@@ -133,11 +97,13 @@ export class AgentRegistry {
     return (await this.list()).find((agent) => agent.id === id)
   }
 
-  async info(): Promise<AgentInfo[]> {
-    return (await this.list()).map(({ id, name, available, detail }) => ({ id, name, available, detail }))
+  /** The replacement of the launch recipe of Claude Code, or null when no usable entry exists. */
+  async claudeCodeOverride(): Promise<{ command: string; args: string[] } | null> {
+    const entry = await this.get(CLAUDE_CODE_ID)
+    return entry?.available ? { command: entry.command, args: entry.args } : null
   }
 
-  private async readCustom() {
+  private async readCustom(): Promise<AgentDefinition[]> {
     let data: CustomAgentFile
     try {
       data = JSON.parse(await readFile(this.customFile, 'utf8')) as CustomAgentFile

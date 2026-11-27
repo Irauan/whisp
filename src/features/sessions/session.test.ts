@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MODES, type Mode } from '../../building-blocks/mode'
-import { modeForNewSession, titleOf } from './session'
+import { modeForNewSession, TITLE_LIMIT, titleOf } from './session'
 
 const at = (mode: Mode, createdAt: string) => ({ mode, createdAt })
 
@@ -50,6 +50,12 @@ describe('titleOf', () => {
 
   it('trims the space around the title', () => {
     expect(titleOf('  Fix the login page  ')).toBe('Fix the login page')
+  })
+
+  it('limits the title to TITLE_LIMIT characters, and never cuts a character in two', () => {
+    expect(titleOf('a'.repeat(TITLE_LIMIT + 50))).toBe('a'.repeat(TITLE_LIMIT))
+    expect(titleOf('x'.repeat(TITLE_LIMIT - 1) + '😀😀')).toBe('x'.repeat(TITLE_LIMIT - 1) + '😀')
+    expect(titleOf('a'.repeat(TITLE_LIMIT - 1) + ' b')).toBe('a'.repeat(TITLE_LIMIT - 1))
   })
 
   it('gives an empty title for a blank prompt', () => {

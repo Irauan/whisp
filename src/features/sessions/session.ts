@@ -36,12 +36,25 @@ export type Session = z.output<typeof sessionSchema>
 export const MESSAGES = {
   unknownProfile: 'This profile does not exist.',
   unknownSession: 'This session does not exist.',
-  invalidSourcePath: 'The session folder must be an existing folder, with an absolute path.'
+  invalidSourcePath: 'The session folder must be an existing folder, with an absolute path.',
+  folderMissing: 'The session folder does not exist any more. Create it again, or start a new session in another folder.',
+  turnActive: 'The agent is still working on the last message.',
+  sessionStarted: 'The mode of a session that started cannot change here.'
 } as const
 
-/** The title of a session: the first line of its prompt, without the space around it. */
+/** The kind of provider that every session uses now (decision 0013). */
+export const PROVIDER_KIND = 'claude-code'
+
+/** The longest title of a session, in characters. */
+export const TITLE_LIMIT = 100
+
+/**
+ * The title of a session: the first line of its prompt, without the space around it. A long line
+ * is cut at `TITLE_LIMIT` characters. The cut never splits a character in two.
+ */
 export function titleOf(prompt: string): string {
-  return (prompt.split(/\r?\n/)[0] ?? '').trim()
+  const line = (prompt.split(/\r?\n/)[0] ?? '').trim()
+  return [...line].slice(0, TITLE_LIMIT).join('').trimEnd()
 }
 
 /**
