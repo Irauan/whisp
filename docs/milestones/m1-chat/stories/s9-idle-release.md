@@ -1,6 +1,6 @@
 # S9 Idle release and process limit: story spec
 
-Status: draft for the design review. Not approved.
+Status: approved by the user on 2026-11-27 (design review). The user decided open choices 1, 2, 3, 4 and 6: A for each.
 
 - Milestone: m1-chat. Path step 6.
 - Checks: A21, A22.

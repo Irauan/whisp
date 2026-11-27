@@ -214,6 +214,9 @@ The main process asks these questions, and stores the answers. The renderer cann
 - The next message after a release resumes the session.
 - A pure function with a clock decides the release.
 - Shutdown sends cancel, closes the session, closes stdin, then kills the whole process tree after a limit.
+- A background shell command of the agent does not count as busy. It ends with its process after the release time. The user accepted this gap against decision 0006 on 2026-11-27. A background subagent holds the turn open, so it counts.
+- A close lists the process tree before it closes stdin. After the agent ends, it kills each listed process that still runs, and checks the start time of each one first. On Windows the list uses PowerShell and takes some hundreds of milliseconds.
+- Two cases still escape the kill of the tree: a crash of the agent, and a child that starts after the list.
 - Processes and open questions live in memory only. A turn does not survive a restart of Aether.
 
 ### Agent environment
