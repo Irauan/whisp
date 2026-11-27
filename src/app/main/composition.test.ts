@@ -585,5 +585,83 @@ describe('composeMain', () => {
         expect(ended).toBe(true)
       })
     })
+
+    describe('a stop, a delete or a quit during the gate of the main folder, with an additional directory outside (A15 with A10)', () => {
+      /**
+       * The main folder is a plain folder in the workspace directory: its scan asks nothing. The
+       * session has a folder attachment outside the workspace directory: it would ask the directory
+       * question. The cancel comes while the scan of the main folder waits.
+       */
+      async function duringMainFolderScan(cancel: (ctx: { call: ReturnType<typeof start>['call']; composition: Composition }, id: string) => Promise<void>) {
+        const { starts, port } = countingAgents()
+        let release: () => void = () => undefined
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        let scans = 0
+        const scanner: ProjectScanner = {
+          scan: async () => {
+            scans += 1
+            if (scans === 1) await gate
+            return { hooks: [], mcpServers: [], files: [], unreadable: [] }
+          }
+        }
+        const plain = join(rootDir, 'plain')
+        await mkdir(plain, { recursive: true })
+        const elsewhere = join(dataDir, '..', 'elsewhere')
+        await mkdir(elsewhere, { recursive: true })
+        const composed = start(port, scanner)
+        await composed.call('profiles.add', { name: 'Third', workspaceDirectory: rootDir, github: null, claudeFolder: null })
+        const [profile] = (await snapshotOf(composed.call)).profiles
+        const created = (await composed.call('sessions.create', {
+          profileId: profile!.id,
+          prompt: 'Sort',
+          mode: 'ask',
+          model: 'default',
+          sourcePath: plain,
+          attachments: [{ kind: 'folder', ref: elsewhere, label: 'elsewhere' }]
+        })) as { ok: true; value: { id: string } }
+        const id = created.value.id
+        await composed.call('sessions.send-message', { id, text: 'Sort' })
+        for (let wait = 0; wait < 30 && scans === 0; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(scans).toBe(1)
+        await cancel(composed, id)
+        release()
+        for (let wait = 0; wait < 60; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        const listed = (await composed.call('repositories.list-questions', {})) as Listed
+        return { ...composed, id, starts, scans: () => scans, questions: listed.value.questions }
+      }
+
+      it('opens no question after Stop, starts no process, and the turn ends with "Stopped."', async () => {
+        const ctx = await duringMainFolderScan(async ({ call }, id) => void (await call('sessions.stop', { id })))
+        expect(ctx.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        // The gate for the additional directory never ran.
+        expect(ctx.scans()).toBe(1)
+        expect(await ctx.call('sessions.open', { id: ctx.id })).toMatchObject({
+          ok: true,
+          value: { status: 'idle', entries: [{ entry: { kind: 'user' } }, { entry: { text: 'Stopped.' } }] }
+        })
+      })
+
+      it('opens no question after a delete of the session, and starts no process', async () => {
+        const ctx = await duringMainFolderScan(async ({ call }, id) => void (await call('sessions.delete', { id })))
+        expect(ctx.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+      })
+
+      it('opens no question after a shutdown, starts no process, and the shutdown ends', async () => {
+        let ended = false
+        const ctx = await duringMainFolderScan(async ({ composition }) => {
+          void composition.shutdown().then(() => {
+            ended = true
+          })
+        })
+        expect(ctx.questions).toEqual([])
+        expect(ctx.starts).toHaveLength(0)
+        for (let wait = 0; wait < 30 && !ended; wait += 1) await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(ended).toBe(true)
+      })
+    })
   })
 })

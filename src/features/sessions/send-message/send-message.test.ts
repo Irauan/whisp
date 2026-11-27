@@ -1080,6 +1080,32 @@ describe('sessions.send-message', () => {
       await second.finished
     })
 
+    it('does not ask the gate for the next folder after a stop, also when the gate for the folder before allowed it, and starts no process, account or token read', async () => {
+      const root = folders()
+      let answer: (value: Result<unknown, string>) => void = () => undefined
+      const calls: string[] = []
+      const guard: StartGuard = (request) => {
+        calls.push(request.folder)
+        return new Promise((resolve) => {
+          answer = resolve
+        })
+      }
+      const { database, store, agents, tokens, processes, send } = setup({ guard })
+      attachFolders(database, [join(root, 'extra'), join(root, 'other')], join(root, 'main'))
+      const { finished } = send('s1', 'Say hello')
+      await settle()
+      // The stop comes while the gate for the main folder waits. The gate then allows the folder.
+      const turn = processes.turnOf('s1')
+      if (turn) turn.stopped = true
+      answer(ok({}))
+      await finished
+      expect(calls).toEqual([join(root, 'main')])
+      expect(agents.processes).toHaveLength(0)
+      expect(tokens).toEqual([])
+      expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
+      expect(entriesOf(store).at(-1)).toEqual({ kind: 'notice', tone: 'info', text: 'Stopped.', code: 'stopped' })
+    })
+
     it('shows "Stopped." when the user stops the turn while a question for an additional directory is open', async () => {
       const root = folders()
       let answer: (value: Result<unknown, string>) => void = () => undefined

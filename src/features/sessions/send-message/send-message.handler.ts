@@ -134,8 +134,13 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
   // The folders are the main folder, then each additional directory by its real path (check A15). The
   // gate asks for one folder after the other, so one question is open at a time, and the first
   // refusal ends the start. The gate reads the content of each folder at each start.
+  // Each call of the gate takes its own mark of the cancel state, so a cancel (Stop, delete, quit)
+  // that comes while a call waits, and that call asks nothing, would not reach the next call. The
+  // turn is the one record of a cancel here, and `turn.stopped` is set in the same step as the
+  // cancel. So the turn is checked before each call, and the gate cannot open a question after it.
   const extra = additionalDirectoriesOf(session)
   for (const folder of [session.sourcePath, ...extra]) {
+    if (turn.stopped) return stoppedBeforeStart(deps, session)
     const permission = await deps.guard({ sessionId: id, profileId: session.profileId, folder })
     if (!permission.ok) {
       // A stop makes the guard refuse, so the turn tells a stop from the answer of the user.
@@ -144,6 +149,9 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
     }
   }
 
+  // A cancel during the last call: start no account and no token read for a turn that ended.
+  if (turn.stopped) return stoppedBeforeStart(deps, session)
+
   const prepared = await prepareStart(deps, session, extra)
   try {
     return await startProcess(deps, session, turn, prepared)
@@ -151,6 +159,12 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
     // The agent run names the account now, or the start failed. The account no longer counts as in a start.
     if (prepared.run === null) deps.starting.end(prepared.providerId)
   }
+}
+
+/** The turn was stopped before its process started: no question, no process. The turn shows "Stopped.". */
+function stoppedBeforeStart(deps: SendMessageDeps, session: Session): null {
+  deps.transcript.addEntry(session.id, notice('info', 'Stopped.', 'stopped'))
+  return null
 }
 
 /** Starts the process of the session, waits until it is ready, and saves the agent run. */
