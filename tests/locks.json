@@ -123,9 +123,29 @@
     "sha256": "702d35ccb30b77629d48c1990a47d35db1e1ea35fa8b94a6353d027e765534a7",
     "story": "m1-chat/s7"
   },
+  "tests/acceptance/m1-chat/s9/child-process.spec.ts": {
+    "sha256": "a7a1e85c639cd43126c8d3130794fc278c2dfa429952812d90e8de2c8248b7a9",
+    "story": "m1-chat/s9"
+  },
+  "tests/acceptance/m1-chat/s9/fixture.ts": {
+    "sha256": "701812639d141907254b105c4a70a4726ed59fff31216d7c573096eeeded2868",
+    "story": "m1-chat/s9"
+  },
+  "tests/acceptance/m1-chat/s9/process-limit.spec.ts": {
+    "sha256": "1f2aad35814ec8f8a7566974cab38f6a45bc6598ea0859abc1cfd0a250a26e83",
+    "story": "m1-chat/s9"
+  },
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
+  },
+  "tests/architecture/m1-chat-s9-idle-release.test.ts": {
+    "sha256": "c9611d42b75acf3321aec8f2095f23f7e57be3e74d25d99da7a36c47ae1709d9",
+    "story": "m1-chat/s9"
+  },
+  "tests/architecture/m1-chat-s9-retire-idle.test.ts": {
+    "sha256": "09f46808d87c0a31c20c3a16b1264a5cd2dbee01a2f14b1006732ba3ada687a6",
+    "story": "m1-chat/s9"
   },
   "tests/simulated-agent/agent.mjs": {
     "sha256": "7a6df09cd2fa039355c22803640b2882c217d67f295e00c258d539555db9c83e",
