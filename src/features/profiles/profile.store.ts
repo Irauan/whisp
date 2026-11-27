@@ -1,16 +1,23 @@
 import type { Database } from '../../building-blocks/database'
 import type { Ids } from '../../building-blocks/ids'
 import type { Profile } from './profile'
-import { claudeSettingsOf, parseSettings, type ClaudeChoice } from './provider'
+import { claudeSettingsOf, parseSettings, type ClaudeChoice, type ClaudeCodeSettings } from './provider'
 
 const CURRENT = 'current_profile'
 const CLAUDE = 'claude-code'
 
+/** The name of the account that Aether creates. The user can change it. */
+const DEFAULT_LABEL = 'Claude'
+
 type Row = Record<string, unknown>
+
+/** The settings as JSON with a fixed order of the keys, so that equal settings give equal text. */
+const canonical = (settings: ClaudeCodeSettings): string =>
+  JSON.stringify(Object.fromEntries(Object.entries(settings).sort(([a], [b]) => a.localeCompare(b))))
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 
-/** The profile with the settings of its Claude provider row. A settings value that breaks its schema is a defect. */
+/** The profile with the settings of its current Claude account. A settings value that breaks its schema is a defect. */
 function toProfile(row: Row): Profile {
   const login = text(row.github_login)
   const settings = row.claude_settings === null ? {} : parseSettings(CLAUDE, JSON.parse(String(row.claude_settings)))
@@ -27,9 +34,9 @@ function toProfile(row: Row): Profile {
 
 const SELECT = `SELECT p.*, v.settings AS claude_settings
                   FROM profiles p
-                  LEFT JOIN providers v ON v.profile_id = p.id AND v.kind = '${CLAUDE}'`
+                  LEFT JOIN providers v ON v.profile_id = p.id AND v.kind = '${CLAUDE}' AND v.is_current = 1`
 
-/** The profiles, their Claude provider rows and the current profile, in the database. */
+/** The profiles, their current Claude accounts and the current profile, in the database. */
 export class ProfileStore {
   constructor(private readonly database: Database) {}
 
@@ -85,29 +92,55 @@ export class ProfileStore {
     return changes > 0
   }
 
-  /** Saves the Claude settings of a profile in its provider row. See `saveProvider`. */
+  /** Saves the Claude settings of a profile in its current Claude account. See `saveProvider`. */
   saveClaude(profileId: string, choice: ClaudeChoice, ids: Ids, createdAt: string): void {
     this.saveProvider(profileId, CLAUDE, claudeSettingsOf(choice), ids, createdAt)
   }
 
   /**
-   * Saves the settings of the provider of this kind. Each profile has one row for each kind, and a
-   * change edits that row in place. The settings pass through the schema of the kind, so an unknown
-   * kind and a setting that the schema does not know throw. A session keeps the ID of its provider,
-   * so the row stays when the user clears all settings: it then holds an empty object. Without a
-   * row and without a setting, no row is made.
+   * Saves the settings of the current account of this kind (decision 0014). The settings pass
+   * through the schema of the kind, so an unknown kind and a setting that the schema does not know throw.
+   *
+   * - Same settings: nothing changes.
+   * - No account and no setting: no row is made.
+   * - No account: the settings make the current account.
+   * - An account that no agent session used: the settings change it in place.
+   * - An account that an agent session used: it keeps its settings, because a resume reads them.
+   *   The settings make the current account instead. An account of the profile that already has
+   *   these settings becomes the current one. Otherwise a new account is made. The old account stays.
    */
   saveProvider(profileId: string, kind: string, settings: unknown, ids: Ids, createdAt: string): void {
     const checked = parseSettings(kind, settings)
-    const json = JSON.stringify(checked)
-    const changed = this.database
-      .prepare('UPDATE providers SET settings = ? WHERE profile_id = ? AND kind = ?')
-      .run(json, profileId, kind).changes
-    if (changed === 0 && Object.keys(checked).length > 0) {
-      this.database
-        .prepare('INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(ids.next(), profileId, kind, json, createdAt)
-    }
+    const json = canonical(checked)
+    this.transaction(() => {
+      const current = this.database
+        .prepare('SELECT id, settings FROM providers WHERE profile_id = ? AND kind = ? AND is_current = 1')
+        .get(profileId, kind)
+      if (!current) {
+        if (Object.keys(checked).length > 0) this.insertCurrent(profileId, kind, json, ids.next(), createdAt)
+        return
+      }
+      if (canonical(parseSettings(kind, JSON.parse(String(current.settings)))) === json) return
+      const used = this.database.prepare('SELECT 1 FROM agent_sessions WHERE provider_id = ?').get(String(current.id)) !== undefined
+      if (!used) {
+        this.database.prepare('UPDATE providers SET settings = ? WHERE id = ?').run(json, String(current.id))
+        return
+      }
+      const same = this.database
+        .prepare('SELECT id, settings FROM providers WHERE profile_id = ? AND kind = ? ORDER BY created_at, rowid')
+        .all(profileId, kind)
+        .find((row) => canonical(parseSettings(kind, JSON.parse(String(row.settings)))) === json)
+      // Clear the old mark first: at most one account of a kind is current.
+      this.database.prepare('UPDATE providers SET is_current = 0 WHERE id = ?').run(String(current.id))
+      if (same) this.database.prepare('UPDATE providers SET is_current = 1 WHERE id = ?').run(String(same.id))
+      else this.insertCurrent(profileId, kind, json, ids.next(), createdAt)
+    })
+  }
+
+  private insertCurrent(profileId: string, kind: string, settingsJson: string, id: string, createdAt: string): void {
+    this.database
+      .prepare('INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)')
+      .run(id, profileId, kind, DEFAULT_LABEL, settingsJson, createdAt)
   }
 
   setWorkspaceDirectory(id: string, workspaceDirectory: string): boolean {

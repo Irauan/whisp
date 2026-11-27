@@ -7,7 +7,7 @@ import { err, ok, type Result } from '../../../building-blocks/result'
 import { noticeOfStop, type Entry } from '../entry'
 import type { Processes, Turn } from '../processes.store'
 import { MESSAGES, PROVIDER_KIND, type Session } from '../session'
-import type { ProviderSettings, SessionStore } from '../session.store'
+import type { AgentRun, ProviderAccount, SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
 import type { SendMessageError } from './send-message.contract'
 
@@ -125,12 +125,13 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
     return null
   }
 
-  // The first start fixes the provider and its settings (decision 0013). A resume that failed gives a new agent session.
+  // The agent session exists: save the agent run with the account that the process started with
+  // (decision 0014). A resume that failed gives a new agent session in the same run.
   const { agentSessionId, resumeError } = ready.value
-  if (prepared.firstStart) {
-    store.saveFirstStart(id, { providerId: prepared.providerId, snapshot: prepared.settings, agentSessionId })
-  } else if (agentSessionId !== prepared.resume) {
-    store.saveAgentSession(id, agentSessionId)
+  if (prepared.run === null) {
+    store.saveFirstRun(id, { id: deps.ids.next(), providerId: prepared.providerId, externalId: agentSessionId, createdAt: deps.clock.now().toISOString() })
+  } else if (agentSessionId !== prepared.run.externalId) {
+    store.saveExternalId(prepared.run.id, agentSessionId)
   }
   if (resumeError !== null) {
     transcript.addEntry(
@@ -147,30 +148,27 @@ async function ensureProcess(deps: SendMessageDeps, session: Session, turn: Turn
 
 interface Prepared {
   input: AgentStartInput
-  /** True when the session never had an agent session. The start then saves the provider settings. */
-  firstStart: boolean
+  /** The agent run of an earlier start. Null before the first start. */
+  run: AgentRun | null
+  /** The account that the process starts with. A resume uses the account of its run. */
   providerId: string
-  settings: ProviderSettings
-  resume: string | null
 }
 
 /**
  * Reads what the process needs from the saved session, never from the renderer: the folder, the
- * mode and the model of the row, the provider settings of the first start (or the current ones,
- * before the first start), and the GitHub token of the profile.
+ * mode and the model of the row, and the GitHub token of the profile. The account comes from the
+ * agent run when the session has one: a resume uses the account of its run. Before the first start
+ * it is the account of the session (decision 0014), or the current account of the profile when the
+ * session has none. The first start creates an empty account when the profile has none.
  */
 async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Prepared> {
   const { store, transcript, github, ids, clock } = deps
-  const state = store.agentOf(session.id)
-  if (!state) throw new Error('The session does not exist.')
-  // Before the first start, the session uses the current provider settings of its profile. The
-  // first start creates the provider row when the profile has none.
-  const current =
-    state.providerSnapshot === null || state.providerId === null
-      ? store.ensureProvider(session.profileId, PROVIDER_KIND, ids.next(), clock.now().toISOString())
-      : null
-  const providerId = current?.id ?? state.providerId ?? ''
-  const settings = current?.settings ?? state.providerSnapshot ?? {}
+  const run = store.agentRunOf(session.id)
+  const account: ProviderAccount =
+    run !== null
+      ? { id: run.providerId, settings: run.settings }
+      : ((session.providerId === null ? null : store.providerById(session.providerId)) ??
+        store.ensureCurrentProvider(session.profileId, PROVIDER_KIND, ids.next(), clock.now().toISOString()))
 
   const environment: Record<string, string> = {}
   const login = store.githubLoginOf(session.profileId)
@@ -190,13 +188,11 @@ async function prepareStart(deps: SendMessageDeps, session: Session): Promise<Pr
       model: session.model,
       mode: session.mode,
       sharedItems: [],
-      settings,
+      settings: account.settings,
       environment,
-      resume: state.agentSessionId
+      resume: run?.externalId ?? null
     },
-    firstStart: current !== null,
-    providerId,
-    settings,
-    resume: state.agentSessionId
+    run,
+    providerId: account.id
   }
 }

@@ -22,6 +22,6 @@ export function openSessionHandler({ store, transcript }: OpenSessionDeps, { id 
   const session = store.find(id)
   if (!session) return err('unknown-session', MESSAGES.unknownSession)
   const { entries, status, revision } = transcript.snapshot(id)
-  const agentSessionId = store.agentOf(id)?.agentSessionId ?? null
+  const agentSessionId = store.agentRunOf(id)?.externalId ?? null
   return ok({ session, entries, status, revision, draft: isDraft({ entryCount: entries.length, agentSessionId, status }) })
 }

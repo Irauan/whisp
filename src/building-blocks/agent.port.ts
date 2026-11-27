@@ -20,8 +20,8 @@ export interface AgentStartInput {
   mode: Mode
   sharedItems: readonly SharedItem[]
   /**
-   * The settings of the provider, as the first start of the session saved them. The provider
-   * parses and translates them. A provider that does not know them refuses the start.
+   * The settings of the provider account that this agent run uses. The provider parses and
+   * translates them. A provider that does not know them refuses the start.
    */
   settings: Readonly<Record<string, unknown>>
   /** The variables that Aether sets for the agent, for example `GH_TOKEN`. The provider adds its own. */

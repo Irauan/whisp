@@ -18,38 +18,95 @@ function setup(): { database: Database; store: SessionStore } {
   return { database, store: new SessionStore(database) }
 }
 
-describe('SessionStore: the agent of a session', () => {
-  it('starts without a provider, a snapshot and an agent session', () => {
+const insertProvider = (database: Database, id: string, profile: string, settings: string, current: number, at = '2026-01-01') =>
+  database
+    .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, ?, 'claude-code', 'Claude', ?, ?, ?)")
+    .run(id, profile, settings, current, at)
+
+describe('SessionStore: the agent runs of a session', () => {
+  it('starts without an agent run', () => {
     const { store } = setup()
-    expect(store.agentOf('s1')).toEqual({ providerId: null, providerSnapshot: null, agentSessionId: null })
-    expect(store.agentOf('missing')).toBeNull()
+    expect(store.agentRunOf('s1')).toBeNull()
   })
 
-  it('creates the provider row of a profile once, and gives the same row to the next call', () => {
+  it('finds the current account of a profile, and no account when the profile has none', () => {
     const { database, store } = setup()
-    const first = store.ensureProvider('p1', 'claude-code', 'v1', '2026-01-02')
-    const second = store.ensureProvider('p1', 'claude-code', 'v2', '2026-01-03')
+    expect(store.currentProvider('p1', 'claude-code')).toBeNull()
+    insertProvider(database, 'old', 'p1', '{"configFolder":"C:/f1"}', 0)
+    insertProvider(database, 'new', 'p1', '{"configFolder":"C:/f2"}', 1)
+    expect(store.currentProvider('p1', 'claude-code')).toEqual({ id: 'new', settings: { configFolder: 'C:/f2' } })
+    expect(store.providerById('old')).toEqual({ id: 'old', settings: { configFolder: 'C:/f1' } })
+    expect(store.providerById('missing')).toBeNull()
+  })
+
+  it('creates the current account of a profile once, and gives the same account to the next call', () => {
+    const { database, store } = setup()
+    const first = store.ensureCurrentProvider('p1', 'claude-code', 'v1', '2026-01-02')
+    const second = store.ensureCurrentProvider('p1', 'claude-code', 'v2', '2026-01-03')
     expect(first).toEqual({ id: 'v1', settings: {} })
     expect(second).toEqual({ id: 'v1', settings: {} })
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 1 })
   })
 
-  it('keeps the settings of a provider row that exists', () => {
+  it('keeps the settings of the current account that exists', () => {
     const { database, store } = setup()
-    database
-      .prepare("INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES ('v1', 'p1', 'claude-code', '{\"configFolder\":\"C:\\\\claude\"}', '2026-01-01')")
-      .run()
-    expect(store.ensureProvider('p1', 'claude-code', 'v2', '2026-01-03')).toEqual({ id: 'v1', settings: { configFolder: 'C:\\claude' } })
+    insertProvider(database, 'v1', 'p1', '{"configFolder":"C:/claude"}', 1)
+    expect(store.ensureCurrentProvider('p1', 'claude-code', 'v2', '2026-01-03')).toEqual({ id: 'v1', settings: { configFolder: 'C:/claude' } })
   })
 
-  it('saves the provider, the snapshot and the agent session of the first start together', () => {
-    const { store } = setup()
-    store.ensureProvider('p1', 'claude-code', 'v1', '2026-01-02')
-    store.saveFirstStart('s1', { providerId: 'v1', snapshot: { configFolder: 'C:\\claude' }, agentSessionId: 'a1' })
-    expect(store.agentOf('s1')).toEqual({ providerId: 'v1', providerSnapshot: { configFolder: 'C:\\claude' }, agentSessionId: 'a1' })
-    expect(store.agentOf('s2')?.providerSnapshot).toBeNull()
-    store.saveAgentSession('s1', 'a2')
-    expect(store.agentOf('s1')).toMatchObject({ providerSnapshot: { configFolder: 'C:\\claude' }, agentSessionId: 'a2' })
+  it('saves the first run with its account, and gives the account to a session that had none', () => {
+    const { database, store } = setup()
+    insertProvider(database, 'v1', 'p1', '{"configFolder":"C:/claude"}', 1)
+    store.saveFirstRun('s1', { id: 'r1', providerId: 'v1', externalId: 'a1', createdAt: '2026-01-02' })
+    expect(store.agentRunOf('s1')).toEqual({ id: 'r1', providerId: 'v1', settings: { configFolder: 'C:/claude' }, externalId: 'a1' })
+    expect(store.find('s1')?.providerId).toBe('v1')
+    expect(store.agentRunOf('s2')).toBeNull()
+    // A session that has an account keeps it.
+    insertProvider(database, 'v2', 'p1', '{}', 0)
+    database.prepare("UPDATE sessions SET provider_id = 'v2' WHERE id = 's2'").run()
+    store.saveFirstRun('s2', { id: 'r2', providerId: 'v1', externalId: 'a2', createdAt: '2026-01-02' })
+    expect(store.find('s2')?.providerId).toBe('v2')
+  })
+
+  it('reads the newest run, and saves a new agent session in the run', () => {
+    const { database, store } = setup()
+    insertProvider(database, 'v1', 'p1', '{}', 1)
+    store.saveFirstRun('s1', { id: 'r1', providerId: 'v1', externalId: 'a1', createdAt: '2026-01-02' })
+    store.saveExternalId('r1', 'a2')
+    expect(store.agentRunOf('s1')).toMatchObject({ id: 'r1', externalId: 'a2' })
+    expect(database.prepare('SELECT count(*) AS total FROM agent_sessions').get()).toMatchObject({ total: 1 })
+  })
+
+  it('refuses a change of the Claude folder of an account that a run used, and lets the label and the other settings change', () => {
+    const { database, store } = setup()
+    insertProvider(database, 'v1', 'p1', '{"configFolder":"C:/f1"}', 1)
+    store.saveFirstRun('s1', { id: 'r1', providerId: 'v1', externalId: 'a1', createdAt: '2026-01-02' })
+    expect(() => database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f2"}' WHERE id = 'v1'`).run()).toThrow(/cannot change/)
+    expect(() => database.prepare(`UPDATE providers SET settings = '{}' WHERE id = 'v1'`).run()).toThrow(/cannot change/)
+    database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f1","profileName":"work"}' WHERE id = 'v1'`).run()
+    database.prepare(`UPDATE providers SET label = 'Work' WHERE id = 'v1'`).run()
+    expect(store.providerById('v1')?.settings).toEqual({ configFolder: 'C:/f1', profileName: 'work' })
+    // An account that no run used can change its folder.
+    insertProvider(database, 'v2', 'p1', '{"configFolder":"C:/f1"}', 0)
+    database.prepare(`UPDATE providers SET settings = '{"configFolder":"C:/f2"}' WHERE id = 'v2'`).run()
+  })
+
+  it('keeps one current account for each profile and kind', () => {
+    const { database } = setup()
+    insertProvider(database, 'v1', 'p1', '{}', 1)
+    expect(() => insertProvider(database, 'v2', 'p1', '{"configFolder":"C:/f2"}', 1)).toThrow()
+    insertProvider(database, 'v2', 'p1', '{"configFolder":"C:/f2"}', 0)
+    insertProvider(database, 'v3', 'p2', '{}', 1)
+  })
+
+  it('stops the delete of an account that a run used, but a removed profile removes its sessions, runs and accounts', () => {
+    const { database, store } = setup()
+    insertProvider(database, 'v1', 'p1', '{}', 1)
+    store.saveFirstRun('s1', { id: 'r1', providerId: 'v1', externalId: 'a1', createdAt: '2026-01-02' })
+    expect(() => database.prepare("DELETE FROM providers WHERE id = 'v1'").run()).toThrow()
+    database.prepare("DELETE FROM profiles WHERE id = 'p1'").run()
+    expect(database.prepare('SELECT count(*) AS total FROM agent_sessions').get()).toMatchObject({ total: 0 })
+    expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
   })
 
   it('reads the GitHub login of the profile, and the sessions of a profile', () => {

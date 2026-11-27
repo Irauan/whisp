@@ -16,9 +16,9 @@ export function setModeHandler(
   { store, transcript }: SetModeDeps,
   { id, mode }: { id: string; mode: Mode }
 ): Result<Record<string, never>, SetModeError> {
-  const agent = store.agentOf(id)
-  if (!agent) return err('unknown-session', MESSAGES.unknownSession)
-  const draft = isDraft({ entryCount: store.entryCount(id), agentSessionId: agent.agentSessionId, status: transcript.statusOf(id) })
+  if (!store.find(id)) return err('unknown-session', MESSAGES.unknownSession)
+  const agentSessionId = store.agentRunOf(id)?.externalId ?? null
+  const draft = isDraft({ entryCount: store.entryCount(id), agentSessionId, status: transcript.statusOf(id) })
   if (!draft) return err('session-started', MESSAGES.sessionStarted)
   store.setMode(id, mode)
   return ok({})

@@ -63,6 +63,17 @@ describe('sessions.create', () => {
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
   })
 
+  it('gives the session the current Claude account of its profile, not an older account (decision 0014)', async () => {
+    const { create, store, database } = setup()
+    const insert = database.prepare(
+      "INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, 'w1', 'claude-code', 'Claude', '{}', ?, '2026-01-01')"
+    )
+    insert.run('old', 0)
+    insert.run('new', 1)
+    await create(input(folder))
+    expect(store.find('s1')?.providerId).toBe('new')
+  })
+
   it('saves Approve all as the user chose it', async () => {
     const { create, store } = setup()
     await create({ ...input(folder), mode: 'approve-all' })

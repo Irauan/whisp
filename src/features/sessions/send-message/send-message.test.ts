@@ -230,48 +230,80 @@ describe('sessions.send-message', () => {
     expect(entriesOf(store)).toContainEqual(expect.objectContaining({ kind: 'notice', code: 'github-token' }))
   })
 
-  it('creates the provider row of the profile at the first start, and saves the snapshot with the agent session (decision 0013)', async () => {
+  it('creates the current account of the profile at the first start when it has none, and saves the agent run when the agent session exists (decision 0014)', async () => {
     const { database, store, send, processOf } = setup()
     expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 0 })
     const { finished } = send('s1', 'Say hello')
     const agent = await processOf(0)
-    // Before the agent session exists, nothing is saved for the start.
-    expect(store.agentOf('s1')).toEqual({ providerId: null, providerSnapshot: null, agentSessionId: null })
+    // Before the agent session exists, no agent run is saved.
+    expect(store.agentRunOf('s1')).toBeNull()
     agent.becomeReady('a1')
     agent.turn.resolve(ok('end_turn'))
     await finished
-    const provider = database.prepare('SELECT id, kind, settings FROM providers').all()
-    expect(provider).toEqual([{ id: expect.any(String), kind: 'claude-code', settings: '{}' }])
-    expect(store.agentOf('s1')).toEqual({ providerId: provider[0]?.id, providerSnapshot: {}, agentSessionId: 'a1' })
+    const provider = database.prepare('SELECT id, kind, label, settings, is_current FROM providers').all()
+    expect(provider).toEqual([{ id: expect.any(String), kind: 'claude-code', label: 'Claude', settings: '{}', is_current: 1 }])
+    expect(store.agentRunOf('s1')).toEqual({ id: expect.any(String), providerId: provider[0]?.id, settings: {}, externalId: 'a1' })
+    expect(store.find('s1')?.providerId).toBe(provider[0]?.id)
   })
 
-  it('uses the settings of the row of the provider at the first start, and the snapshot after it', async () => {
+  it('saves no agent run after a failed first start, so the user can fix the profile and try again', async () => {
+    const { store, send, processOf } = setup()
+    const { finished } = send('s1', 'Say hello')
+    const agent = await processOf(0)
+    agent.start.resolve(err('not-signed-in', 'Claude Code is not signed in. Open a terminal.'))
+    await finished
+    expect(store.agentRunOf('s1')).toBeNull()
+  })
+
+  it('starts a session with the account of the session, and resumes with the account of its run, also after the current account changed (decision 0014)', async () => {
     const { database, store, processes, send, processOf } = setup()
-    database
-      .prepare("INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES ('v1', 'p1', 'claude-code', '{\"configFolder\":\"C:\\\\f1\"}', '2026-01-01')")
-      .run()
+    const insert = database.prepare(
+      "INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, 'p1', 'claude-code', 'Claude', ?, ?, ?)"
+    )
+    insert.run('v1', '{"configFolder":"C:/f1"}', 1, '2026-01-01')
+    database.prepare("UPDATE sessions SET provider_id = 'v1' WHERE id = 's1'").run()
     const first = send('s1', 'Say hello')
     const one = await processOf(0)
-    expect(one.input.settings).toEqual({ configFolder: 'C:\\f1' })
+    expect(one.input.settings).toEqual({ configFolder: 'C:/f1' })
+    expect(one.input.resume).toBeNull()
     one.becomeReady('a1')
     one.turn.resolve(ok('end_turn'))
     await first.finished
+    expect(store.agentRunOf('s1')).toMatchObject({ providerId: 'v1', externalId: 'a1' })
 
-    // The profile changes. The process ends. The next message resumes with the snapshot.
-    database.prepare("UPDATE providers SET settings = '{\"configFolder\":\"C:\\\\f2\"}' WHERE id = 'v1'").run()
+    // The profile gets a new current account, as the edit of the Claude folder does. The process ends.
+    // The next message of the old session resumes with the account of its run.
+    database.prepare('UPDATE providers SET is_current = 0 WHERE id = ?').run('v1')
+    insert.run('v2', '{"configFolder":"C:/f2"}', 1, '2026-01-02')
     one.listener.exited({ code: 0, logTail: '' })
     expect(processes.get('s1')).toBeUndefined()
     send('s1', 'Are you still there?')
     const two = await processOf(1)
-    expect(two.input.settings).toEqual({ configFolder: 'C:\\f1' })
+    expect(two.input.settings).toEqual({ configFolder: 'C:/f1' })
     expect(two.input.resume).toBe('a1')
-    expect(store.agentOf('s1')?.providerSnapshot).toEqual({ configFolder: 'C:\\f1' })
 
-    // A new session of the profile starts with the current settings.
+    // A session that was created with the new account starts with it.
+    database.prepare("UPDATE sessions SET provider_id = 'v2' WHERE id = 's2'").run()
     send('s2', 'Start fresh')
     const three = await processOf(2)
-    expect(three.input.settings).toEqual({ configFolder: 'C:\\f2' })
+    expect(three.input.settings).toEqual({ configFolder: 'C:/f2' })
     expect(three.input.resume).toBeNull()
+  })
+
+  it('gives a session without an account the current account of its profile at the first start', async () => {
+    const { database, store, send, processOf } = setup()
+    database
+      .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES ('v1', 'p1', 'claude-code', 'Claude', '{\"profileName\":\"work\"}', 1, '2026-01-01')")
+      .run()
+    expect(store.find('s1')?.providerId).toBeNull()
+    const { finished } = send('s1', 'Say hello')
+    const agent = await processOf(0)
+    expect(agent.input.settings).toEqual({ profileName: 'work' })
+    agent.becomeReady('a1')
+    agent.turn.resolve(ok('end_turn'))
+    await finished
+    expect(store.find('s1')?.providerId).toBe('v1')
+    expect(database.prepare('SELECT count(*) AS total FROM providers').get()).toMatchObject({ total: 1 })
   })
 
   it('sends the next message to the same process and the same agent session (A2)', async () => {
@@ -363,8 +395,8 @@ describe('sessions.send-message', () => {
     ])
     expect(processes.get('s1')).toBeUndefined()
     expect(transcript.statusOf('s1')).toBe('idle')
-    // The session did not start, so it keeps no snapshot.
-    expect(store.agentOf('s1')?.agentSessionId).toBeNull()
+    // The session did not start, so it has no agent run.
+    expect(store.agentRunOf('s1')).toBeNull()
   })
 
   it('does not start a process when the user stops before the GitHub token arrives', async () => {
@@ -464,7 +496,7 @@ describe('sessions.send-message', () => {
     await finished
     expect(entriesOf(store).at(-1)).toMatchObject({ kind: 'notice', code: 'not-signed-in' })
     expect(processes.get('s1')).toBeUndefined()
-    expect(store.agentOf('s1')).toMatchObject({ providerSnapshot: null, agentSessionId: null })
+    expect(store.agentRunOf('s1')).toBeNull()
   })
 
   it('does not start the session when the agent refuses the mode or the model, and shows why', async () => {
@@ -481,7 +513,7 @@ describe('sessions.send-message', () => {
     })
     expect(agent.prompts).toEqual([])
     expect(transcript.statusOf('s1')).toBe('idle')
-    expect(store.agentOf('s1')?.agentSessionId).toBeNull()
+    expect(store.agentRunOf('s1')).toBeNull()
   })
 
   it('shows one notice with the exit code when the process ends during a turn, and the next message starts a new process that resumes (A20)', async () => {
@@ -516,7 +548,7 @@ describe('sessions.send-message', () => {
   })
 
   it('starts a new agent session and shows a notice when the resume fails (A6, assumption of the brief)', async () => {
-    const { store, processes, send, processOf } = setup()
+    const { database, store, processes, send, processOf } = setup()
     const first = send('s1', 'Say hello')
     const one = await processOf(0)
     one.becomeReady('a1')
@@ -536,9 +568,9 @@ describe('sessions.send-message', () => {
       text: 'Aether could not continue the earlier conversation, so a new one starts. Unknown session',
       code: 'resume-failed'
     })
-    expect(store.agentOf('s1')?.agentSessionId).toBe('a2')
-    // The settings of the first start stay.
-    expect(store.agentOf('s1')?.providerSnapshot).toEqual({})
+    expect(store.agentRunOf('s1')?.externalId).toBe('a2')
+    // The run stays one row, and keeps its account.
+    expect(database.prepare('SELECT count(*) AS total FROM agent_sessions').get()).toMatchObject({ total: 1 })
   })
 
   it('turns a defect into a notice, logs it, and leaves the session idle', async () => {

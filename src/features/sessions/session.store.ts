@@ -6,17 +6,29 @@ import { attachmentSchema, sessionSchema, type Session } from './session'
 
 const attachmentsSchema = z.array(attachmentSchema)
 
+/** The name of an account that Aether creates. The user can change it. */
+const DEFAULT_LABEL = 'Claude'
+
 /** The settings of a provider are a JSON object. The provider of the kind checks the keys. */
 const settingsSchema = z.record(z.string(), z.unknown())
 
 export type ProviderSettings = z.output<typeof settingsSchema>
 
-/** What a session keeps about its agent: the provider of its first start, and the agent session to resume. */
-export interface AgentState {
-  providerId: string | null
-  /** The provider settings of the first start. Null until the session has an agent session. */
-  providerSnapshot: ProviderSettings | null
-  agentSessionId: string | null
+/** One agent run of a session: the agent session that Aether resumes, and the account that it runs with. */
+export interface AgentRun {
+  /** The ID of the row in `agent_sessions`. */
+  id: string
+  providerId: string
+  /** The settings of the account of the run. The account of a run keeps its Claude folder. */
+  settings: ProviderSettings
+  /** The ID that the agent gave to its session. */
+  externalId: string
+}
+
+/** An account of a profile. */
+export interface ProviderAccount {
+  id: string
+  settings: ProviderSettings
 }
 
 function toEntry(row: Record<string, unknown>): EntryView {
@@ -104,50 +116,68 @@ export class SessionStore {
     return this.database.prepare('UPDATE sessions SET mode = ? WHERE id = ?').run(mode, id).changes > 0
   }
 
-  agentOf(id: string): AgentState | null {
+  /** The newest agent run of the session, with the settings of its account. Null before the first start. */
+  agentRunOf(sessionId: string): AgentRun | null {
     const row = this.database
-      .prepare('SELECT provider_id, provider_snapshot, agent_session_id FROM sessions WHERE id = ?')
-      .get(id)
+      .prepare(
+        `SELECT a.id, a.provider_id, a.external_id, p.settings
+           FROM agent_sessions a JOIN providers p ON p.id = a.provider_id
+          WHERE a.session_id = ? ORDER BY a.created_at DESC, a.rowid DESC LIMIT 1`
+      )
+      .get(sessionId)
     if (!row) return null
     return {
-      providerId: typeof row.provider_id === 'string' ? row.provider_id : null,
-      providerSnapshot: row.provider_snapshot === null ? null : settingsSchema.parse(JSON.parse(String(row.provider_snapshot))),
-      agentSessionId: typeof row.agent_session_id === 'string' ? row.agent_session_id : null
+      id: String(row.id),
+      providerId: String(row.provider_id),
+      settings: settingsSchema.parse(JSON.parse(String(row.settings))),
+      externalId: String(row.external_id)
     }
   }
 
+  /** The account with this ID, or null. */
+  providerById(id: string): ProviderAccount | null {
+    const row = this.database.prepare('SELECT id, settings FROM providers WHERE id = ?').get(id)
+    return row ? { id: String(row.id), settings: settingsSchema.parse(JSON.parse(String(row.settings))) } : null
+  }
+
+  /** The current account of the profile for this kind, or null (decision 0014). */
+  currentProvider(profileId: string, kind: string): ProviderAccount | null {
+    const row = this.database.prepare('SELECT id, settings FROM providers WHERE profile_id = ? AND kind = ? AND is_current = 1').get(profileId, kind)
+    return row ? { id: String(row.id), settings: settingsSchema.parse(JSON.parse(String(row.settings))) } : null
+  }
+
   /**
-   * The provider row of the profile for this kind. The first start of a session creates it when the
-   * profile has none (decision 0013). It is one statement, so two sessions that start together
-   * find one row.
+   * The current account of the profile for this kind. The first start of a session creates an empty
+   * account when the profile has none (decision 0014). It is one synchronous transaction, so two
+   * sessions that start together find one account.
    */
-  ensureProvider(profileId: string, kind: string, newId: string, createdAt: string): { id: string; settings: ProviderSettings } {
+  ensureCurrentProvider(profileId: string, kind: string, newId: string, createdAt: string): ProviderAccount {
     return this.database.transaction(() => {
+      const found = this.currentProvider(profileId, kind)
+      if (found) return found
       this.database
-        .prepare(
-          `INSERT INTO providers (id, profile_id, kind, settings, created_at) VALUES (?, ?, ?, '{}', ?)
-           ON CONFLICT (profile_id, kind) DO NOTHING`
-        )
-        .run(newId, profileId, kind, createdAt)
-      const row = this.database.prepare('SELECT id, settings FROM providers WHERE profile_id = ? AND kind = ?').get(profileId, kind)
-      if (!row) throw new Error('The provider row does not exist.')
-      return { id: String(row.id), settings: settingsSchema.parse(JSON.parse(String(row.settings))) }
+        .prepare("INSERT INTO providers (id, profile_id, kind, label, settings, is_current, created_at) VALUES (?, ?, ?, ?, '{}', 1, ?)")
+        .run(newId, profileId, kind, DEFAULT_LABEL, createdAt)
+      return { id: newId, settings: {} }
     })
   }
 
   /**
-   * Saves what the first start of the session fixed: its provider, the settings that the process
-   * started with, and the agent session. A later start resumes with these settings (decision 0013).
+   * Saves the first agent run of the session in one transaction: its row in `agent_sessions`, and the
+   * account of the session when the session had none. A later start resumes with the account of the run.
    */
-  saveFirstStart(id: string, start: { providerId: string; snapshot: ProviderSettings; agentSessionId: string }): void {
-    this.database
-      .prepare('UPDATE sessions SET provider_id = ?, provider_snapshot = ?, agent_session_id = ? WHERE id = ?')
-      .run(start.providerId, JSON.stringify(settingsSchema.parse(start.snapshot)), start.agentSessionId, id)
+  saveFirstRun(sessionId: string, run: { id: string; providerId: string; externalId: string; createdAt: string }): void {
+    this.database.transaction(() => {
+      this.database
+        .prepare('INSERT INTO agent_sessions (id, session_id, provider_id, external_id, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(run.id, sessionId, run.providerId, run.externalId, run.createdAt)
+      this.database.prepare('UPDATE sessions SET provider_id = ? WHERE id = ? AND provider_id IS NULL').run(run.providerId, sessionId)
+    })
   }
 
-  /** Saves the ID of a new agent session, for example after a resume that failed. */
-  saveAgentSession(id: string, agentSessionId: string): void {
-    this.database.prepare('UPDATE sessions SET agent_session_id = ? WHERE id = ?').run(agentSessionId, id)
+  /** Saves the ID of a new agent session in the run, for example after a resume that failed. */
+  saveExternalId(runId: string, externalId: string): void {
+    this.database.prepare('UPDATE agent_sessions SET external_id = ? WHERE id = ?').run(externalId, runId)
   }
 
   /** The entries of a session, in order. An entry that does not match the schema is a defect, so it throws. */
