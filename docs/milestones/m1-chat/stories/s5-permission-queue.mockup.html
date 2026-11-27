@@ -106,10 +106,6 @@ button:disabled { cursor: default; opacity: .5; }
 /* The header keeps the title, the facts and the button "Delete session". */
 .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .delete { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
-.facts-row { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; font-size: 12.5px; }
-.facts-row div { display: flex; gap: 6px; }
-.facts-row dt { color: var(--muted); }
-.facts-row dd { margin: 0; }
 .text-button svg { width: 12px; height: 12px; margin-left: 4px; }
 .dock .agent-status, .dock .composer { margin-top: 0; }
 .transcript .permission-queue { margin-top: 4px; }
@@ -133,6 +129,22 @@ button:disabled { cursor: default; opacity: .5; }
 /* Changed (S8): a failed turn shows as one muted line with an info icon. It keeps role="alert". */
 .fail-line { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 13px; }
 .fail-line .info { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 700; font-style: normal; }
+/* Changed (user decision, 2026-11-27): option rows with a radio or a checkbox, split by separators. */
+.rows { display: grid; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; cursor: pointer; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--hover); }
+.row input[type="radio"], .row input[type="checkbox"] { margin: 3px 0 0; accent-color: var(--fill); }
+.row > span { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.row-label { color: var(--text); font-size: 13.5px; }
+.row-sub { color: var(--muted); font-size: 12.5px; }
+.row-other { display: grid; gap: 6px; }
+.block { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* Changed (user decision, 2026-11-27): the answered card, one row for each question. */
+.question.answered { border-color: var(--line); gap: 0; }
+.question.answered h3 { color: var(--muted); margin-bottom: 6px; }
+.answer-row { display: grid; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.answer-row:first-of-type { border-top: 0; }
 </style>
 </head>
 <body>
@@ -141,7 +153,7 @@ button:disabled { cursor: default; opacity: .5; }
   <h1>S5 Permission queue</h1>
   <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
   <p class="legend"><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
-  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Permission cards and question cards of Claude show inside the transcript, at its end, after the last entry, in the order of arrival. They scroll with the chat. An answered card disappears.</p>
+  <p class="muted">Cards inline (user decision, 2026-11-27): "all cards should be part of the chat like Claude code, not queue over the chat input and squeeze the chat window." Permission cards and question cards of Claude show inside the transcript, at its end, after the last entry, in the order of arrival. They scroll with the chat. An answered permission card disappears. An answered question card turns into the saved card "Claude asked".</p>
   <p class="muted">Rule for every card (user decision, 2026-11-27): the recommended option comes first, as the primary button. Buttons are compact. On a safety ask, the refuse option that the agent puts first is the recommended one.</p>
   <p class="muted">Frame (S8): the header holds only the title and "Delete session". The transcript is the only scroll area. Bottom dock, from the top: status line, plan widget (S8), composer. The trust and directory questions of S6 stay an app-level dialog.</p>
 </header>
@@ -236,42 +248,54 @@ button:disabled { cursor: default; opacity: .5; }
 </section>
 
 <section class="state">
-  <h2>3. Cards with the "always" options of real Claude, and a safety ask</h2>
-  <p class="muted">Real Claude labels its options itself. Open choice 2 decides if the "always" option shows. The plan exit (open choice 5): each approval changes the mode; the adapter already puts the allow-once option first. The safety ask (open choice 7): Claude puts "No" first, so "No" is first and primary.</p>
-  <div class="window frame" style="height:680px">
+  <h2>3. Cards with three or more options, and a safety ask</h2>
+  <p class="muted">Changed (hot item, user column): a permission card with three or more options uses radio rows, like the question cards. The allow options are rows, in the order of the agent. The first allow-once row is preselected, never an "always" row. Two buttons follow: "Confirm" (primary) and the refuse option with the label of the agent. On a safety ask, the refuse button is primary, and no row is preselected. A card with one or two options keeps its buttons. Open choice 2 decides if the "always" option shows.</p>
+  <div class="window frame" style="height:760px">
     <div class="frame-head"><div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg"><p>The plan is ready. I wait for your answer before I code.</p></div>
       <div class="tool"><span>◌</span><span class="tool-title">npm test</span><span>Pending</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">Approve Plan</span><span>Pending</span></div>
       <div class="tool"><span>◌</span><span class="tool-title">rm -rf build</span><span>Pending</span></div>
-      <div class="permission-queue">
-        <div class="question" role="article" aria-label="Permission request">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button">Yes</button>
-            <button class="button" type="button">Yes, and don't ask again for npm test commands</button>
-            <button class="button" type="button">No</button>
+      <div class="mark"><span class="mark-label">Changed: radio rows for three or more options</span>
+        <div class="permission-queue">
+          <div class="question" role="article" aria-label="Permission request">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">npm test</span><span class="muted">execute</span></div>
+            <div class="rows" role="radiogroup" aria-label="npm test">
+              <label class="row"><input type="radio" name="p1" checked><span><span class="row-label">Yes</span></span></label>
+              <label class="row"><input type="radio" name="p1"><span><span class="row-label">Yes, and don't ask again for npm test commands</span></span></label>
+            </div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Confirm</button>
+              <button class="button" type="button">No</button>
+            </div>
           </div>
-        </div>
-        <div class="question" role="article" aria-label="Permission request">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">Approve Plan</span><span class="muted">switch_mode</span></div>
-          <div class="question-actions">
-            <button class="button primary" type="button">Yes, manually approve edits</button>
-            <button class="button" type="button">Yes, and use auto mode</button>
-            <button class="button" type="button">Yes, and bypass permissions</button>
-            <button class="button" type="button">No, keep planning</button>
+          <div class="question" role="article" aria-label="Permission request">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">Approve Plan</span><span class="muted">switch_mode</span></div>
+            <div class="rows" role="radiogroup" aria-label="Approve Plan">
+              <label class="row"><input type="radio" name="p2" checked><span><span class="row-label">Yes, manually approve edits</span></span></label>
+              <label class="row"><input type="radio" name="p2"><span><span class="row-label">Yes, and use auto mode</span></span></label>
+              <label class="row"><input type="radio" name="p2"><span><span class="row-label">Yes, and bypass permissions</span></span></label>
+            </div>
+            <div class="question-actions">
+              <button class="button primary" type="button">Confirm</button>
+              <button class="button" type="button">No, keep planning</button>
+            </div>
           </div>
-        </div>
-        <div class="question" role="article" aria-label="Permission request">
-          <h3>Permission request</h3>
-          <div class="question-tool"><span class="mono">rm -rf build</span><span class="muted">execute</span></div>
-          <p class="muted" style="font-size:13px">A safety ask: "No" is first and primary.</p>
-          <div class="question-actions">
-            <button class="button primary" type="button">No</button>
-            <button class="button" type="button">Yes</button>
+          <div class="question" role="article" aria-label="Permission request">
+            <h3>Permission request</h3>
+            <div class="question-tool"><span class="mono">rm -rf build</span><span class="muted">execute</span></div>
+            <p class="muted" style="font-size:13px">A safety ask: no row is preselected, and the refuse button is primary.</p>
+            <div class="rows" role="radiogroup" aria-label="rm -rf build">
+              <label class="row"><input type="radio" name="p3"><span><span class="row-label">Yes</span></span></label>
+              <label class="row"><input type="radio" name="p3"><span><span class="row-label">Yes, and don't ask again for rm commands</span></span></label>
+            </div>
+            <div class="question-actions">
+              <button class="button primary" type="button">No</button>
+              <button class="button" type="button" disabled>Confirm</button>
+            </div>
           </div>
         </div>
       </div>
@@ -399,43 +423,51 @@ button:disabled { cursor: default; opacity: .5; }
 </section>
 
 <section class="state">
-  <h2>8. Questions of Claude (form elicitation)</h2>
-  <p class="muted">User decision, open choice 8. Question cards show inline, like permission cards. First card: a single select; the recommended option comes first and is primary; a click sends the answer. Second card: a form with several questions; the field title is a small header, the description is the question text; the multi select uses toggles, the single select stays one choice (radio). Third card: the refusal fallback (decision A); "Keep the refusal" is first and primary. An answered question card disappears; nothing then shows the answer (a hot item).</p>
-  <div class="window frame" style="height:900px">
+  <h2>8. Questions of Claude: option rows</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): each option is a full-width row with a radio (single select) or a checkbox (multi select). The label is in the primary color, the explanation below in the secondary color. A click anywhere on the row selects it, and sends nothing. "Other" is the last row, with its text field. No row is preselected; the recommended option comes first in the order of Claude. Below the rows: "Submit" (primary, disabled until a pick) and "Skip". In a form with several questions, each question is a block, with separators. The refusal fallback is the binary case and keeps its two buttons.</p>
+  <div class="window frame" style="height:1120px">
     <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
     <div class="transcript" role="log" aria-label="Transcript">
       <div class="msg user"><p>Set up the test runner.</p></div>
       <div class="msg"><p>I have some questions first.</p></div>
       <div class="tool"><span>◌</span><span class="tool-title">AskUserQuestion</span><span>Pending</span></div>
-      <div class="mark"><span class="mark-label">New: question cards of Claude, inline</span>
+      <div class="mark"><span class="mark-label">Changed: option rows with radios and checkboxes</span>
         <div class="permission-queue">
           <div class="question" role="article" aria-label="Claude asks">
             <h3>Claude asks</h3>
             <p>Which test runner do you want?</p>
-            <div class="question-actions">
-              <button class="button primary" type="button" title="Fast, and the project already uses Vite">Vitest (Recommended)</button>
-              <button class="button" type="button">Jest</button>
-              <button class="button" type="button">Node test runner</button>
+            <div class="rows" role="radiogroup" aria-label="Which test runner do you want?">
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Vitest (Recommended)</span><span class="row-sub">Fast, and the project already uses Vite.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Jest</span><span class="row-sub">Widely used. Needs a transform for ESM.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span><span class="row-label">Node test runner</span><span class="row-sub">No extra package. Fewer features.</span></span></label>
+              <label class="row"><input type="radio" name="q1"><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" placeholder="Type your own answer"></span></label>
             </div>
-            <div class="question-tool"><input class="other" type="text" aria-label="Other" placeholder="Other: type your own answer"></div>
-            <div class="question-actions"><button class="button" type="button">Skip</button></div>
+            <div class="question-actions">
+              <button class="button primary" type="button" disabled>Submit</button>
+              <button class="button" type="button">Skip</button>
+            </div>
           </div>
           <div class="question" role="article" aria-label="Claude asks">
             <h3>Claude asks</h3>
             <p>Please answer the following questions.</p>
-            <p class="muted" style="font-size:12px">Reports</p>
-            <p style="font-size:13px">Which reports do you want?</p>
-            <div class="question-actions">
-              <button class="button toggle" type="button" aria-pressed="true">Coverage</button>
-              <button class="button toggle" type="button" aria-pressed="true">JUnit XML</button>
-              <button class="button toggle" type="button" aria-pressed="false">HTML</button>
+            <div class="block">
+              <p class="muted" style="font-size:12px">Reports</p>
+              <p style="font-size:13px">Which reports do you want?</p>
+              <div class="rows" role="group" aria-label="Which reports do you want?">
+                <label class="row"><input type="checkbox" checked><span><span class="row-label">Coverage</span><span class="row-sub">Lines and branches, as text and lcov.</span></span></label>
+                <label class="row"><input type="checkbox" checked><span><span class="row-label">JUnit XML</span><span class="row-sub">For the CI test view.</span></span></label>
+                <label class="row"><input type="checkbox"><span><span class="row-label">HTML</span><span class="row-sub">A local report to open in the browser.</span></span></label>
+                <label class="row"><input type="checkbox" checked><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" value="A summary in the console"></span></label>
+              </div>
             </div>
-            <div class="question-tool"><input class="other" type="text" aria-label="Other" value="A summary in the console"></div>
-            <p class="muted" style="font-size:12px">Watch</p>
-            <p style="font-size:13px">Run the tests on each save?</p>
-            <div class="question-actions" role="radiogroup" aria-label="Run the tests on each save?">
-              <button class="button toggle" type="button" role="radio" aria-checked="true">Yes (Recommended)</button>
-              <button class="button toggle" type="button" role="radio" aria-checked="false">No</button>
+            <div class="block">
+              <p class="muted" style="font-size:12px">Watch</p>
+              <p style="font-size:13px">Run the tests on each save?</p>
+              <div class="rows" role="radiogroup" aria-label="Run the tests on each save?">
+                <label class="row"><input type="radio" name="q3" checked><span><span class="row-label">Yes (Recommended)</span><span class="row-sub">Faster feedback while you work.</span></span></label>
+                <label class="row"><input type="radio" name="q3"><span><span class="row-label">No</span><span class="row-sub">Run the tests on demand only.</span></span></label>
+                <label class="row"><input type="radio" name="q3"><span class="row-other"><span class="row-label">Other</span><input class="other" type="text" aria-label="Other" placeholder="Type your own answer"></span></label>
+              </div>
             </div>
             <div class="question-actions">
               <button class="button primary" type="button">Submit</button>
@@ -457,6 +489,40 @@ button:disabled { cursor: default; opacity: .5; }
       <p class="agent-status muted"><span class="spin">◌</span><span>Waiting for your answer</span></p>
       <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
         <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>8b. Answered question cards</h2>
+  <p class="muted">Changed (user decision, 2026-11-27): after Submit, Skip or a cancel, the question card turns into the answered card "Claude asked". One row for each question: the question in the primary color, the answer below it in the secondary color, with separators. "Skipped" and "Cancelled" stand for a question with no answer. The card is a saved entry, so it stays after a restart.</p>
+  <div class="window frame" style="height:620px">
+    <div class="frame-head"><div class="page-head head-row"><h1>Set up the project</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Set up the test runner.</p></div>
+      <div class="mark"><span class="mark-label">Changed: answered card, one question</span>
+        <div class="question answered" role="article" aria-label="Claude asked">
+          <h3>Claude asked</h3>
+          <div class="answer-row"><p>Which test runner do you want?</p><p class="muted">Vitest (Recommended)</p></div>
+        </div>
+      </div>
+      <div class="mark"><span class="mark-label">Changed: answered card, several questions</span>
+        <div class="question answered" role="article" aria-label="Claude asked">
+          <h3>Claude asked</h3>
+          <div class="answer-row"><p>Which reports do you want?</p><p class="muted">Coverage, JUnit XML, A summary in the console</p></div>
+          <div class="answer-row"><p>Run the tests on each save?</p><p class="muted">Yes (Recommended)</p></div>
+          <div class="answer-row"><p>Which folder holds the tests?</p><p class="muted">Skipped</p></div>
+        </div>
+      </div>
+      <div class="question answered" role="article" aria-label="Claude asked">
+        <h3>Claude asked</h3>
+        <div class="answer-row"><p>Do you want a watch script?</p><p class="muted">Cancelled</p></div>
+      </div>
+      <div class="msg"><p>I set up Vitest with coverage and JUnit XML.</p></div>
+    </div>
+    <div class="dock">
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
     </div>
   </div>
 </section>

@@ -78,8 +78,8 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-6 | A safety ask with "No" first. "No" is the first and the primary button. In another request, the first `allow-once` option is first and primary. | Acceptance |
 | S5-7 | The agent reports the mode `accept-edits` after a plan exit. The Mode control shows "Accept edits". After a restart, the session starts in `accept-edits`. | Acceptance |
 | S5-8 | The agent reports `bypassPermissions`. The Mode control shows "Approve all". The saved mode stays the last saved mode. A new process starts in that mode. | Slice |
-| S5-9 | `initialize` declares form elicitation. The agent sends a single select question. The card shows the options with the recommended one first and primary. A click sends `accept` with that `const`. | Acceptance |
-| S5-10 | A multi select question with "Other": the user toggles two options, types a text and submits. The agent receives the array and the custom text. | Acceptance |
+| S5-9 | `initialize` declares form elicitation. The agent sends a single select question. The card shows one radio row for each option, in the order of the agent, with its explanation. A row click and "Submit" send `accept` with that `const`. | Acceptance |
+| S5-10 | A multi select question with "Other": the user checks two option rows and the "Other" row, types a text and submits. The agent receives the array and the custom text. | Acceptance |
 | S5-11 | "Skip" sends `decline`. Stop sends `cancel` for an open question card. | Slice |
 | S5-12 | A form with a number field gets the error -32602, and no card shows. | Slice |
 
@@ -89,10 +89,15 @@ The session status does not get a new value. "Waiting for permission" is any sta
 | S5-17 | Two open cards show inside the log "Transcript", after the last entry, in the order of arrival. A later entry comes before them. The dock holds no card. | Acceptance |
 | S5-18 | The user scrolled up. A new card comes. The log does not move. The status line shows "Waiting for your answer" and "Show request". A click brings the oldest open card into view and focuses it. | Acceptance |
 | S5-19 | A new card does not take the focus: a key typed in "Prompt" goes to the composer. | Acceptance |
-| S5-20 | An answered card disappears. No entry is saved for it. | Acceptance |
+| S5-20 | An answered permission card disappears. No entry is saved for it. | Acceptance |
+| S5-21 | The user answers a single select and a multi select with "Other". The card turns into the answered card "Claude asked", with one row for each question and the answer below it. After a restart it shows the same. | Acceptance |
+| S5-22 | A question with no pick shows "Skipped". Skip of the whole form shows "Skipped" in each row. Stop on an open question card shows "Cancelled" in each row. | Acceptance |
+| S5-23 | A click on an option row selects it and sends nothing. "Submit" is disabled until a pick or a text. No row is preselected. | Acceptance |
+| S5-24 | A permission card with three options shows radio rows, the first allow-once row preselected, "Confirm" and the refuse button. A safety ask with three options preselects nothing, and the refuse button is primary. | Acceptance |
+| S5-25 | An MCP form with a text field saves "Answered", not the typed text. | Slice |
 | S5-14 | A session folder in a repository inside R. The trust question shows the root path and no warning. | Acceptance |
 
-S5-1 to S5-20 are not in the brief. They cover the rules above.
+S5-1 to S5-25 are not in the brief. They cover the rules above.
 
 The references to lines of the adapter (`v1/acp-agent.js` and others) in this spec come from the design review, not from the first read of this spec.
 
@@ -155,27 +160,68 @@ Scope: S5 grows. Aether declares the ACP form elicitation capability. Claude's `
   - This is the one case where the model changes after the first message.
   - A new process can refuse the saved fallback model. Then the start fails with the S4 notice of `settings-refused`, as for any refused model. The model button stays disabled, because the session is not a draft. The user can start a new session.
 
-#### The question card
+#### The question card (user decision, 2026-11-27)
 
-- Heading: "Claude asks". The card is a group with the name of the message.
-- The message, then each question with its `title` as a small label.
-- Single select, one question: one compact button for each option. A click sends the answer at once.
-- The recommended option comes first and is primary:
-  - the option whose label ends with "(Recommended)", as Claude marks it
-  - else the `default` of the field
-  - else the first option
-  - The other options keep the order of the agent.
-- Multi select: one compact toggle button for each option, with `aria-pressed`. A compact primary "Submit" sends the answer.
-- Several questions in one form:
-  - The field `title` is only a small header. The field `description` is the question text, and the card shows it (`elicitation.js` 145-146, 171).
-  - A single select stays one choice, like a radio button: a click picks one option and clears the others of that question. Use the role `radiogroup` with `radio` items.
-  - Only a multi select uses toggles.
-  - One "Submit" sends all answers.
-- "Other": a one-line text field under the options. Typing in it, then Enter or "Submit", sends the text as `question_<n>_custom`.
-- "Skip": a compact plain button. It sends `decline`.
-- Stop closes the card and sends `cancel`.
+The user said: "For ask question tool, We should Claude design, where each option is like options (radio button) and each option has the option text and a sub text that can contain explanations. They have their own row and clicking or tapping in the row selects it. It can have radios or checks. Radios for single option and checks for multiple choices! Buttons as shown in the image should be used for other more binary cases, I can't recall a situation where Claude showed more the 2 buttons in a card it is often 2 or 1 only."
+
+- The open card is an `article` with the fixed name "Claude asks".
+- The question text: the `message` for one question. In a form with several questions, the field `description` is the question text, and the field `title` is only a small header above it (`elicitation.js` 145-146, 171).
+- Each option is a full-width row, split from the next row by a separator.
+  - A single select uses a radio in each row. The rows form a `radiogroup` with `radio` items.
+  - A multi select uses a checkbox in each row. The rows form a `group` with `checkbox` items.
+  - The row shows the option label in the primary text color, and its explanation below it in the secondary color.
+  - The explanation is the option `description`. It reaches Aether: the adapter copies `option.description` into the `description` of each `oneOf` or `anyOf` item, and ACP version 1 has this field (`EnumOption`). Only the `preview` in `_meta` is lost, which S5 does not render.
+  - A click or a tap anywhere on the row selects it. A row click only selects. It never sends.
+  - The accessible name of a row is the option label only. The explanation is its description (`aria-describedby`).
+- "Other" is the last row of each question. It is a radio row in a single select, and a checkbox row in a multi select. It holds a one-line text field. Aether sends the text as `question_<n>_custom` only when the "Other" row is selected. The adapter reads a pick plus a text as a note.
+- The recommended option:
+  - Assumption: Claude Code puts its recommended option first and adds "(Recommended)" to its label. This read found no such rule in the adapter, so it is a convention of Claude, not a field of ACP.
+  - Aether keeps the order of the agent. So the recommended option comes first.
+  - No row is preselected. Submit would otherwise send an answer that the user did not pick, and the answered card would save it as the answer of the user. The advisor predicts no clear user preference, so this is a hot item.
+- Several questions in one form: one block for each question, with its header, its question text and its rows. Separators split the blocks.
+- Below the rows, at most two compact buttons:
+  - "Submit" (primary). It sends `accept` with the picks and the texts. It is disabled until at least one question has a pick or a text.
+  - "Skip" (plain). It sends `decline`.
+- Stop sends `cancel`.
 - The card follows the rules of a permission card: oldest first, one answer only, the buttons disabled after a click, and the error line under the buttons.
-- An option `description` shows as muted text under the option, or as its `title` attribute when the card is narrow.
+- The refusal fallback is the binary case of decision A. It keeps its two buttons: "Keep the refusal" (primary) and "Retry with <fallback>".
+
+#### The answered card (user decision, 2026-11-27)
+
+The user said: "On Claude desktop the card changes and shows a list with the question and the answer. I would follow this pattern. Each question in primary, answers in secondary, and both in their own row inside the card. When multiple questions and answers we have separators between each row delimiting their space."
+
+- After Submit, Skip or a cancel, the question card turns into an answered card. It does not disappear.
+- The answered card is an `article` with the fixed name "Claude asked". It does not reuse "Claude asks", so a locator for an open card never matches an answered card.
+- It lists one row for each question: the question text in the primary color, and the answer below it in the secondary color. Separators split the rows.
+- The answer text:
+  - submitted: the picked labels, joined with ", ", then the typed text of "Other"
+  - a question with no pick and no text: "Skipped"
+  - Skip of the whole form: each row says "Skipped"
+  - a cancel: each row says "Cancelled"
+- The refusal fallback card also turns into an answered card, with the one row "Retry with <fallback>?" and the chosen option.
+- The answered card is a saved entry, so it stays after a reload and a restart. See "Data".
+- Main adds the entry with `addEntry` in the same step that removes the open card. The open card was last in the log, so the answered card keeps its place.
+- Which cancels save an entry:
+  - Stop: yes, "Cancelled"
+  - the withdraw by the agent (`$/cancel_request`): yes, "Cancelled"
+  - the exit or a crash of the process: yes, "Cancelled"
+  - the quit of Aether: yes, "Cancelled", while `releaseAll` closes the processes
+  - a form that got -32602: no, because no card showed
+- Permission cards still disappear after the answer. The tool call shows the result.
+
+#### Permission cards with three or more options (hot item, user column)
+
+The coordinator's reading, which the user did not state: buttons are for binary cases only. The advisor answered: use radio rows. User column (permissions). Not hard to revert.
+
+- Facts: real Claude often offers three options. The fallback tools and WebFetch use `withGeneratedUpdate`: "Yes", "Yes, and don't ask again for …", "No". The plan exit has four or five options.
+- A card with one or two options keeps its buttons. A4, A5 and S5-6 do not change.
+- A card with three or more options:
+  - The allow options are radio rows, with the labels and the order of the agent.
+  - The first `allow-once` row is preselected, never an "always" row. So the common answer stays one click.
+  - Two buttons follow: "Confirm" (primary), which sends the selected row, and the refuse option with the label of the agent, for example "No".
+  - On a safety ask, the refuse button is primary, no row is preselected, and "Confirm" waits for a pick.
+- "Confirm" is a new Aether text in a permission prompt. The user decides it with this item.
+- The count of options depends on open choice 2. With option 2B, nearly every card of Claude has two options.
 
 ### The S6 trust question (user decision, 2026-11-27)
 
@@ -224,7 +270,7 @@ The user said: "all cards should be part of the chat like Claude code, not queue
 - The cards are view only: the renderer draws them after the entries from the open requests of the snapshot. They are not entries.
 - They are not in the bottom dock. The dock of S8 holds only the status line, the plan widget and the composer.
 - The rules for the order, the recommended and primary option, the safety ask, Stop and requests outside a turn do not change.
-- The S6 trust question stays the app-level dialog for now. The locked S6 tests find it as a `dialog`. Open point for the user: show it inline too, in a later story.
+- The S6 trust question stays the app-level dialog in m1 (user decision, 2026-11-27). The locked S6 tests find it as a `dialog`. Later item, out of m1: show it as a card in the chat.
 
 ### Scroll and the jump button
 
@@ -241,10 +287,9 @@ The advisor answered on the shape. Not hard to revert. The user likely agrees.
 
 The advisor answered. Not hard to revert.
 
-- An answered card disappears. It leaves no saved entry (open choice 4 stays A).
+- An answered permission card disappears. It leaves no saved entry (open choice 4 stays A for permissions). The tool entry shows the result.
 - Reason: an open card can stay last in the log, but a folded line needs a fixed place among later entries, and only an entry has one. After a revision gap, the window rebuilds its view from a new snapshot, so a line in view only would be lost.
-- For a permission card, the tool entry shows the result. The advisor predicts that the user agrees.
-- For a question card, nothing then shows what the user answered. The advisor predicts that the user may disagree. This is a hot item. A trace needs a saved entry, which reopens choice 4 for questions only.
+- An answered question card does not disappear. It turns into a saved answered card (user decision, 2026-11-27). See "The answered card".
 
 Changes against the current screen:
 
@@ -288,14 +333,35 @@ The status line keeps the S6 condition: it shows no "Starting Claude Code" while
 - A question card has the role `article` and the fixed name "Claude asks". The message stays as text inside it.
 - Reason: `toolCall` in `s4/fixture.ts` 344 finds a `group` in the log by a substring of its name. A card that is a `group` named by the tool title would give two matches. No locked test reads the role `article`.
 - Each option is a button with its label as its name.
-- A toggle of a multi select has `aria-pressed`. A single select in a form with several questions is a `radiogroup` with `radio` items. The free text field has the name "Other".
+- A single select is a `radiogroup` with `radio` rows. A multi select is a `group` with `checkbox` rows. The name of a row is its option label; its explanation is its description. The free text field has the name "Other".
+- An answered question card is an `article` with the fixed name "Claude asked".
 - The cards inside the log keep the S4 checks of the log text: A2 and A6 use `toHaveText` with a pattern that allows text between the turns (`s4/chat.spec.ts` 119, `s4/restart.spec.ts` 78 and 85). A3 and A5 check the log after Stop, when no card is open.
 
 ## Data
 
 - No migration. No new column.
 - The queue of permission requests and elicitations lives in main memory. `docs/architecture.md` says that open questions live in memory only.
-- The answer adds no entry to the transcript. The tool call entry shows the result: "Completed" after an allowed tool, and "Failed" after a refused one. See open choice 4.
+- The answer to a permission request adds no entry to the transcript. The tool call entry shows the result: "Completed" after an allowed tool, and "Failed" after a refused one. See open choice 4.
+- The answer to a question of Claude adds one entry: the answered card (user decision, 2026-11-27).
+  - New entry kind `answers` in `entrySchema` (`entry.ts`):
+
+```ts
+z.strictObject({
+  kind: z.literal('answers'),
+  toolId: z.string().nullable(),          // the toolCallId of the elicitation, if any
+  outcome: z.enum(['submitted', 'skipped', 'cancelled']),
+  rows: z.array(z.strictObject({
+    question: z.string(),                 // the message for one question, else the field description
+    answer: z.string().nullable(),        // the picked labels, then the typed text; null when none
+  })),
+})
+```
+
+  - The entry saves what the card shows, not the field keys and not the UI texts. The renderer maps a null answer to "Skipped" or "Cancelled" by the outcome. A later change of a text then needs no data change.
+  - Main builds the rows at answer time, and adds the entry with `addEntry` where the open card was: at the end of the entries.
+  - No migration. Migration 002 has no CHECK that lists the kinds of entry; its only CHECK keeps the column `kind` equal to the key `kind` of the JSON. zod validates the kinds.
+  - Hard to revert: yes. `entrySchema` is strict on each read, so a database that holds this kind fails on a build without it. This is a hot item: a new saved format needs the approval of the user.
+  - The typed text of "Other" is saved only for `AskUserQuestion` forms. See open choice 10.
 - Changed use of a saved column: `sessions.mode` now also changes after the first message, when the agent reports a live mode. Aether never saves `approve-all` this way. The values of the column do not change. Today only `sessions.set-mode` of a draft writes it.
 - The live mode lives in memory only, for the session view, in two cases: Approve all, and a mode that comes with the notice for the fallback of Auto (decision B).
 - Changed use of a saved column: `sessions.model` changes after the first message only after the refusal fallback (decision A).
@@ -366,8 +432,8 @@ The slice folder `src/features/sessions/answer-permission/` is already named in 
 
 ```ts
 export type ElicitationField =
-  | { key: string; kind: 'choice'; title: string | null; description: string | null; options: ElicitationChoice[]; recommended: string | null }
-  | { key: string; kind: 'choices'; title: string | null; description: string | null; options: ElicitationChoice[]; recommended: string | null }
+  | { key: string; kind: 'choice'; title: string | null; description: string | null; options: ElicitationChoice[] }
+  | { key: string; kind: 'choices'; title: string | null; description: string | null; options: ElicitationChoice[] }
   | { key: string; kind: 'text'; title: string | null; description: string | null }
 export interface ElicitationChoice { value: string; label: string; description: string | null }
 export interface Elicitation { id: string; toolId: string | null; message: string; fields: ElicitationField[] }
@@ -380,7 +446,7 @@ export type ElicitationAnswer =
 - `AgentProcess.answerElicitation(id, answer): Result<true, 'unknown-request' | 'invalid-answer'>`.
 - `cancel()` and `close()` answer each open elicitation with `{ action: "cancel" }`.
 - `providers/acp` declares `elicitation: { form: {} }` in `initialize`. It maps `oneOf` to `choice`, `items.anyOf` to `choices`, and a plain string to `text`. It answers -32602 for any other field, and shows no card. It maps `submit` to `accept`, and `skip` to `decline`.
-- `providers/acp` finds the recommended option: the label that ends with "(Recommended)", else the `default`, else the first option.
+- `providers/acp` keeps the order of the agent. No option is preselected. The `providers/claude-code` recipe still marks "Keep the refusal" as the first option of the refusal fallback.
 - Contract `sessions.answer-elicitation`, slice `src/features/sessions/answer-elicitation/`:
   - Input: `{ id: string, elicitationId: string, answer: ElicitationAnswer }`.
   - Errors: `unknown-session`, `unknown-request` ("This question of Claude is closed."), `invalid-answer` ("Aether cannot send this answer.").
@@ -419,6 +485,8 @@ export type ElicitationAnswer =
 | A choice on a card | the label of the agent, for example "Yes" or "Allow" | `PermissionOption` | none |
 | The status while a card shows | "Waiting for your answer" | any status and a queue that is not empty | none |
 | A question of Claude | "Claude asks" (card heading) | `Elicitation`, `ElicitationView` | none |
+| An answered question | "Claude asked" (card name) | entry kind `answers` | `entries.kind` = `answers` |
+| The confirm of a permission card with 3 or more options | "Confirm" (hot item) | none | none |
 | The free text of a question | "Other" | `question_<n>_custom` (ACP key) | none |
 | The mode that the agent reports | the Mode control | live mode, `liveMode` | `sessions.mode`, except Approve all |
 
@@ -442,7 +510,7 @@ export type ElicitationAnswer =
 | A double click on a button | The first click disables the buttons of the card. Only one answer goes out. |
 | A form with an unsupported field | The provider answers -32602. No card shows. |
 | A question card when the process exits | The card closes. The agent gets nothing more. |
-| "Submit" with nothing chosen and no text | It sends `accept` with empty content. Claude reads it as skipped. |
+| No pick and no text | "Submit" is disabled. "Skip" sends `decline`. |
 
 ## Files and dependencies
 
@@ -461,7 +529,7 @@ export type ElicitationAnswer =
 - `src/features/repositories/question.ts` and `check-directory/check-directory.handler.ts` (S6): the field `holdsWorkspace`.
 - `docs/architecture.md`, "Directories and trust": correct "Trust applies to one Git repository, not to the whole workspace directory." It is false when the repository root is above R. New text: "Trust applies to one Git repository. When the root of that repository holds the workspace directory, trust covers every plain folder under the workspace directory for that profile, and the question warns."
 - `docs/decisions/0007-permissions-and-trust.md`: add a note, with the date, that squares the walk-up with the rejected alternative "Trust for the whole root". The note says: Aether still never trusts the root without a question. It trusts one repository. A repository above the root covers the root by containment, and the question names it before the user answers. This note records the user decision of 2026-11-27; it does not change the decision.
-- `src/features/sessions/entry.ts`: the new changes. Shared with S7 and S8.
+- `src/features/sessions/entry.ts` and `entry.test.ts`: the new changes, and the entry kind `answers`. Shared with S7 and S8.
 - `src/features/sessions/transcript.store.ts`: the queue in memory and its events. Shared with S8.
 - `src/features/sessions/open/open.contract.ts` and `open.handler.ts`: the snapshot.
 - `src/features/sessions/send-message/send-message.handler.ts`: the listener, and the refusal of a message while a card is open. The end of a turn does not close the cards. Shared with S6, S7 and S9.
@@ -470,7 +538,7 @@ export type ElicitationAnswer =
 - `src/app/contracts.ts` and `src/app/main/composition.ts`: the new contract. Shared with S6, S7 and S9.
 - `src/renderer/src/session-view.ts`: the new changes.
 - `src/renderer/src/components/SessionPage.tsx`: the status line with "Waiting for your answer" and "Show request". Shared with S6 and S8.
-- `src/renderer/src/components/Transcript.tsx`: the open cards after the entries, inside the log. Shared with S8.
+- `src/renderer/src/components/Transcript.tsx`: the open cards after the entries, inside the log, and the case `answers` for the answered card. Shared with S8.
 - New `src/renderer/src/components/PermissionCard.tsx`.
 - `src/renderer/src/styles.css`: reuse `.question` and `.question-actions`. Add a compact button variant for the cards. Shared with S8.
 - `tests/simulated-agent/agent.mjs`, `scenarios.mjs`, `control.ts`: the new steps. Shared with S7 and S9.
@@ -527,6 +595,10 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Advisor: A. The user likely agrees.
 
 ### 4. A trace of the answer in the transcript
+
+- **Decided by the user on 2026-11-27, for questions only: a saved answered card.** The user said: "On Claude desktop the card changes and shows a list with the question and the answer. I would follow this pattern. Each question in primary, answers in secondary, and both in their own row inside the card. When multiple questions and answers we have separators between each row delimiting their space."
+- Permission requests keep option A: no entry. See "The answered card" and "Data".
+- The text below is the record of the options as they were offered.
 
 - User column: no. The saved format does not change.
 - Hard to revert: no.
@@ -614,6 +686,18 @@ The advisor answered each choice. Its answer is recorded under the choice.
 - Recommendation: A.
 - Advisor: A. Not hard to revert. The user likely agrees.
 
+### 10. The typed text of a form that is not `AskUserQuestion`
+
+- User column: yes (credentials). The brief says "Aether stores no key and no token".
+- Hard to revert: no.
+- Facts: an MCP form renders on the same path as `AskUserQuestion`. Its text field can hold a secret, and the answered card would save it in SQLite.
+- How Aether knows the form: the `providers/claude-code` recipe, as for the refusal fallback. An `AskUserQuestion` form has a `toolCallId`, and each key is `question_<n>` or `question_<n>_custom` (`elicitation.js` 122-175). An MCP form has no `toolCallId` (`mcpElicitationToCreateRequest`).
+- Options:
+  - A. Save the typed text only for `AskUserQuestion` forms. Other forms save "Answered" for a text field. Impact: no secret of an MCP form lands in the database; the answered card of an MCP form hides the typed text.
+  - B. Save the typed text of each form. Impact: the full answer shows; a secret of an MCP form can land in the database.
+- Recommendation: A.
+- Advisor: A. It is a hot item.
+
 ## Skim list
 
 Small texts and details that the advisor accepted. The user can veto each one.
@@ -621,3 +705,7 @@ Small texts and details that the advisor accepted. The user can veto each one.
 - The status text "Waiting for your answer".
 - The button "Cancel request" for a request with no options.
 - The card heading "Permission request".
+- The texts "Skipped" and "Cancelled" in the answered card.
+- The fixed card names "Claude asks" (open) and "Claude asked" (answered).
+- The jump button "Show request".
+- The refusal fallback keeps its two buttons.
