@@ -36,10 +36,3 @@ Aether is a desktop workspace for agent sessions. It uses Electron, React and Ty
 
 - The repository is public. Never write a token, a key or real account data in a file.
 - Use fake data in tests and examples.
-
-## Writing
-
-- Write in the active voice. Use the imperative for instructions.
-- Keep one topic in each sentence.
-- Keep each instruction to 20 words or fewer. Keep each description to 25 words or fewer.
-- Keep each paragraph to 6 sentences or fewer.
