@@ -15,7 +15,8 @@
     "lint": "node scripts/lint-gate.mjs",
     "architecture": "node scripts/architecture-gate.mjs",
     "lock": "node scripts/check-lock.mjs",
-    "acceptance": "npm run build && playwright test"
+    "acceptance": "npm run build && playwright test",
+    "acceptance:story": "node scripts/acceptance-scope.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.112.0",
