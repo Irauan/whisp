@@ -60,6 +60,7 @@
   display: inline-flex;
   align-items: center;
   flex: none;
+  gap: 4px;
   height: 26px;
   padding: 0 8px;
   color: var(--muted);

@@ -112,7 +112,7 @@ export function SessionPage({
 
   return (
     <div className="session-frame">
-      <header className="session-head">
+      <header className="page-head session-head">
         <h1>{session.title}</h1>
         <button type="button" className="icon-button" aria-label="Delete session" title="Delete session" onClick={onDelete}>
           <Trash2 size={18} />

@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { labelOf, MODELS } from '../../../shared/model'
 import { Menu, MenuOption } from './Menu'
 
@@ -8,7 +9,7 @@ type ModelId = (typeof MODELS)[number]['id']
  * the group "Model". The composer of a new session and the composer of a draft use it. `className`
  * and `above` let the session window show it as a small text button at the bottom of the window.
  */
-export function ModelMenu(props: { model: string; disabled?: boolean; above?: boolean; className?: string; onChange(model: ModelId): void }) {
+export function ModelMenu(props: { model: string; disabled?: boolean; above?: boolean; className?: string; chevron?: boolean; onChange(model: ModelId): void }) {
   return (
     <Menu
       id="model-menu"
@@ -16,7 +17,12 @@ export function ModelMenu(props: { model: string; disabled?: boolean; above?: bo
       disabled={props.disabled}
       above={props.above}
       {...(props.className === undefined ? {} : { className: props.className })}
-      trigger={labelOf(MODELS, props.model)}
+      trigger={
+        <>
+          {labelOf(MODELS, props.model)}
+          {props.chevron && <ChevronDown size={12} aria-hidden="true" />}
+        </>
+      }
     >
       <p className="popover-title">Claude</p>
       {MODELS.map((option) => (

@@ -61,8 +61,8 @@ export function ReplyComposer(props: {
           <button type="button" className={styles.plus} aria-label="Add context" title="Coming soon" disabled>
             <Plus size={16} aria-hidden="true" />
           </button>
-          <ModeMenu mode={props.mode} disabled={!props.draft} above className={styles.control} onChange={props.onMode} />
-          <ModelMenu model={props.model} disabled={!props.draft} above className={styles.control} onChange={props.onModel} />
+          <ModeMenu mode={props.mode} disabled={!props.draft} above chevron className={styles.control} onChange={props.onMode} />
+          <ModelMenu model={props.model} disabled={!props.draft} above chevron className={styles.control} onChange={props.onModel} />
           <span className={styles.spacer} />
           {props.running ? (
             <button type="button" className={styles.send} aria-label="Stop" title="Stop" onClick={props.onStop}>

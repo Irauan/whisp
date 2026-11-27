@@ -894,12 +894,17 @@ fieldset {
   overflow: clip;
 }
 
+/* The header and the dock have the edge of the transcript: a column of 796px, 32px from the window at least. */
 .session-head {
   flex: none;
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 8px 32px 12px;
+  margin: 0;
+  padding: 8px max(32px, calc((100% - 796px) / 2)) 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.session-body .description {
+  margin: 0;
+  font-size: 13px;
 }
 
 .transcript,
