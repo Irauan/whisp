@@ -1,6 +1,8 @@
 // Tests of the simulated agent itself, with a bare ACP client and no Aether code.
 // Each scenario has its test. The tests wait on gates and on reported messages, never on a clock.
 import { spawn, type ChildProcess } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import {
@@ -20,6 +22,8 @@ interface Harness {
   exited: Promise<number | null>
   /** What the agent wrote to its log (stderr) so far. */
   log(): string
+  /** Each JSON-RPC message that the agent wrote to stdout so far, in the order of stdout (story S1 of m2-slash-menu). */
+  sent: Record<string, unknown>[]
   connection: ClientConnection
   updates: Record<string, unknown>[]
   /** What the client answers to a permission request. */
@@ -29,6 +33,7 @@ interface Harness {
   hold(): { asked: Promise<void>; release(): void }
   initialize(): Promise<unknown>
   newSession(): Promise<string>
+  resume(sessionId: string): Promise<unknown>
   prompt(sessionId: string, text?: string): Promise<{ stopReason: string }>
 }
 
@@ -62,16 +67,27 @@ function startAgent(env: NodeJS.ProcessEnv = process.env): Harness {
       await state.held?.released
       return state.answer
     })
-  const connection = app.connect(
-    ndJsonStream(
-      Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>,
-      Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>
-    )
-  )
+  // One copy of stdout goes to the client, the other to `sent`, so a test sees the order on stdout.
+  const [toClient, toTap] = (Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>).tee()
+  const sent: Record<string, unknown>[] = []
+  void (async () => {
+    const decoder = new TextDecoder()
+    let pending = ''
+    for await (const chunk of toTap) {
+      pending += decoder.decode(chunk, { stream: true })
+      for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
+        const line = pending.slice(0, end).trim()
+        pending = pending.slice(end + 1)
+        if (line) sent.push(JSON.parse(line) as Record<string, unknown>)
+      }
+    }
+  })().catch(() => undefined)
+  const connection = app.connect(ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, toClient))
   const made: Harness = {
     child,
     exited,
     log: () => log,
+    sent,
     connection,
     updates,
     permissions,
@@ -96,6 +112,7 @@ function startAgent(env: NodeJS.ProcessEnv = process.env): Harness {
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }
       }),
     newSession: async () => (await connection.agent.request(methods.agent.session.new, { cwd: process.cwd(), mcpServers: [] })).sessionId,
+    resume: (sessionId) => connection.agent.request(methods.agent.session.resume, { sessionId, cwd: process.cwd(), mcpServers: [] }),
     prompt: (sessionId, text = 'hello') =>
       connection.agent.request(methods.agent.session.prompt, { sessionId, prompt: [{ type: 'text', text }] })
   }
@@ -963,6 +980,145 @@ describe('simulated agent', () => {
       await agent.prompt(await agent.newSession())
       agent.child.stdin!.end()
       expect(await agent.exited).toBe(0)
+    })
+  })
+
+  // Added for story S1 of milestone m2-slash-menu: the command list at the session start.
+  describe('scenario commands', () => {
+    const REVIEW = { name: 'review', description: 'Review a pull request.', input: { hint: '[pr]' } }
+    const COMPACT = { name: 'compact', description: 'Keep a summary of the conversation.', input: null }
+    const DEPLOY = { name: 'deploy', description: 'Deploy the fake app.', input: null }
+
+    const isList = (message: Record<string, unknown>) =>
+      (message.params as { update?: { sessionUpdate?: unknown } } | undefined)?.update?.sessionUpdate === 'available_commands_update'
+    const lists = (updates: Record<string, unknown>[]) =>
+      updates.filter((update) => update.sessionUpdate === 'available_commands_update').map((update) => update.availableCommands)
+    /** The position on stdout of the response that matches, and of the first command list. */
+    const order = (sent: Record<string, unknown>[], isResponse: (message: Record<string, unknown>) => boolean) => ({
+      response: sent.findIndex((message) => message.method === undefined && 'result' in message && isResponse(message)),
+      list: sent.findIndex(isList)
+    })
+    const sessionOf = (message: Record<string, unknown> | undefined) => (message?.params as { sessionId?: unknown } | undefined)?.sessionId
+
+    it('sends the list right after the response to session/new, with no prompt', async () => {
+      await control.scenario('commands', { commands: [REVIEW, COMPACT] })
+      const agent = startAgent()
+      await agent.initialize()
+      const session = await agent.newSession()
+      await expect.poll(() => lists(agent.updates)).toEqual([[REVIEW, COMPACT]])
+      const { response, list } = order(agent.sent, (message) => (message.result as { sessionId?: unknown }).sessionId === session)
+      expect(response).toBeGreaterThanOrEqual(0)
+      expect(list, 'The list must follow the response on stdout.').toBeGreaterThan(response)
+      expect(sessionOf(agent.sent[list])).toBe(session)
+      expect(control.received('session/prompt')).toEqual([])
+    })
+
+    it('sends the list right after the response to session/resume too', async () => {
+      await control.scenario('commands', { commands: [COMPACT] })
+      const agent = startAgent()
+      await agent.initialize()
+      await agent.resume('s7')
+      await expect.poll(() => lists(agent.updates)).toEqual([[COMPACT]])
+      const resumeId = control.received('session/resume')[0]?.id
+      const { response, list } = order(agent.sent, (message) => message.id === resumeId)
+      expect(response).toBeGreaterThanOrEqual(0)
+      expect(list, 'The list must follow the response on stdout.').toBeGreaterThan(response)
+      expect(sessionOf(agent.sent[list])).toBe('s7')
+    })
+
+    it('early: sends the list before the response, with the new session ID', async () => {
+      await control.scenario('commands', { commands: [REVIEW], early: true })
+      const agent = startAgent()
+      await agent.initialize()
+      const session = await agent.newSession()
+      // The notification came before the response, so the client has it when the response resolves.
+      expect(lists(agent.updates)).toEqual([[REVIEW]])
+      const { response, list } = order(agent.sent, (message) => (message.result as { sessionId?: unknown }).sessionId === session)
+      expect(list).toBeGreaterThanOrEqual(0)
+      expect(list, 'The list must come before the response on stdout.').toBeLessThan(response)
+      expect(sessionOf(agent.sent[list])).toBe(session)
+    })
+
+    it('gate: the list waits at the gate, and the response does not wait', async () => {
+      await control.scenario('commands', { commands: [REVIEW], gate: 'list' })
+      const agent = startAgent()
+      await agent.initialize()
+      await agent.newSession()
+      await control.waitForGate('list')
+      expect(lists(agent.updates)).toEqual([])
+      await control.open('list')
+      await expect.poll(() => lists(agent.updates)).toEqual([[REVIEW]])
+    })
+
+    it('change: sends a second list after the gate, outside any turn', async () => {
+      await control.scenario('commands', { commands: [REVIEW, COMPACT], change: { gate: 'change', commands: [REVIEW, COMPACT, DEPLOY] } })
+      const agent = startAgent()
+      await agent.initialize()
+      const session = await agent.newSession()
+      await control.waitForGate('change')
+      // The gate report and the list take two pipes, so the list can reach the client a little later.
+      await expect.poll(() => lists(agent.updates)).toEqual([[REVIEW, COMPACT]])
+      expect(await agent.prompt(session)).toEqual({ stopReason: 'end_turn' })
+      expect(texts(agent.updates)).toEqual(['Hel', 'lo'])
+      await control.open('change')
+      await expect.poll(() => lists(agent.updates)).toEqual([
+        [REVIEW, COMPACT],
+        [REVIEW, COMPACT, DEPLOY]
+      ])
+    })
+
+    it('skills: the list holds the skill folders of the Claude folder of the process', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'aether-simulated-skills-'))
+      try {
+        const claudeA = join(root, 'claude-a')
+        const claudeB = join(root, 'claude-b')
+        await mkdir(join(claudeA, 'skills', 'skill-a'), { recursive: true })
+        await writeFile(join(claudeA, 'skills', 'skill-a', 'SKILL.md'), '---\nname: skill-a\ndescription: The fake skill of A.\n---\nBody\n')
+        await mkdir(join(claudeB, 'skills', 'skill-b'), { recursive: true })
+        await mkdir(join(claudeB, 'skills', 'skill-c'), { recursive: true })
+        await writeFile(join(claudeB, 'skills', 'skill-b', 'SKILL.md'), '---\ndescription: The fake skill of B.\n---\n')
+        await control.scenario('commands', { skills: true })
+        const env = (folder: string | undefined) => {
+          const copy = { ...process.env }
+          for (const name of Object.keys(copy)) if (name.toUpperCase() === 'CLAUDE_CONFIG_DIR') delete copy[name]
+          return folder === undefined ? copy : { ...copy, CLAUDE_CONFIG_DIR: folder }
+        }
+        const expected: [string | undefined, unknown][] = [
+          [claudeA, [{ name: 'skill-a', description: 'The fake skill of A.', input: null }]],
+          [
+            claudeB,
+            [
+              { name: 'skill-b', description: 'The fake skill of B.', input: null },
+              { name: 'skill-c', description: '', input: null }
+            ]
+          ],
+          [undefined, []]
+        ]
+        for (const [folder, list] of expected) {
+          const agent = startAgent(env(folder))
+          await agent.initialize()
+          await agent.newSession()
+          await expect.poll(() => lists(agent.updates), { message: `The skills of ${folder ?? 'no Claude folder'}` }).toEqual([list])
+        }
+      } finally {
+        // The agents end before the folder goes, so no agent holds a file in it.
+        for (const { child, connection } of harness) {
+          connection.close()
+          child.kill()
+        }
+        await Promise.all(harness.map(({ exited }) => exited))
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+      }
+    })
+
+    it('a scenario without these steps sends no list at the session start', async () => {
+      await control.scenario('text')
+      const agent = startAgent()
+      await agent.initialize()
+      const session = await agent.newSession()
+      await agent.resume(session)
+      await agent.prompt(session)
+      expect(agent.sent.filter(isList)).toEqual([])
     })
   })
 

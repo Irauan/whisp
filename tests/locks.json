@@ -276,11 +276,11 @@
     "story": "m1-chat/s9"
   },
   "tests/simulated-agent/agent.mjs": {
-    "sha256": "bb2b814339b3ed4ed3877cb87f0d918dab8e897063a1ace8b2dae78e0aae193a",
+    "sha256": "4c64a8c4177338aab0884f2bedd9b31e45795a1123d7c613055dd173247b2ba8",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/agent.test.ts": {
-    "sha256": "5748c5e0dccb72a2f4d32a232da869298b15ccba5a4f239a0d7912f27f0c1390",
+    "sha256": "a0cd47c3f977bb5a138a18fd63d30b3c22d9b14fadb8cad2cb9693e020acd121",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/child.mjs": {
@@ -300,7 +300,7 @@
     "story": "m1-chat/s5"
   },
   "tests/simulated-agent/scenarios.mjs": {
-    "sha256": "4091dc34defa79955c5bb43fb8a4c4014e3d99ffade4210b4b0c37884e7bb30f",
+    "sha256": "a513a225c2cdda5721e8c12f226c3a3de1fac0c08f67698ea79a3e6bcb4402c7",
     "story": "m0-gates/s4"
   }
 }

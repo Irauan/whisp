@@ -31,8 +31,19 @@
 //                                                               handles no ACP request before it.
 //                   { type: 'scenario', id, name, options }     choose the scenario
 //                   { type: 'open', id, gate }                  open a gate. It stays open.
+//
+// The steps of a session start (added for story S1 of milestone m2-slash-menu). A scenario can give
+// `beforeSession` and `afterSession`, for `session/new` and `session/resume`:
+//   - `beforeSession` runs in the handler, before the response. Its updates reach the client before
+//     the client knows the session ID.
+//   - `afterSession` runs on its own, outside any request, right after the response passes to stdout.
+//     The response and its updates keep this order on stdout by construction: the agent starts the
+//     steps when the response passes the outgoing stream. No timer and no prompt is needed.
+// A scenario without these fields behaves as before.
+import { readdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 import { agent, methods, ndJsonStream, PROTOCOL_VERSION, RequestError } from '@agentclientprotocol/sdk'
@@ -146,7 +157,7 @@ async function runSteps(steps, { signal, sessionId, client }) {
   const update = (value) => client.notify(methods.client.session.update, { sessionId, update: value })
   const say = (text) => update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } })
   for (const step of steps) {
-    if (!client && (step.do === 'say' || step.do === 'tool' || step.do === 'update')) {
+    if (!client && (step.do === 'say' || step.do === 'tool' || step.do === 'update' || step.do === 'skills')) {
       throw new Error(`Step "${step.do}" needs a session.`)
     }
     switch (step.do) {
@@ -173,6 +184,9 @@ async function runSteps(steps, { signal, sessionId, client }) {
       }
       case 'update':
         await update(step.update)
+        break
+      case 'skills':
+        await update({ sessionUpdate: 'available_commands_update', availableCommands: await skillsOfClaudeFolder() })
         break
       case 'log':
         await new Promise((resolve) => process.stderr.write(`${step.text}\n`, () => resolve()))
@@ -227,6 +241,69 @@ async function startChild() {
   child.unref()
   await report({ type: 'child', pid: child.pid, parent: process.pid })
 }
+
+/**
+ * The commands of the step 'skills' (story S1 of m2-slash-menu): one command for each folder in
+ * `skills` of the Claude folder of this process (`CLAUDE_CONFIG_DIR`), sorted by name, as Claude Code
+ * lists the skills of its folder. The description is the `description:` line of `SKILL.md` in the
+ * folder, or "". No Claude folder, or no `skills` folder, gives an empty list.
+ */
+async function skillsOfClaudeFolder() {
+  const name = Object.keys(process.env).find((key) => key.toUpperCase() === 'CLAUDE_CONFIG_DIR')
+  const folder = name === undefined ? '' : process.env[name]
+  if (!folder) return []
+  let entries
+  try {
+    entries = await readdir(join(folder, 'skills'), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const names = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+  const commands = []
+  for (const skill of names) {
+    let description = ''
+    try {
+      const text = await readFile(join(folder, 'skills', skill, 'SKILL.md'), 'utf8')
+      description = /^description:\s*(.*)$/m.exec(text)?.[1]?.trim() ?? ''
+    } catch {
+      // A skill folder without SKILL.md has no description.
+    }
+    commands.push({ name: skill, description, input: null })
+  }
+  return commands
+}
+
+// The steps of a session start (see the top of this file).
+
+/** The `afterSession` steps that wait for their response: the JSON-RPC id of the request -> the session ID and the client. */
+const afterResponse = new Map()
+
+/** Runs the `beforeSession` steps of the scenario, in the handler, before the response. */
+async function runBeforeSession(sessionId, client) {
+  if (scenario.beforeSession?.length) await runSteps(scenario.beforeSession, { signal: new AbortController().signal, sessionId, client })
+}
+
+/**
+ * Keeps the `afterSession` steps of the scenario for the response of the request `requestId`. The
+ * outgoing stream starts them when that response passes.
+ */
+function holdAfterSession(requestId, sessionId, client) {
+  if (requestId !== undefined && scenario.afterSession?.length) afterResponse.set(requestId, { steps: scenario.afterSession, sessionId, client })
+}
+
+/** Starts the steps that wait for this outgoing message, when it is the response that they wait for. */
+function startAfterSession(message) {
+  if (message.method !== undefined || message.id === undefined || !afterResponse.has(message.id)) return
+  const { steps, sessionId, client } = afterResponse.get(message.id)
+  afterResponse.delete(message.id)
+  if (!('result' in message)) return // The request failed: no session started.
+  void runSteps(steps, { signal: new AbortController().signal, sessionId, client }).catch(
+    (error) => new Promise((resolve) => process.stderr.write(`The afterSession steps failed: ${error?.message ?? error}\n`, () => resolve()))
+  )
+}
+
+/** The JSON-RPC ids of the `session/new` and `session/resume` requests that the handlers have not taken yet, in order. */
+const sessionRequests = { new: [], resume: [] }
 
 // The ACP side.
 
@@ -293,14 +370,21 @@ const app = agent({ name: 'simulated-agent' })
       authMethods: []
     }
   })
-  .onRequest(methods.agent.session.new, async () => {
+  .onRequest(methods.agent.session.new, async ({ client }) => {
+    // Take the id before the first await: the handlers start in the order of the requests.
+    const requestId = sessionRequests.new.shift()
     await ready
     const sessionId = `s${++nextSession}`
+    await runBeforeSession(sessionId, client)
+    holdAfterSession(requestId, sessionId, client)
     return { sessionId, ...stateOf(sessionId) }
   })
-  .onRequest(methods.agent.session.resume, async ({ params }) => {
+  .onRequest(methods.agent.session.resume, async ({ params, client }) => {
+    const requestId = sessionRequests.resume.shift()
     await ready
     if (!params.sessionId.startsWith('s')) throw RequestError.invalidParams(undefined, 'Unknown session')
+    await runBeforeSession(params.sessionId, client)
+    holdAfterSession(requestId, params.sessionId, client)
     return stateOf(params.sessionId)
   })
   .onRequest(methods.agent.session.setMode, async ({ params, client }) => {
@@ -336,12 +420,23 @@ const app = agent({ name: 'simulated-agent' })
 
 // Report each message that the client sends, before the agent handles it.
 const stdio = ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin))
+// The outgoing messages pass this stream on their way to stdout. A response that `afterSession`
+// steps wait for starts them after it is in the stream, so their updates follow it on stdout.
+const outgoing = new TransformStream({
+  transform(message, controller) {
+    controller.enqueue(message)
+    startAfterSession(message)
+  }
+})
+void outgoing.readable.pipeTo(stdio.writable).catch(() => undefined)
 const observed = {
-  writable: stdio.writable,
+  writable: outgoing.writable,
   readable: stdio.readable.pipeThrough(
     new TransformStream({
       async transform(message, controller) {
         await report({ type: 'message', message })
+        if (message.id !== undefined && message.method === methods.agent.session.new) sessionRequests.new.push(message.id)
+        if (message.id !== undefined && message.method === methods.agent.session.resume) sessionRequests.resume.push(message.id)
         controller.enqueue(message)
       }
     })

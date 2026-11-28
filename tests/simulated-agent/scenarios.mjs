@@ -4,7 +4,9 @@
 // sends `initialize`, and `prompt` when a client sends `session/prompt`. A scenario can also give
 // `noAuto`: the models that cannot use the permission mode `auto` (see the scenario `no-auto`), and
 // `exitGate`: a gate that the agent waits at after the client closes its stdin, before it ends
-// (see the scenario `slow-exit`).
+// (see the scenario `slow-exit`). A scenario can also give `beforeSession` and `afterSession`: steps
+// for each `session/new` and `session/resume`, before and right after the response (see the top of
+// `agent.mjs` and the scenario `commands`).
 //
 //   { do: 'gate', name }                          wait until the test opens the gate `name`
 //   { do: 'say', text }                           stream a chunk of the reply
@@ -16,6 +18,9 @@
 //   { do: 'exit', code }                          end the agent process
 //   { do: 'child' }                               start a child process that outlives the agent, and
 //                                                 report its process ID (see the scenario `child-process`)
+//   { do: 'skills' }                              send one `available_commands_update` with a command for
+//                                                 each skill folder of the Claude folder of the process
+//                                                 (`CLAUDE_CONFIG_DIR`\skills\<name>), sorted by name
 //   { do: 'ask' | 'elicit' | 'withdraw' | 'answers' | 'detach', ... }
 //                                                 permission requests and form elicitations that do
 //                                                 not wait for the answer (see `requests.mjs`)
@@ -25,6 +30,7 @@
 
 const gateStep = (name) => ({ do: 'gate', name })
 const say = (text) => ({ do: 'say', text })
+const commandsUpdate = (commands) => ({ do: 'update', update: { sessionUpdate: 'available_commands_update', availableCommands: commands } })
 
 export const scenarios = {
   // Streams a reply. With `gate`, the reply starts when the test opens that gate.
@@ -117,11 +123,38 @@ export const scenarios = {
     ]
   }),
 
+  // Added for story S1 of milestone m2-slash-menu. Sends the command list of the session
+  // (`available_commands_update`) at each `session/new` and `session/resume`, with no prompt, as the
+  // Claude adapter does. The prompt then streams a reply, as `text` does.
+  // - `commands`: the list, as ACP gives it: { name, description, input: { hint } | null }.
+  // - `skills`: true takes the list from the Claude folder of the process instead (step 'skills').
+  // - `early`: true sends the list before the response, when the client does not know the session
+  //   ID yet. Else it goes right after the response.
+  // - `gate`: the list waits at this gate. With `early`, the response waits too.
+  // - `change`: { gate, commands }: after the list, wait at `gate`, then send `commands`: a later
+  //   change of the list.
+  commands: ({ commands = [], skills = false, early = false, gate, change, chunks = ['Hel', 'lo'] } = {}) => {
+    const steps = [
+      ...(gate ? [gateStep(gate)] : []),
+      skills ? { do: 'skills' } : commandsUpdate(commands),
+      ...(change ? [gateStep(change.gate), commandsUpdate(change.commands)] : [])
+    ]
+    return { initialize: [], prompt: chunks.map(say), ...(early ? { beforeSession: steps } : { afterSession: steps }) }
+  },
+
   // Takes the steps from the options. Use it for a scenario that no test shares.
-  steps: ({ initialize = [], prompt = [] } = {}) => ({ initialize, prompt })
+  steps: ({ initialize = [], prompt = [], beforeSession, afterSession } = {}) => ({
+    initialize,
+    prompt,
+    ...(beforeSession ? { beforeSession } : {}),
+    ...(afterSession ? { afterSession } : {})
+  })
 }
 
-/** Returns `{ initialize, prompt }`, and `noAuto` and `exitGate` when the scenario has them, for a scenario name and its options. */
+/**
+ * Returns `{ initialize, prompt }`, and `noAuto`, `exitGate`, `beforeSession` and `afterSession` when
+ * the scenario has them, for a scenario name and its options.
+ */
 export function resolveScenario(name, options = {}) {
   const build = Object.hasOwn(scenarios, name) ? scenarios[name] : undefined
   if (!build) throw new Error(`Unknown scenario "${name}". Known: ${Object.keys(scenarios).join(', ')}.`)
