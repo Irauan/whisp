@@ -114,12 +114,21 @@ test.describe('S3: sessions are created, listed, opened and deleted from the dat
 
     await sessionEntry(page, deleted.prompt).click()
     await expect(sessionEntry(page, deleted.prompt)).toHaveAttribute('aria-current', 'page')
-    const remove = main(page).getByRole('button', { name: 'Delete session', exact: true })
-    await expect(remove, 'S3 delete: the session window has no button "Delete session".').toBeVisible()
-    await expect(remove, 'S3 delete: the button "Delete session" is disabled.').toBeEnabled()
+    // S10 (user decision, 2026-11-28): "Delete session" is an item of the menu "Session options" of the
+    // title strip: "Delete" in a started session, "Discard draft" in a draft. It asks the same confirmation.
+    const remove = async () => {
+      const options = main(page).getByRole('button', { name: 'Session options', exact: true })
+      await expect(options, 'S3 delete: the session window has no button "Session options".').toBeVisible()
+      await options.click()
+      const menu = page.getByRole('group', { name: 'Session options', exact: true }).or(page.getByRole('menu', { name: 'Session options', exact: true }))
+      const item = menu.getByRole('button').or(menu.getByRole('menuitem')).filter({ hasText: /^\s*(Delete|Discard draft)/ })
+      await expect(item, 'S3 delete: the menu "Session options" has no item "Delete" or "Discard draft".').toHaveCount(1)
+      await expect(item, 'S3 delete: the item that deletes the session is disabled.').toBeEnabled()
+      await item.click()
+    }
 
     // Cancel keeps the session.
-    await remove.click()
+    await remove()
     let dialog = page.getByRole('dialog', { name: /^Delete/ })
     await expect(dialog, 'S3 delete: "Delete session" does not ask first.').toBeVisible()
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -127,7 +136,7 @@ test.describe('S3: sessions are created, listed, opened and deleted from the dat
     await expect(sessionEntry(page, deleted.prompt), 'S3 delete: Cancel deleted the session.').toBeVisible()
 
     // "Delete session" in the dialog deletes it.
-    await remove.click()
+    await remove()
     dialog = page.getByRole('dialog', { name: /^Delete/ })
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: 'Delete session', exact: true }).click()
