@@ -10,6 +10,10 @@ export function Menu(props: {
   above?: boolean
   /** The class of the button. The default is the button of the bar below the composer of a new session. */
   className?: string
+  /** An extra class of the popover, for a menu that has its own look. */
+  menuClass?: string
+  /** Tells the caller when the menu opens or closes. */
+  onToggle?(open: boolean): void
   children: ReactNode
 }) {
   return (
@@ -26,10 +30,11 @@ export function Menu(props: {
       </button>
       <div
         id={props.id}
-        className={props.above ? 'popover above' : 'popover'}
+        className={[props.above ? 'popover above' : 'popover', props.menuClass].filter(Boolean).join(' ')}
         popover="auto"
         role="group"
         aria-label={props.label}
+        onToggle={props.onToggle && ((event) => props.onToggle?.((event as unknown as ToggleEvent).newState === 'open'))}
       >
         {props.children}
       </div>
@@ -47,12 +52,14 @@ export function MenuOption(props: {
   hint?: string
   checked?: boolean
   disabled?: boolean
+  /** The row of an action that deletes: red, with its icon. */
+  danger?: boolean
   onSelect(): void
 }) {
   return (
     <button
       type="button"
-      className="option"
+      className={props.danger ? 'option danger' : 'option'}
       aria-pressed={props.checked}
       // The text and the tag join without a space, so a screen reader needs the full name.
       aria-label={props.tag ? `${props.title}, ${props.tag.toLowerCase()}` : undefined}

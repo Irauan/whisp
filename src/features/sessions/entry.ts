@@ -137,7 +137,9 @@ export const changeSchema = z.discriminatedUnion('type', [
   /** The agent uses this mode now (the live mode). */
   z.strictObject({ type: z.literal('mode'), mode: modeSchema }),
   /** The session uses this model now, after the refusal fallback. */
-  z.strictObject({ type: z.literal('model'), model: z.string() })
+  z.strictObject({ type: z.literal('model'), model: z.string() }),
+  /** The session has this title now: the agent named it, or the user renamed it. */
+  z.strictObject({ type: z.literal('title'), title: z.string() })
 ])
 
 export type Change = z.output<typeof changeSchema>

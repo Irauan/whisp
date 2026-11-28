@@ -10,12 +10,15 @@ import { SessionPage } from './SessionPage'
 export function OpenSession({
   id,
   asking,
+  stripSlot,
   onSettingsSaved,
   onDelete
 }: {
   id: string
   /** True while a question of the main process waits for the user, for example the trust question. */
   asking: boolean
+  /** The place of the title in the title strip of the shell. */
+  stripSlot: HTMLElement | null
   onSettingsSaved(): void
   onDelete(): void
 }) {
@@ -25,7 +28,7 @@ export function OpenSession({
     case 'loading':
       return null
     case 'opened':
-      return <SessionPage view={opened.view} asking={asking} onSettingsSaved={onSettingsSaved} onDelete={onDelete} />
+      return <SessionPage view={opened.view} asking={asking} stripSlot={stripSlot} onSettingsSaved={onSettingsSaved} onDelete={onDelete} />
     case 'failed':
       return <p className="error" role="alert">{`Aether could not open the session. ${opened.message}`}</p>
     case 'missing':

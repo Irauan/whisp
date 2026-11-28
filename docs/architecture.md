@@ -49,7 +49,7 @@ src/
         send-message.handler.ts
         send-message.ui.tsx
         send-message.test.ts
-      create/  list/  open/  stop/  delete/  set-mode/  set-model/
+      create/  list/  open/  stop/  delete/  rename/  set-mode/  set-model/
       answer-permission/
       record-agent-update/       event consumer (handler and test, no contract)
       entry.ts                   entries and events, pure
@@ -245,6 +245,14 @@ The main process asks these questions, and stores the answers. The renderer cann
 - A model that cannot use Auto makes Claude use Accept edits. The agent reports it, and the session shows a notice that names both modes.
 - `sessions.send-message` refuses an attachment of an unknown kind and a session attachment before any agent process starts.
 - A new session never copies "Approve all" from another session.
+
+### Session title
+
+- The first line of the first message is the first title (`titleOf`). The agent can name the session later: the port update `title` comes from `session_info_update` with a string title.
+- Each title passes through `titleOf` (first line, cut at 100 characters). A blank title, a title equal to the saved one, and a title for a deleted session change nothing.
+- `sessions.title_source` (migration 005) says where the title comes from: `prompt`, `agent` or `user`. The store validates it in code. A title of the agent never replaces a title with the source `user`. `sessions.rename` sets the source `user`.
+- The store saves the title first. The event `title` of `sessions.changed` goes out only after a successful save. The window applies it. The sidebar loads a new snapshot of the sessions when a `title` event comes, for any session.
+- The title and the menu "Session options" are in the title strip of the shell. A draft shows "New session" and the item "Discard draft".
 
 ## Skills and MCP servers
 

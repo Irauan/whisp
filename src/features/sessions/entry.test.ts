@@ -224,7 +224,8 @@ describe('the changes of a card, the live mode and the model', () => {
     { type: 'card-opened', entry: view, card: { kind: 'elicitation', elicitation: { id: 'f1', entryId: 'e1', toolId: null, message: 'm', fields: [], recommended: null } } },
     { type: 'card-closed', entry: view, id: 'r1' },
     { type: 'mode', mode: 'approve-all' },
-    { type: 'model', model: 'claude-opus-5-5' }
+    { type: 'model', model: 'claude-opus-5-5' },
+    { type: 'title', title: 'Greeting test' }
   ])('accepts the change %j', (change) => {
     expect(changeSchema.parse(change)).toEqual(change)
   })
@@ -234,7 +235,9 @@ describe('the changes of a card, the live mode and the model', () => {
     { type: 'card-opened', entry: view, card: { kind: 'dialog' } },
     { type: 'card-closed', entry: view },
     { type: 'mode', mode: 'interactive' },
-    { type: 'model' }
+    { type: 'model' },
+    { type: 'title' },
+    { type: 'title', title: 'Greeting test', extra: true }
   ])('refuses the change %j', (change) => {
     expect(changeSchema.safeParse(change).success).toBe(false)
   })

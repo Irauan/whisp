@@ -17,6 +17,7 @@ import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
 import { QuestionDialog } from './components/QuestionDialog'
+import { SESSIONS_CHANGED, sessionEventSchema } from '../../features/sessions/open/open.contract'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import type { SessionSettings } from '../../shared/model'
 import { invokeContract } from './invoke'
@@ -44,6 +45,8 @@ export function App() {
   const [problem, setProblem] = useState<string | null>(null)
   // View state: the messages of the start that the user closed.
   const [closedNotices, setClosedNotices] = useState<string[]>([])
+  // View state: the place of the session title in the title strip. The open session draws its title there.
+  const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -54,6 +57,17 @@ export function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  // A new title of any session changes its row in the sidebar, also when the session is not open. The main
+  // process saves the title before it sends the event, so the new snapshot holds it (story S10).
+  useEffect(
+    () =>
+      window.aether.subscribe(SESSIONS_CHANGED, (payload) => {
+        const event = sessionEventSchema.safeParse(payload)
+        if (event.success && event.data.change.type === 'title') void reload()
+      }),
+    [reload]
+  )
 
   if (!state) {
     return (
@@ -156,6 +170,7 @@ export function App() {
             key={view.sessionId}
             id={view.sessionId}
             asking={questions.some((question) => question.sessionId === view.sessionId)}
+            stripSlot={stripSlot}
             onSettingsSaved={() => void reload()}
             onDelete={() => setDialog({ kind: 'delete-session', sessionId: view.sessionId })}
           />
@@ -275,7 +290,10 @@ export function App() {
         </aside>
       )}
       <main className="main">
-        <div className="title-strip">{!sidebarOpen && toolbar}</div>
+        <div className="title-strip">
+          {!sidebarOpen && toolbar}
+          <div className="strip-slot" ref={setStripSlot} />
+        </div>
         {error && <p className="error" role="alert">{error}</p>}
         {problem && (
           <p className="error" role="alert">

@@ -131,6 +131,9 @@ export function translateUpdate(update: SessionUpdate, modeOf: (id: string) => M
           status: STEP_STATUSES.includes(step.status) ? (step.status as 'pending' | 'in_progress' | 'completed') : 'pending'
         }))
       }
+    case 'session_info_update':
+      // Only a string title names the session. A null title, a missing title, `updatedAt` and `_meta` give no update.
+      return typeof update.title === 'string' ? { type: 'title', title: update.title } : null
     default:
       return null
   }

@@ -54,6 +54,8 @@ export type AgentUpdate =
   | { type: 'mode'; mode: Mode }
   /** The agent uses another model now, for example after the refusal fallback. It comes only when the model changes. */
   | { type: 'model'; model: string }
+  /** The agent names the session. The title is as the agent wrote it: the caller cleans it. It names no protocol. */
+  | { type: 'title'; title: string }
 
 export type PermissionOptionKind = 'allow-once' | 'allow-always' | 'refuse-once' | 'refuse-always'
 

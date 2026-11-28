@@ -69,6 +69,15 @@ export const starterSchema = z.enum(['person', 'automation'])
 
 export type Starter = z.output<typeof starterSchema>
 
+/**
+ * Where the title of a session comes from (`sessions.title_source`, migration 005): the first line of
+ * the first message, the agent, or the user. A title of the agent never replaces a title of the user.
+ * The database holds no CHECK for it: the store validates the value. The renderer neither reads nor sets it.
+ */
+export const titleSourceSchema = z.enum(['prompt', 'agent', 'user'])
+
+export type TitleSource = z.output<typeof titleSourceSchema>
+
 /** The text of an error that more than one slice returns. */
 export const MESSAGES = {
   unknownProfile: 'This profile does not exist.',
@@ -76,7 +85,8 @@ export const MESSAGES = {
   invalidSourcePath: 'The session folder must be an existing folder, with an absolute path.',
   folderMissing: 'The session folder does not exist any more. Create it again, or start a new session in another folder.',
   turnActive: 'The agent is still working on the last message.',
-  sessionStarted: 'The mode of a session that started cannot change here.'
+  sessionStarted: 'The mode of a session that started cannot change here.',
+  blankTitle: 'The title needs some text.'
 } as const
 
 /** The kind of provider that every session uses now (decision 0013). */

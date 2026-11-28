@@ -45,6 +45,8 @@ import { RELEASE_LIMITS } from '../../features/sessions/idle-release'
 import { Processes } from '../../features/sessions/processes.store'
 import { recordAgentRequestHandler, recordAgentUpdateHandler } from '../../features/sessions/record-agent-update/record-agent-update.handler'
 import { retireIdleHandler } from '../../features/sessions/retire-idle/retire-idle.handler'
+import { renameSession } from '../../features/sessions/rename/rename.contract'
+import { renameSessionController } from '../../features/sessions/rename/rename.controller'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import { sendMessageController } from '../../features/sessions/send-message/send-message.controller'
 import { SessionStore } from '../../features/sessions/session.store'
@@ -222,6 +224,7 @@ export function composeMain({
       [answerQuestion.name]: answerQuestionController({ questions }),
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
       [setModel.name]: setModelController({ store: sessionStore, transcript }),
+      [renameSession.name]: renameSessionController({ store: sessionStore, transcript }),
       [deleteSession.name]: deleteSessionController(database, release)
     },
     notices,
