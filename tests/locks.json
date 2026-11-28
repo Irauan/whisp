@@ -224,7 +224,7 @@
     "story": "m0-gates/s8"
   },
   "tests/architecture/m1-chat-s10-session-title.test.ts": {
-    "sha256": "014375c243e5edc5387fdb3149fb2cbe7966ffe3d9821dcb1ed0ae0ed8c51ea8",
+    "sha256": "bd3fd7788f74aea1bb1607d01db49734870951f6b0f57bb6a97afbc998a95dca",
     "story": "m1-chat/s10"
   },
   "tests/architecture/m1-chat-s10-title-agent.test.ts": {

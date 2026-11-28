@@ -16,8 +16,13 @@
 // - The session event (`entry.ts`, `changeSchema`): the change `{ type: 'title'; title: string }`.
 // - The window state (`src/renderer/src/session-view.ts`): the change `title` sets
 //   `view.session.title`.
-// - Migration 005: `sessions.title_source TEXT NOT NULL DEFAULT 'prompt' CHECK (title_source IN
-//   ('prompt', 'agent', 'user'))`.
+// - Migration 005: `sessions.title_source TEXT NOT NULL DEFAULT 'prompt'`, with no CHECK
+//   (coordinator decision, 2026-11-28, user preference 5: a rule in code, not in the database). The
+//   store validates the value in code ('prompt' | 'agent' | 'user') and refuses another value.
+// - The store method that sets the title (spec, "Interfaces": "like setModel"). This test fixes its
+//   name and its parameters: `SessionStore.setTitle(id, title, source)`, with the source `agent` or
+//   `user`. It returns true when it saved the title, and false for an unknown session. For a bad
+//   source it refuses: it throws or returns false, and it writes nothing.
 //
 // Readings of the spec text:
 // - "No event goes out" (S10-4, S10-6): the transcript publishes no event at all for the update.
@@ -219,8 +224,11 @@ describe('S10-8: the window state takes the title change', () => {
   })
 })
 
+/** The store method that sets the title, as the header gives it. */
+type SetTitle = (id: string, title: string, source: string) => boolean
+
 describe('S10-16: migration 005 adds the source of the title', () => {
-  it("S10-16: a database at version 4 with sessions gets title_source 'prompt' for each session, and a bad value is refused", async () => {
+  it("S10-16: a database at version 4 with sessions gets title_source 'prompt' for each session, and the store refuses a bad value", async () => {
     const check = 'S10-16'
     const folder = await mkdtemp(join(tmpdir(), 'aether-s10-migration-'))
     try {
@@ -257,34 +265,52 @@ describe('S10-16: migration 005 adds the source of the title', () => {
           { id: 's2', title: 'Write the notes', title_source: 'prompt' }
         ])
 
-        // A new row gets the default, and the values of the spec are accepted.
+        // A new row gets the default. The column is NOT NULL.
         database
           .prepare("INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, created_at) VALUES ('s3', 'p1', 't', 'p', 'ask', 'f', 'default', '2026-01-03')")
           .run()
         expect(database.prepare("SELECT title_source FROM sessions WHERE id = 's3'").get(), `${check}: a new session must get title_source 'prompt'.`).toEqual({
           title_source: 'prompt'
         })
-        for (const value of ['agent', 'user', 'prompt']) {
-          expect(
-            () => database.prepare("UPDATE sessions SET title_source = ? WHERE id = 's3'").run(value),
-            `${check}: the value '${value}' of the spec must be accepted.`
-          ).not.toThrow()
-        }
-
-        // A bad value is refused.
-        for (const value of ['robot', '', 'User']) {
-          expect(
-            () => database.prepare("UPDATE sessions SET title_source = ? WHERE id = 's1'").run(value),
-            `${check}: the value '${value}' must be refused by the CHECK of title_source.`
-          ).toThrow()
-        }
         expect(
-          () => database.prepare("UPDATE sessions SET title_source = NULL WHERE id = 's1'").run(),
+          () => database.prepare("UPDATE sessions SET title_source = NULL WHERE id = 's3'").run(),
           `${check}: title_source must be NOT NULL.`
         ).toThrow()
-        expect(database.prepare("SELECT title_source FROM sessions WHERE id = 's1'").get(), `${check}: a refused value changed the row.`).toEqual({
-          title_source: 'prompt'
+
+        // No CHECK lists the values: the code validates them (coordinator decision, user preference 5).
+        expect(
+          () => database.prepare("UPDATE sessions SET title_source = 'robot' WHERE id = 's3'").run(),
+          `${check}: the database must not list the values of title_source in a CHECK. The store validates them.`
+        ).not.toThrow()
+
+        // The store saves a title with a source of the spec.
+        const store = new SessionStore(database)
+        const setTitle = (store as unknown as { setTitle?: unknown }).setTitle
+        if (typeof setTitle !== 'function') throw new Error(`${check}: SessionStore has no method setTitle(id, title, source).`)
+        const set = (setTitle as SetTitle).bind(store)
+        const sourceOf = (id: string) => database.prepare('SELECT title, title_source FROM sessions WHERE id = ?').get(id)
+        expect(set('s1', 'Greeting test', 'user'), `${check}: setTitle with the source 'user' must save the title.`).toBe(true)
+        expect(sourceOf('s1'), `${check}: setTitle with the source 'user' must save the title and the source.`).toEqual({
+          title: 'Greeting test',
+          title_source: 'user'
         })
+        expect(set('s2', 'Release notes', 'agent'), `${check}: setTitle with the source 'agent' must save the title.`).toBe(true)
+        expect(sourceOf('s2'), `${check}: setTitle with the source 'agent' must save the title and the source.`).toEqual({
+          title: 'Release notes',
+          title_source: 'agent'
+        })
+
+        // The store refuses a bad value: it throws or returns false, and it writes nothing.
+        for (const bad of ['robot', '', 'User']) {
+          let saved: boolean | 'threw'
+          try {
+            saved = set('s1', 'Other title', bad)
+          } catch {
+            saved = 'threw'
+          }
+          expect(saved, `${check}: the store must refuse the source '${bad}': setTitle must throw or return false.`).not.toBe(true)
+          expect(sourceOf('s1'), `${check}: the refused source '${bad}' changed the row.`).toEqual({ title: 'Greeting test', title_source: 'user' })
+        }
       } finally {
         database.close()
       }
