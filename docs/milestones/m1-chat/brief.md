@@ -125,6 +125,8 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 | A21 | A person's session is idle for 30 minutes, measured with a test clock | — | Its process closes. The next message resumes the session. |
 | A22 | 7 idle sessions with open processes | — | The oldest idle process closes. An active session never closes for this limit. |
 | A23 | A started session | The user sends a first message of 10 characters or more | Claude names the session. The title strip and the sidebar show its title. A title that the user set with Rename stays. Added by the user on 2026-11-28 (S10). |
+| A24 | A profile with sessions in two folders, and an added empty folder | The user collapses a group, adds a folder, starts a session from a group's '+', and removes the empty folder from its right-click menu | The sidebar shows the folders like the GitHub Copilot app. The collapse and the empty folder survive a restart. Added by the user on 2026-11-28 (S11). |
+| A25 | Two sessions, one open | Claude works, answers in the other session, and asks a permission | The icon of the other session fades while it works, turns blue at the answer until it is opened, and shows a yellow hand while a card waits. Added by the user on 2026-11-28 (S11). |
 
 ## Non-goals
 
