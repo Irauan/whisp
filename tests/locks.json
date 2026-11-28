@@ -231,6 +231,34 @@
     "sha256": "1f2aad35814ec8f8a7566974cab38f6a45bc6598ea0859abc1cfd0a250a26e83",
     "story": "m1-chat/s9"
   },
+  "tests/acceptance/m2-slash-menu/s1/composer-regression.spec.ts": {
+    "sha256": "027cac98cea6d8fed9b1cef6381f59d315d03b758f225f4935d78b63286db1bd",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/fixture.ts": {
+    "sha256": "292b6ccf542d9a10d308a4d452c68b5c96379df332c25b88bd0a1591da007326",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/menu.spec.ts": {
+    "sha256": "cb5c12e51b2c192b2dcf164b9c0bfb27d6fe06a9e40f5edff9c885fb55ca0501",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/pick.spec.ts": {
+    "sha256": "2ac68ed77a4fe0710fa9db05eee0e9aead54d64eef7e0d0bf4b161b91ceae4db",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/profiles.spec.ts": {
+    "sha256": "e23850a6c13e8912f8f03571fccf5bf5a12ee27e465be8eaef421e2e068b2fb9",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/scroll.spec.ts": {
+    "sha256": "cd79b71571f2363d6c8e063516834f62262e4e0b6ea477ae034130b489fd5aa6",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/acceptance/m2-slash-menu/s1/updates.spec.ts": {
+    "sha256": "5ea108f4adecab3a3acdc893a275fa9d535ce3c241e8e56cb80d681a6b319b2a",
+    "story": "m2-slash-menu/s1"
+  },
   "tests/acceptance/support/hidden-windows.cjs": {
     "sha256": "c9a4f113a4afe89aa95bd39ac70ef25532e4020bd8b39dde3adc8240bd60f9cb",
     "story": "m1-chat/test-windows"
@@ -274,6 +302,18 @@
   "tests/architecture/m1-chat-s9-retire-idle.test.ts": {
     "sha256": "09f46808d87c0a31c20c3a16b1264a5cd2dbee01a2f14b1006732ba3ada687a6",
     "story": "m1-chat/s9"
+  },
+  "tests/architecture/m2-slash-menu-s1-commands-store.test.ts": {
+    "sha256": "09f8d6839dc248cd4e3fc076db6b7ac81038d2401754d9f92bb30b924b996f5a",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/architecture/m2-slash-menu-s1-provider.test.ts": {
+    "sha256": "525d724ea74f12684381a3c90c50299ff66dbde94d5145c45a1812512404479a",
+    "story": "m2-slash-menu/s1"
+  },
+  "tests/architecture/m2-slash-menu-s1-slash.test.ts": {
+    "sha256": "c02168b43aac9a0ca328579bc2ff1d7cf5bf0545b6b19f926eb5d5dad12e93c2",
+    "story": "m2-slash-menu/s1"
   },
   "tests/simulated-agent/agent.mjs": {
     "sha256": "4c64a8c4177338aab0884f2bedd9b31e45795a1123d7c613055dd173247b2ba8",
