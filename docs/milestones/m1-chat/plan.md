@@ -37,6 +37,7 @@ The order follows the dependencies. S1 to S4 form the walking skeleton. After S4
 | S7 Session settings reach the agent | — | Model, mode and attachments reach the agent. A model that cannot use Auto shows the notice. | — | A12, A15 | S4 |
 | S8 Plan widget | — | The plan shows as a todo list above the composer, with three states. | — | A11 | S4 |
 | S9 Idle release and process limit | 6 | Idle processes close after the release time. At most 6 idle processes stay open. | — | A21, A22 | S4, S6 (migration 003 before 004) |
+| S10 Session title and menu | — | Claude names the session. The title sits in the top strip with an arrow menu: Rename, Fork and Archive (coming soon), Delete. Added by the user on 2026-11-28 after the hand test. | — | A23 | S4, S5, S8, S9 (migration 004 before 005) |
 
 S6 to S8 are independent after S4. S5 needs S8, because S5 puts its cards inline in the log of S8, and its jump button in the status line of S8. S5 also needs S7, because the live mode uses the port update `mode` of S7. S9 needs S6, because its migration 004 follows migration 003 of S6. S5, S7 and S9 touch `acp-agents.ts`, and S5, S6, S7 and S9 touch `send-message.handler.ts`, so the coordinator merges them one at a time. Story specs: `stories/` in this folder.
 
@@ -53,10 +54,11 @@ S6 to S8 are independent after S4. S5 needs S8, because S5 puts its cards inline
 | A17, A18 | S2 |
 | A19 | S1 |
 | A21, A22 | S9 |
+| A23 | S10 |
 
 ## Live checks (step 7)
 
-The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. Decision 0011 (2026-11-27): these checks use the subscription of the user.
+The validator runs A1, A2, A3, A4, A6, A8, A12 and A23 with real Claude. Decision 0011 (2026-11-27): these checks use the subscription of the user.
 
 ## Todo list
 
@@ -75,6 +77,8 @@ The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. Decision 001
 - [x] S7 Session settings reach the agent. PR #27, squash merge `597d6c5`.
 - [x] S8 Frame, composer and plan widget. PR #35, squash merge `a92cb98`.
 - [x] S9 Idle release and process limit. PR #40, squash merge `c485a92`.
-- [ ] Step 7: milestone validation, with the live checks
+- [x] Step 7: milestone validation, with the live checks. PASS, PR #44, squash merge `02136b2`.
+- [ ] S10 Session title and menu (user decision, 2026-11-28). Design review approved on 2026-11-28.
+- [ ] Step 7 again for S10, with the live check A23
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective
