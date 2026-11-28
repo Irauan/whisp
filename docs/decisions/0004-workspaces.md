@@ -2,7 +2,7 @@
 
 Date: 2026-11-25
 Decided by: the user, on a proposal of the architecture session (step 0).
-Status: accepted
+Status: accepted, partly replaced by 0013 (the name "profile", the workspace directory, and the providers)
 
 ## Context
 

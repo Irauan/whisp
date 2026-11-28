@@ -1,12 +1,1 @@
-[
-  {
-    "rule": "eslint(no-restricted-globals)",
-    "file": "src/renderer/src/components/AgentPanel.tsx",
-    "count": 2
-  },
-  {
-    "rule": "typescript(no-floating-promises)",
-    "file": "src/renderer/src/useSuggestions.ts",
-    "count": 1
-  }
-]
+[]

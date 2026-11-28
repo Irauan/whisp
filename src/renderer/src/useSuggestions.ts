@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Listing } from '../../shared/bridge'
-import type { Attachment, Session } from '../../shared/model'
+import type { Attachment } from '../../shared/model'
 import type { Mention } from './mention'
 
 const MAX_SHOWN = 20
@@ -8,7 +8,6 @@ const MAX_SHOWN = 20
 interface Sources {
   folder: string
   githubLogin: string | null
-  sessions: Session[]
 }
 
 export interface Suggestions {
@@ -18,7 +17,7 @@ export interface Suggestions {
 
 /** Lists the attachments that match the mention. */
 export function useSuggestions(mention: Mention | null, sources: Sources): Suggestions | null {
-  const { folder, githubLogin, sessions } = sources
+  const { folder, githubLogin } = sources
   const trigger = mention?.trigger
   const [loaded, setLoaded] = useState<{ key: string; listing: Listing } | null>(null)
   const key = `${trigger} ${githubLogin} ${folder}`
@@ -30,7 +29,7 @@ export function useSuggestions(mention: Mention | null, sources: Sources): Sugge
       trigger === '@'
         ? window.aether.listRepositoryFiles(folder)
         : window.aether.listIssues(folder, githubLogin)
-    request
+    void request
       .catch((cause: unknown): Listing => ({ ok: false, reason: String(cause) }))
       .then((listing) => {
         if (active) setLoaded({ key, listing })
@@ -42,20 +41,12 @@ export function useSuggestions(mention: Mention | null, sources: Sources): Sugge
 
   if (!mention) return null
 
-  let all: Attachment[]
-  if (trigger === '&') {
-    all = sessions
-      .toReversed()
-      .map((session) => ({ kind: 'session', ref: session.id, label: session.title }))
-  } else {
-    if (!folder) return { items: [], message: 'Choose a folder first.' }
-    if (loaded?.key !== key) return { items: [], message: 'Loading…' }
-    if (!loaded.listing.ok) return { items: [], message: loaded.listing.reason }
-    all = loaded.listing.items
-  }
+  if (!folder) return { items: [], message: 'Choose a folder first.' }
+  if (loaded?.key !== key) return { items: [], message: 'Loading…' }
+  if (!loaded.listing.ok) return { items: [], message: loaded.listing.reason }
 
   const needle = mention.query.toLowerCase()
-  const items = all
+  const items = loaded.listing.items
     .filter((item) => item.label.toLowerCase().includes(needle))
     .slice(0, MAX_SHOWN)
   return { items, message: items.length === 0 ? 'No results' : null }

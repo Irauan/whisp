@@ -27,3 +27,7 @@ Today sessions of one agent share one process. A second session can use it befor
 
 - One shared process per agent.
 - Immediate close of an idle process. Each next message would wait for a start.
+
+## Notes
+
+- 2026-11-27: User decision (S9 choice 2A): the release times are constants in m1, not settings. The line "Both are settings" above stays as the first decision. A later story can add the setting.
