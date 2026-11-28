@@ -40,6 +40,10 @@ src/
     contracts.ts        registry of all contracts
   features/
     profiles/
+    folders/
+      folder.ts                  a folder of a profile, pure
+      folders.store.ts           persistence
+      add/  set-collapsed/  remove/
     sessions/
       session.ts                 aggregate, pure
       session.store.ts           persistence
@@ -55,6 +59,8 @@ src/
       entry.ts                   entries and events, pure
       transcript.store.ts        the conversation in memory and in the database
       processes.store.ts         the agent process and the turn of each session
+      viewing.store.ts           the session that the window shows, and the focus flag
+      set-viewing/
     repositories/
     agents/
   building-blocks/      result, contract, database, agent port, agent environment, accounts in start, clock, ids, base UI
@@ -114,6 +120,9 @@ Rules from the template that do not apply: a container for dependency injection,
 - A query returns a snapshot. Events then carry only the change and a revision number.
 - When the renderer sees a gap in the revisions, it loads a new snapshot.
 - The event `sessions.changed` carries one change of one session and its revision. The revision counts from 1 in memory, and it starts again after a restart.
+- The main process holds the viewed session and the focus flag (`viewing.store.ts`). The renderer sends the viewed session with `sessions.set-viewing`. The entry point sets the focus flag from the window events `focus` and `blur` through `Composition.windowFocus`, and clears both at `closed` through `Composition.windowClosed`. A port is not needed for them. At a turn end, `send-message` reads them for the unread mark (`sessions.unread`): the session gets the mark unless the user looks at it with the focus on the window. A stop by the user and a quit do not set it. A session that becomes seen loses the mark.
+- `sessions.list` returns the folders of the profile and, for each session, the unread mark and the live state: the status, the IDs of the open cards and the revision. The sidebar keeps a map of these by session ID. It applies the changes of `sessions.changed` for every session in the order of the revision, and loads the list again at a gap.
+- The `folders` feature owns the folders of a profile (table `folders`): a folder exists with no session under it, and keeps the saved collapsed state of its group. A session joins its folder by the profile and the path (`sessions.source_path`). Creating a session and the import of the old files add the folder row in the same transaction.
 - `sessions.open` returns the snapshot: the session, its entries, its status and its revision. The renderer subscribes before it opens, and drops the events at or below the revision of the snapshot.
 
 ## IPC and the renderer boundary

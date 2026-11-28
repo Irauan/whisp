@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 
 export type View =
-  | { kind: 'home' }
+  /** The New page. `folder` is the folder that the composer starts with, for "New session in <folder>" (story S11). */
+  | { kind: 'home'; folder?: string }
   | { kind: 'pulls' }
   | { kind: 'projects' }
   | { kind: 'items' }

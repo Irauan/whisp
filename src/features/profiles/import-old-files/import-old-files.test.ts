@@ -88,6 +88,20 @@ describe('importOldFilesHandler', () => {
     ])
   })
 
+  it('adds one folder row for each folder of the imported sessions, with the time of the oldest session (S11)', async () => {
+    const sessions = [
+      { ...draft('s1', 'personal', 'plan', 'all'), settings: { ...draft('s1', 'personal', 'plan', 'all').settings, folder: 'C:\code\shared' }, createdAt: '2026-01-05T00:00:00.000Z' },
+      { ...draft('s2', 'personal', 'plan', 'all'), settings: { ...draft('s2', 'personal', 'plan', 'all').settings, folder: 'C:\code\shared' }, createdAt: '2026-01-02T00:00:00.000Z' },
+      { ...draft('s3', 'client', 'plan', 'all'), settings: { ...draft('s3', 'client', 'plan', 'all').settings, folder: 'C:\code\shared' }, createdAt: '2026-01-03T00:00:00.000Z' }
+    ]
+    await writeFile(file, JSON.stringify({ ...oldProfile, sessions }))
+    run()
+    expect(database.prepare('SELECT profile_id, path, collapsed, created_at FROM folders ORDER BY profile_id').all().map((row) => ({ ...row }))).toEqual([
+      { profile_id: 'w-a', path: 'C:\code\shared', collapsed: 0, created_at: '2026-01-02T00:00:00.000Z' },
+      { profile_id: 'w-b', path: 'C:\code\shared', collapsed: 0, created_at: '2026-01-03T00:00:00.000Z' }
+    ])
+  })
+
   it('imports once: a second run changes nothing', async () => {
     await writeFile(file, JSON.stringify(oldProfile))
     run()

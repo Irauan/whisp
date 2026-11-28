@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, PanelLeft, Plus, Search, SearchX } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ConfirmDialog, SearchDialog } from './components/Dialogs'
 import {
   BotsPage,
@@ -20,10 +20,13 @@ import { QuestionDialog } from './components/QuestionDialog'
 import { focusSessionOptions } from './components/SessionTitle'
 import { SESSIONS_CHANGED, sessionEventSchema } from '../../features/sessions/open/open.contract'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
+import { setViewing } from '../../features/sessions/set-viewing/set-viewing.contract'
 import type { SessionSettings } from '../../shared/model'
 import { invokeContract } from './invoke'
 import { useNavigation, type View } from './navigation'
-import { useProfiles } from './useProfiles'
+import { applySidebarEvent } from './sidebar-state'
+import type { SessionEvent } from './session-view'
+import { useProfiles, type SessionView } from './useProfiles'
 import { useQuestions } from './useQuestions'
 
 type OpenDialog =
@@ -34,7 +37,8 @@ type OpenDialog =
   | { kind: 'delete-session'; sessionId: string }
 
 export function App() {
-  const { state, error, reload, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession } = useProfiles()
+  const { state, error, reload, chooseDirectories, add, edit, switchTo, remove, createSession, deleteSession, addFolder, removeFolder, setCollapsed } =
+    useProfiles()
   const { view, go, back, forward, reset, canGoBack, canGoForward } = useNavigation()
   // The questions of the main process (trust and directory). The window shows the oldest one.
   const { questions, answer: answerQuestion } = useQuestions()
@@ -49,6 +53,65 @@ export function App() {
   // View state: the place of the session title in the title strip. The open session draws its title there.
   const [stripSlot, setStripSlot] = useState<HTMLElement | null>(null)
 
+  // The session that the window shows. The main process needs it for the unread mark (story S11). The
+  // layout effect sends it before the next event of the user, at the start too, also after a reload of the page.
+  const viewedId = view.kind === 'session' ? view.sessionId : null
+  useLayoutEffect(() => {
+    void invokeContract(setViewing, { sessionId: viewedId }).then((sent) => {
+      if (!sent.ok) console.error('Aether could not tell the main process which session is open.', sent.error.message)
+    })
+  }, [viewedId])
+
+  // The sidebar map: the live state of every session, by ID (story S11). It starts from `sessions.list`.
+  // The events of `sessions.changed` keep it up to date, in the order of the revision. A gap loads the list again.
+  const [live, setLive] = useState<{ source: SessionView[] | null; items: ReadonlyMap<string, SessionView> }>({ source: null, items: new Map() })
+  const liveRef = useRef(live)
+  // The latest events. A new list replays those that are newer than its items, because an event can come before its list.
+  const recentEvents = useRef<SessionEvent[]>([])
+  const sessionList = state?.sessions ?? null
+  useLayoutEffect(() => {
+    if (sessionList === null) return
+    let items: ReadonlyMap<string, SessionView> = new Map(sessionList.map((session) => [session.id, session]))
+    for (const event of recentEvents.current) items = applySidebarEvent(items, event) ?? items
+    liveRef.current = { source: sessionList, items }
+    setLive(liveRef.current)
+  }, [sessionList])
+  useEffect(
+    () =>
+      window.aether.subscribe(SESSIONS_CHANGED, (payload) => {
+        const event = sessionEventSchema.safeParse(payload)
+        if (!event.success) return
+        recentEvents.current = [...recentEvents.current.slice(-499), event.data]
+        // A new title of any session changes its row, also when the session is not open. The main process saves
+        // the title before it sends the event, so the new list holds it (story S10).
+        if (event.data.change.type === 'title') void reload()
+        const next = applySidebarEvent(liveRef.current.items, event.data)
+        if (next === null) {
+          void reload()
+          return
+        }
+        if (next !== liveRef.current.items) {
+          liveRef.current = { source: liveRef.current.source, items: next }
+          setLive(liveRef.current)
+        }
+      }),
+    [reload]
+  )
+
+  // Rule 9: a collapsed group expands when the user opens one of its sessions. It runs when the open
+  // session changes, never as a constant rule: the user can collapse the group of the open session.
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  })
+  useEffect(() => {
+    if (viewedId === null) return
+    const snapshot = stateRef.current
+    const session = snapshot?.sessions.find((candidate) => candidate.id === viewedId)
+    const folder = snapshot?.folders.find((candidate) => candidate.path === session?.sourcePath)
+    if (folder?.collapsed) setCollapsed(folder.id, false)
+  }, [viewedId, setCollapsed])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return
@@ -58,17 +121,6 @@ export function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  // A new title of any session changes its row in the sidebar, also when the session is not open. The main
-  // process saves the title before it sends the event, so the new snapshot holds it (story S10).
-  useEffect(
-    () =>
-      window.aether.subscribe(SESSIONS_CHANGED, (payload) => {
-        const event = sessionEventSchema.safeParse(payload)
-        if (event.success && event.data.change.type === 'title') void reload()
-      }),
-    [reload]
-  )
 
   if (!state) {
     return (
@@ -81,7 +133,9 @@ export function App() {
     )
   }
 
-  const { profiles, currentId, notices, sessions, newSessionMode } = state
+  const { profiles, currentId, notices, sessions, folders, newSessionMode } = state
+  // The rows of the sidebar take the live state from the map, as long as the map matches the list.
+  const liveSessions = live.source === sessions ? sessions.map((session) => live.items.get(session.id) ?? session) : sessions
   const current = profiles.find((profile) => profile.id === currentId) ?? null
   const withoutDirectory = profiles.filter((profile) => profile.workspaceDirectory === null)
   const closeDialog = () => setDialog(null)
@@ -91,6 +145,19 @@ export function App() {
   }
 
   const openAdd = () => setDialog({ kind: 'add-profile' })
+
+  // "Add local folder or repository": the picker, then the folder joins the sidebar. A cancel changes nothing.
+  const addLocalFolder = async () => {
+    if (!current) return
+    let path: string | null
+    try {
+      path = await window.aether.chooseFolder()
+    } catch (cause) {
+      setProblem(`Aether could not open the folder picker. ${String(cause)}`)
+      return
+    }
+    if (path !== null) setProblem(await addFolder(current.id, path))
+  }
 
   const switchProfile = async (id: string) => {
     if (id === currentId) return
@@ -137,10 +204,11 @@ export function App() {
         if (!current) return <NoProfile onAdd={openAdd} />
         return (
           <HomePage
-            key={current.id}
+            key={`${current.id}:${view.folder ?? ''}`}
             sessions={sessions}
             newSessionMode={newSessionMode}
             githubLogin={current.github?.login ?? null}
+            folder={view.folder}
             onStart={startSession(current.id)}
           />
         )
@@ -284,7 +352,16 @@ export function App() {
       {sidebarOpen && (
         <aside className="sidebar">
           {toolbar}
-          <Sidebar sessions={sessions} view={view} onGo={go} />
+          <Sidebar
+            sessions={liveSessions}
+            folders={folders}
+            askingIds={new Set(questions.map((question) => question.sessionId))}
+            view={view}
+            onGo={go}
+            onToggleFolder={setCollapsed}
+            onAddFolder={() => void addLocalFolder()}
+            onRemoveFolder={(folderId) => void removeFolder(folderId).then(setProblem)}
+          />
           <ProfileSwitcher
             profiles={profiles}
             current={current}

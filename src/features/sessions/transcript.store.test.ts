@@ -370,3 +370,40 @@ describe('Transcript', () => {
     })
   })
 })
+
+describe('Transcript: the unread mark and the live state of the list (S11)', () => {
+  it('saves the mark and sends the event only when the saved value changes', () => {
+    const { store, events, transcript } = setup()
+    transcript.setUnread('s1', false)
+    transcript.setUnread('s1', true)
+    transcript.setUnread('s1', true)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set(['s1']))
+    transcript.setUnread('s1', false)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+    expect(events).toEqual([
+      { sessionId: 's1', revision: 1, change: { type: 'unread', unread: true } },
+      { sessionId: 's1', revision: 2, change: { type: 'unread', unread: false } }
+    ])
+  })
+
+  it('sets and sends no mark for a session that was forgotten', () => {
+    const { store, events, transcript } = setup()
+    transcript.forget('s1')
+    transcript.setUnread('s1', true)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+    expect(events).toEqual([])
+  })
+
+  it('gives the open card IDs in the order of arrival, and the revision of the last event', () => {
+    const { transcript } = setup()
+    expect(transcript.openCardIds('s1')).toEqual([])
+    expect(transcript.revisionOf('s1')).toBe(0)
+    transcript.openPermission('s1', { id: 'r1', toolId: 't1', title: 'npm test', toolKind: 'execute', locations: [], options: [] })
+    transcript.openPermission('s1', { id: 'r2', toolId: 't2', title: 'npm run build', toolKind: 'execute', locations: [], options: [] })
+    expect(transcript.openCardIds('s1')).toEqual(['r1', 'r2'])
+    expect(transcript.revisionOf('s1')).toBe(2)
+    transcript.forget('s1')
+    expect(transcript.openCardIds('s1')).toEqual([])
+    expect(transcript.revisionOf('s1')).toBe(0)
+  })
+})
