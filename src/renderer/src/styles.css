@@ -328,6 +328,11 @@ button:disabled {
   background: var(--hover);
 }
 
+/* The row has the hover color, so the toggle adds none: two layers would make the toggle darker than the "+". */
+.group-row .group-toggle:hover {
+  background: none;
+}
+
 .group-toggle {
   flex: 1;
   min-width: 0;
@@ -351,17 +356,22 @@ button:disabled {
   flex: none;
   display: grid;
   place-items: center;
-  width: 26px;
+  /* At rest the button has no width (and the gap goes with it): the state icon of a collapsed group is flush right. */
+  width: 0;
   height: 26px;
+  margin-left: -2px;
   padding: 0;
+  overflow: hidden;
   color: var(--muted);
   border-radius: 6px;
   opacity: 0;
 }
 
-/* Hidden with the opacity, not with display, so that the keyboard reaches the button. */
+/* Hidden with the width and the opacity, not with display, so that the keyboard reaches the button. */
 .group-row:hover .group-plus,
 .group-row:focus-within .group-plus {
+  width: 26px;
+  margin-left: 0;
   opacity: 1;
 }
 

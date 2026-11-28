@@ -1,5 +1,6 @@
 import { statSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
+import type { Database } from './database'
 
 /** True when the path is absolute. */
 export const isAbsolutePath = (path: string): boolean => isAbsolute(path)
@@ -35,4 +36,14 @@ export function isSameFolder(a: string, b: string): boolean {
 /** The absolute path of a reference: an absolute path stays, and a relative path is taken from the base folder. */
 export function absoluteIn(base: string, reference: string): string {
   return resolve(base, reference)
+}
+
+/**
+ * The path of the folder row of the profile that names the same folder as `path`, or `path` when the profile
+ * has none (story S11). On Windows the case and the kind of slash do not count. A session saves this path,
+ * so the sidebar, which compares the text, puts the session in its folder, and no second row appears.
+ */
+export function folderRowPath(database: Database, profileId: string, path: string): string {
+  const rows = database.prepare('SELECT path FROM folders WHERE profile_id = ?').all(profileId)
+  return rows.map((row) => String(row.path)).find((known) => isSameFolder(known, path)) ?? path
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Database } from '../../building-blocks/database'
-import { isSameFolder } from '../../building-blocks/folder'
+import { folderRowPath } from '../../building-blocks/folder'
 import type { Mode } from '../../building-blocks/mode'
 import { entrySchema, isOpenTool, type EntryView } from './entry'
 import { attachmentSchema, sessionSchema, starterSchema, titleSourceSchema, type Session, type Starter, type TitleSource } from './session'
@@ -85,12 +85,7 @@ export class SessionStore {
    */
   insert(input: Session, startedBy: Starter = 'person'): void {
     this.database.transaction(() => {
-      const known = this.database
-        .prepare('SELECT path FROM folders WHERE profile_id = ?')
-        .all(input.profileId)
-        .map((row) => String(row.path))
-        .find((path) => isSameFolder(path, input.sourcePath))
-      const session = known === undefined ? input : { ...input, sourcePath: known }
+      const session = { ...input, sourcePath: folderRowPath(this.database, input.profileId, input.sourcePath) }
       this.database
         .prepare(
           `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at, started_by)
