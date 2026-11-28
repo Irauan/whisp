@@ -6,7 +6,6 @@ import {
   CircleDot,
   Compass,
   Folder,
-  GitBranch,
   GitPullRequest,
   Hand,
   Link,
@@ -20,6 +19,7 @@ import { baseName } from '../../../shared/model'
 import type { View } from '../navigation'
 import { groupState, sessionState, type SessionState } from '../sidebar-state'
 import type { FolderView, SessionView } from '../useProfiles'
+import { GithubMark } from './GithubMark'
 import { MenuOption } from './Menu'
 
 interface Props {
@@ -169,7 +169,7 @@ export function Sidebar({ sessions, folders, askingIds, view, onGo, onToggleFold
           <MenuOption key={folder.id} menu={SESSIONS_MENU} title={baseName(folder.path)} icon={<Folder size={16} />} onSelect={() => newSessionIn(folder)} />
         ))}
         {folders.length > 0 && <hr />}
-        <MenuOption menu={SESSIONS_MENU} title="Add from GitHub" icon={<GitBranch size={16} />} tag="Coming soon" disabled onSelect={() => undefined} />
+        <MenuOption menu={SESSIONS_MENU} title="Add from GitHub" icon={<GithubMark size={16} />} tag="Coming soon" disabled onSelect={() => undefined} />
         <MenuOption menu={SESSIONS_MENU} title="Add from URL" icon={<Link size={16} />} tag="Coming soon" disabled onSelect={() => undefined} />
         <MenuOption menu={SESSIONS_MENU} title="Add local folder or repository" icon={<Folder size={16} />} onSelect={onAddFolder} />
       </div>
