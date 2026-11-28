@@ -296,7 +296,7 @@ Verdict of the validator: PASS.
 
 ### Checks of the brief, round 2
 
-Only the new checks and the checks that ran again live are in detail. A2 to A22 have no code change of their own since round 1, and their CI tests passed again in the full suite at `98d923e`.
+Only the new checks and the checks that ran again live are in detail. S10 and S11 changed shared code that A2 to A22 use, for example `send-message.handler.ts`, `transcript.store.ts`, `session.store.ts` and `App.tsx`. The CI tests of A2 to A22 passed again in the full suite at `98d923e`. See also "Locked tests changed since round 1".
 
 | ID | Evidence in CI (simulated agent) | Live (real Claude) | Result |
 |---|---|---|---|
@@ -305,6 +305,18 @@ Only the new checks and the checks that ran again live are in detail. A2 to A22 
 | A23 | `s10/title.spec.ts`: S10-1 (title during the turn, window and sidebar, after a restart), S10-2 (title outside a turn), S10-3 (title of a session that is not open). `s10/rename.spec.ts`: S10-14 (a title from Rename stays, also after a restart; a later agent title changes nothing). `s10/strip.spec.ts`: S10-10, S10-11, S10-12, S10-13, S10-15. vitest: S10-4 to S10-9, S10-16. | R2-L2 | PASS |
 | A24 | `s11/groups.spec.ts`: S11-1, S11-2, S11-3 (collapse with click, Enter, Space), S11-4 (the "+" of a group sets the folder of the composer), S11-16. `s11/folders.spec.ts`: S11-13 (collapse after a restart and a profile switch), S11-14 (the "+" menu), S11-15 (an added empty folder stays after a restart, and "Remove folder" removes it), S11-24 (the folder menu). vitest: S11-18, S11-19. | R2-L4 | PASS, with finding F4 (a test gap, covered live) |
 | A25 | `s11/status.spec.ts`: S11-5 (Working and its animation, none with reduced motion), S11-6 (New answer while another session is open; the open clears it), S11-7, S11-8, S11-9 (the mark after a restart), S11-10 (the hand, and no hand after a withdraw), S11-11 (the collapsed groups), S11-12. `s11/viewing.spec.ts`: S11-21. vitest: S11-17, S11-20, S11-22, S11-23. | R2-L3 | PASS |
+
+### Locked tests changed since round 1
+
+The validator read `git diff f4eb2f2..98d923e -- tests/`. Besides the new folders `s10` and `s11`, the new `tests/architecture/m1-chat-s10-*` and `m1-chat-s11-*` files and `tests/locks.json`, four locked files changed:
+
+| File | Change | Allowed by | Trailer | Meaning |
+|---|---|---|---|---|
+| `s3/sessions.spec.ts` | "Delete session" is the item "Delete" or "Discard draft" of the menu "Session options". The same dialog, Cancel and delete checks stay. | S10 spec, "Locked tests that change" | `dcfb310`: "S10 moves the title and Delete session into the title strip and its menu (user decision 2026-11-28)" | Kept: Delete asks first |
+| `s8/frame.spec.ts`, `s8/frame.ts` | The header row is gone. The title and "Session options" are in the strip, fully in view, and "Session options" is the only button above the log. | S10 spec, "Locked tests that change" | Same trailer in `dcfb310` | Kept: the title is in view, no facts row |
+| `s3/fixture.ts` | `openNewSession` uses the row "New", because the "+" of "Sessions" opens a menu from S11. It also checks the New page. | S11 spec, "Locked tests" (the trailer rule) | `481930d`: "S11 sidebar folders and status (user decision 2026-11-28): the + of Sessions opens a menu, so the helper uses the New row" | Kept: a helper opens the composer of a new session |
+
+No locked test changed its meaning. Each change has its trailer and follows the spec.
 
 ### Live run, round 2
 
@@ -362,7 +374,7 @@ Only the new checks and the checks that ran again live are in detail. A2 to A22 
 
 #### Probe against the mockups
 
-The validator compared the live screenshots with the two approved mockups, `s10-session-title.mockup.html` and `s11-sidebar-status.mockup.html`.
+The validator compared the live screenshots with the two approved mockups, `s10-session-title.mockup.html` and `s11-sidebar-status.mockup.html`. The row states (Working, New answer, Needs your answer) come from the DOM values in R2-L3: the description, the icon class, the computed color and the running animations. A screenshot shows one frame of the fade only.
 
 | Mockup state | Live | Match |
 |---|---|---|
@@ -373,13 +385,13 @@ The validator compared the live screenshots with the two approved mockups, `s10-
 | S11 2: groups and status icons | Folder icons, indented rows, the blue chat icon of "New answer", the yellow hand | Yes |
 | S11 3: hover on a group | Chevron down and "+" at the right | Yes |
 | S11 4: collapsed group with the hand | Chevron right, the hand at the right. With the keyboard focus on the toggle, the "+" also shows next to the hand, as rule 6 says. | Yes |
-| S11 5: no sessions | Not shown live. CI covers it (S11-15, S11-16). | Not probed |
+| S11 5: no sessions (a profile with no folder) | Not shown live. The sidebar code shows "No sessions yet" when the profile has no folder (`Sidebar.tsx` 179). S11-15 and S11-16 cover an empty folder in a group, not this state. | Not probed |
 | S11 6: the "+" menu | Same items, order and disabled states | Yes |
 | S11 7: right click on a folder | Same items. "Remove folder" disabled for a folder with a session, with its description. | Yes |
 
 ### Review of PR #53
 
-The validator read `git diff 481930d..98d923e`: 12 files, 182 lines added, 20 removed. No locked test changed (the lock gate passed).
+The validator read `git diff 481930d..98d923e`: 12 files, 182 lines added, 20 removed. All 12 files are under `src/`, so no locked test changed.
 
 | Item | What changed | Validator check | Result |
 |---|---|---|---|
