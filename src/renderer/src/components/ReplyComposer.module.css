@@ -33,6 +33,11 @@
   field-sizing: content;
 }
 
+/* The box shows the focus (.box:focus-within), so the text area has no ring of its own. */
+.field:focus-visible {
+  outline: none;
+}
+
 .field::placeholder {
   color: var(--muted);
 }
