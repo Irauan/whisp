@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S11 Sidebar mockup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --canvas: #070709; --sidebar: #101013; --raised: #0d0d0f; --selected: #212126; --hover: #18181b;
+    --line: #2d2d33; --text: #eeeef1; --muted: #9d9ea6; --accent: #ac99ff; --danger: #e5786d;
+    --unread: #4493f8; --attention: #d29922;
+    font: 14px/1.45 system-ui, 'Segoe UI', sans-serif; color: var(--text); background: #000;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  section { width: 300px; }
+  h2.cap { margin: 0 0 4px; font-size: 15px; }
+  .note { margin: 0 0 10px; color: var(--muted); font-size: 13px; min-height: 76px; }
+  .change { color: var(--accent); }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .side { width: 280px; height: 380px; padding: 6px 8px 16px; background: var(--sidebar); border: 1px solid var(--line); border-radius: 8px; }
+  .group-head { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding-left: 8px; }
+  .group-head h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .icon-button { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
+  .row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 8px; text-align: left; border-radius: 7px; }
+  .row > svg { color: var(--muted); }
+  .row:hover, .row.hover { background: var(--hover); }
+  .row[aria-current] { background: var(--selected); }
+  .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .child { padding-left: 36px; }
+
+  /* Group row: folder icon; on hover a chevron and the plus. */
+  .grow .chev, .grow .plus { display: none; }
+  .grow.hover .folder { display: none; }
+  .grow.hover .chev, .grow.hover .plus { display: grid; }
+  .grow .plus { place-items: center; width: 26px; height: 26px; margin-right: -4px; color: var(--muted); border-radius: 6px; }
+  .grow .plus:hover { background: var(--selected); color: var(--text); }
+  .grow .plus svg { width: 16px; height: 16px; }
+
+  /* Status icons */
+  .s-working { color: var(--text) !important; animation: fade 1.6s ease-in-out infinite; }
+  @keyframes fade { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .s-working { animation: none; color: var(--accent) !important; } }
+  .s-unread { color: var(--unread) !important; }
+  .s-attention { color: var(--attention) !important; }
+
+  /* Today (S3) */
+  .old-title { padding: 6px 8px 2px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .old .group-head { margin-top: 18px; }
+
+  .empty { margin: 0; font-size: 13px; color: var(--muted); min-height: 30px; }
+  .menu { position: absolute; top: 40px; left: 20px; width: 255px; padding: 6px; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); z-index: 2; }
+  .menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+  .menu-cap { padding: 4px 8px; font-size: 12px; color: var(--muted); }
+  .menu .row { min-height: 30px; }
+  .row[disabled] { opacity: 0.45; cursor: default; }
+  .soon { padding: 1px 7px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; }
+  .legend { width: 620px; }
+  .legend table { border-collapse: collapse; font-size: 13px; }
+  .legend td { padding: 6px 12px 6px 0; vertical-align: middle; }
+  .legend td:first-child { width: 28px; }
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+  <symbol id="chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+</svg>
+
+<section>
+  <h2 class="cap">1. Today (S3)</h2>
+  <p class="note">The group is a small muted heading with extra space above it. Every session has the same muted chat icon.</p>
+  <div class="side old">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <div class="old-title">Whisp</div>
+    <div class="row"><svg><use href="#chat"/></svg><span class="label">First test run of aether. how are…</span></div>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">2. Groups and status icons</h2>
+  <p class="note"><span class="change">Changed:</span> each group is a row with a folder icon, one row gap under "Sessions". Session rows are indented. Each icon shows the state of its session.</p>
+  <div class="side">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <button class="row grow" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><span class="label">whisp</span></button>
+    <button class="row child" aria-current="page"><svg><use href="#chat"/></svg><span class="label">Greeting test</span></button>
+    <button class="row child"><svg class="s-working" aria-label="Working"><use href="#chat"/></svg><span class="label">Fix the login form</span></button>
+    <button class="row child"><svg class="s-unread" aria-label="New answer"><use href="#chat"/></svg><span class="label">Review the release notes</span></button>
+    <button class="row child"><svg class="s-attention" aria-label="Needs your answer"><use href="#hand"/></svg><span class="label">Clean the build folder</span></button>
+    <button class="row grow" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><span class="label">ai-harness</span></button>
+    <button class="row child"><svg><use href="#chat"/></svg><span class="label">Plan the agent loop</span></button>
+    <button class="row grow" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><span class="label">tmp</span></button>
+    <p class="row child empty">No sessions yet</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">6. The "+" menu of Sessions</h2>
+  <p class="note"><span class="change">New:</span> as the Copilot app, in the GitHub menu style. "Start session in" lists the folders. "Add local folder or repository" adds an empty group. GitHub and URL are coming soon.</p>
+  <div class="side" style="position:relative">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button" style="background:var(--selected);color:var(--text)"><svg><use href="#plus"/></svg></span></div>
+    <button class="row grow"><svg class="folder"><use href="#folder"/></svg><span class="label">whisp</span></button>
+    <button class="row grow"><svg class="folder"><use href="#folder"/></svg><span class="label">tmp</span></button>
+    <div class="menu">
+      <div class="menu-cap">Start session in</div>
+      <button class="row"><svg><use href="#folder"/></svg><span class="label">whisp</span></button>
+      <button class="row"><svg><use href="#folder"/></svg><span class="label">tmp</span></button>
+      <button class="row"><svg><use href="#folder"/></svg><span class="label">ai-harness</span></button>
+      <hr>
+      <button class="row" disabled><svg><use href="#github"/></svg><span class="label">Add from GitHub</span><span class="soon">Coming soon</span></button>
+      <button class="row" disabled><svg><use href="#link"/></svg><span class="label">Add from URL</span><span class="soon">Coming soon</span></button>
+      <button class="row"><svg><use href="#folder"/></svg><span class="label">Add local folder or repository</span></button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">7. Right-click on a folder</h2>
+  <p class="note"><span class="change">New:</span> the folder menu, like the Copilot app, in the GitHub style. "Remove folder" works only for an empty folder; for a folder with sessions it is disabled.</p>
+  <div class="side" style="position:relative">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <button class="row grow"><svg class="folder"><use href="#folder"/></svg><span class="label">whisp</span></button>
+    <button class="row grow hover"><svg class="chev"><use href="#down"/></svg><span class="label">tmp</span></button>
+    <p class="row child empty">No sessions yet</p>
+    <button class="row grow"><svg class="folder"><use href="#folder"/></svg><span class="label">ai-harness</span></button>
+    <div class="menu" style="top:88px; left:90px; width:190px">
+      <button class="row"><svg><use href="#plus"/></svg><span class="label">New session</span></button>
+      <hr>
+      <button class="row" style="color:var(--danger)"><svg style="color:var(--danger)"><use href="#trash"/></svg><span class="label">Remove folder</span></button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">3. Hover on a group</h2>
+  <p class="note"><span class="change">New:</span> the folder icon becomes a chevron (down: expanded). "+" at the right starts a new session in that folder. A click on the row collapses it.</p>
+  <div class="side">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <div class="row grow hover" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><svg class="chev"><use href="#down"/></svg><span class="label">whisp</span><button class="plus" aria-label="New session in whisp"><svg><use href="#plus"/></svg></button></div>
+    <button class="row child" aria-current="page"><svg><use href="#chat"/></svg><span class="label">Greeting test</span></button>
+    <button class="row child"><svg class="s-working"><use href="#chat"/></svg><span class="label">Fix the login form</span></button>
+    <button class="row grow" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><span class="label">ai-harness</span></button>
+    <button class="row child"><svg><use href="#chat"/></svg><span class="label">Plan the agent loop</span></button>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">4. Collapsed group</h2>
+  <p class="note"><span class="change">New:</span> "whisp" is collapsed. One of its sessions needs the user, so the hand shows at the right of the group row. The signal never hides.</p>
+  <div class="side">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <button class="row grow" aria-expanded="false"><svg class="folder"><use href="#folder"/></svg><span class="label">whisp</span><svg class="s-attention" aria-label="Needs your answer"><use href="#hand"/></svg></button>
+    <button class="row grow" aria-expanded="true"><svg class="folder"><use href="#folder"/></svg><span class="label">ai-harness</span></button>
+    <button class="row child"><svg class="s-unread"><use href="#chat"/></svg><span class="label">Plan the agent loop</span></button>
+  </div>
+</section>
+
+<section>
+  <h2 class="cap">5. No sessions</h2>
+  <p class="note">As today.</p>
+  <div class="side">
+    <div class="group-head"><h2>Sessions</h2><span class="icon-button"><svg><use href="#plus"/></svg></span></div>
+    <p style="margin:0;padding:6px 8px;font-size:13px;color:var(--muted)">No sessions yet</p>
+  </div>
+</section>
+
+<section class="legend">
+  <h2 class="cap">Status icons (first match wins)</h2>
+  <table>
+    <tr><td><svg class="s-attention"><use href="#hand"/></svg></td><td><b>Needs your answer</b>: a permission or question card is open. Yellow raised hand.</td></tr>
+    <tr><td><svg class="s-working"><use href="#chat"/></svg></td><td><b>Working</b>: Claude is starting or thinking. The icon fades in and out. No motion with reduced motion.</td></tr>
+    <tr><td><svg class="s-unread"><use href="#chat"/></svg></td><td><b>New answer</b>: a turn ended while you were in another session or Aether had no focus. Blue until you open it.</td></tr>
+    <tr><td><svg style="color:var(--muted)"><use href="#chat"/></svg></td><td><b>Normal</b>: nothing new.</td></tr>
+  </table>
+</section>
+
+</body>
+</html>
