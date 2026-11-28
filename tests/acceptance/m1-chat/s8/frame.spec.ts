@@ -1,8 +1,8 @@
 // The session window frame of story S8 of milestone m1-chat, on the built app.
 //
 // Spec, "The session window frame" (user decision, 2026-11-27): the session window is a fixed
-// frame. The header (the title and "Delete session") is at the top. The transcript is the only
-// scroll area. The bottom dock (status line, plan widget, composer) is always in view.
+// frame. The title strip (the title and "Session options", story S10) is at the top. The
+// transcript is the only scroll area. The bottom dock (status line, plan widget, composer) is always in view.
 // Spec, "Conditions for the locked tests":
 // - The log "Transcript" is the scroll element itself. A wrapper around it must not scroll.
 // - `.content` stops scrolling for the session page. Otherwise the page scrolls.
@@ -12,6 +12,8 @@
 // - The transcript stays at the bottom while new entries and streamed text arrive. When the user
 //   scrolls up, it keeps the position. Back at the bottom, it follows new entries again.
 // - The header shows only the title and the button "Delete session". The facts row goes away.
+//   S10 (user decision, 2026-11-28): the header row goes away. The title and the button
+//   "Session options" are in the title strip, and "Delete session" is an item of its menu.
 //
 // The checks read the frame before any action in the composer, because an action of Playwright
 // scrolls its target into view. `frame.ts` describes the UI contract. No test sleeps.
@@ -65,9 +67,9 @@ test.describe('S8 session frame', () => {
 
     // The header and the composer are in view.
     const heading = main(page).getByRole('heading', { level: 1, name: 'Write a long reply' })
-    const remove = main(page).getByRole('button', { name: 'Delete session', exact: true })
+    const options = main(page).getByRole('button', { name: 'Session options', exact: true })
     await expect(heading, `${check}: the title of the session is not fully in view at the top.`).toBeInViewport({ ratio: 1 })
-    await expect(remove, `${check}: the button "Delete session" is not fully in view at the top.`).toBeInViewport({ ratio: 1 })
+    await expect(options, `${check}: the button "Session options" is not fully in view at the top.`).toBeInViewport({ ratio: 1 })
     await expectComposerInView(promptField(page), sendButton(page), check)
     expect(await scrollersAround(promptField(page)), `${check}: an element around the text field "Prompt" scrolls. The dock must never scroll.`).toEqual([])
 
@@ -211,7 +213,7 @@ test.describe('S8 session frame', () => {
     await expectPinned(page, `${check} (prompt of 12 lines)`)
   })
 
-  test('Frame, header: the header holds only the title and "Delete session", with no facts row', async ({ chat }) => {
+  test('Frame, header: the title strip holds only the title and "Session options", with no facts row', async ({ chat }) => {
     const check = 'S8 frame, header'
     await chat.control.scenario('text', { chunks: ['Hello ', 'from the agent.'] })
     await writeOldProfile(chat, [DRAFT_IN_REPO_A])
@@ -220,8 +222,8 @@ test.describe('S8 session frame', () => {
     await expectInTranscript(page, 'Hello from the agent.', `${check}: the reply does not show.`)
     await expect(stopButton(page), `${check}: the turn does not end.`).toHaveCount(0)
 
-    await expect(main(page).getByRole('heading', { level: 1, name: 'Say hello' }), `${check}: the header does not show the title.`).toBeVisible()
-    await expect(main(page).getByRole('button', { name: 'Delete session', exact: true }), `${check}: the header has no button "Delete session".`).toBeVisible()
+    await expect(main(page).getByRole('heading', { level: 1, name: 'Say hello' }), `${check}: the title strip does not show the title.`).toBeVisible()
+    await expect(main(page).getByRole('button', { name: 'Session options', exact: true }), `${check}: the title strip has no button "Session options".`).toBeVisible()
 
     // No facts row: no Profile, no Folder, no folder path.
     for (const fact of ['Profile', 'Folder']) {
@@ -233,13 +235,13 @@ test.describe('S8 session frame', () => {
     ).toHaveCount(0)
     await expect(main(page).getByRole('term'), `${check}: the session window still has a facts list.`).toHaveCount(0)
 
-    // Above the log, the only button is "Delete session".
+    // Above the log, the only button is "Session options".
     const top = (await transcript(page).boundingBox())?.y ?? 0
     const above: string[] = []
     for (const button of await main(page).getByRole('button').filter({ visible: true }).all()) {
       const box = await button.boundingBox()
       if (box && box.y + box.height <= top + 1) above.push((await button.getAttribute('aria-label')) ?? (await button.innerText()))
     }
-    expect(above, `${check}: the header must hold only the button "Delete session".`).toEqual(['Delete session'])
+    expect(above, `${check}: the title strip must hold only the button "Session options".`).toEqual(['Session options'])
   })
 })

@@ -51,23 +51,23 @@ Mockup: `s10-session-title.mockup.html`, states 0 (today) to 4. The user's words
 - The menu has the items of the Claude app menu that Aether can support, in Claude's order and with Claude's shortcut letters. The user's words: "the menu should present the same options as the claude as well." And: "we should follow the github app style adding icons to the actions."
 - Style: the GitHub style of the app menus (`.menu`): each row has an icon, groups have separators, the danger row is in `--danger` with a red trash icon. A shortcut letter shows muted at the right. A submenu row shows "›".
 - Items of a started session:
-  1. "Rename" (pencil, R). The title turns into a text field in place, with the title selected. Enter saves, Escape and a click outside cancel. A blank title is refused (the field stays). The saved title is cleaned with `titleOf`.
+  1. "Rename" (pencil, R). The title turns into a text field named "Session title" in place, with the title selected. Enter saves, Escape and a click outside cancel. A blank title is refused (the field stays). The saved title is cleaned with `titleOf`.
   2. "Fork" (branch icon), disabled, with the "Coming soon" pill, as "Pull requests" in the sidebar.
   3. Separator.
   4. "Archive" (archive icon), disabled, with "Coming soon".
   5. "Delete" (trash, D), red. It runs the same command and confirmation as the trash button today.
-- Items of a draft: only "Discard draft" in red.
+- Items of a draft: only "Discard draft" in red. A draft is a saved session that has not started, as in S3 and S8. "Discard draft" asks the same confirmation as Delete (coordinator decision, 2026-11-28).
 - Left out: "Open in" (user decision, 2026-11-28: "you can remove the open in menu"), and the items that Aether has no feature for: Share, Detach to top level, Transcript view, Output style, Continue in cloud.
-- With the menu open, a shortcut letter runs its item. Escape, a click outside and a choice close the menu. Focus goes back to the arrow.
+- With the menu open, a shortcut letter runs its item. Escape, a click outside and a choice close the menu. Only Escape and a choice put the focus back on the arrow: a click outside leaves the focus where the user clicked. After "Delete" and Cancel in the dialog, the focus goes back to the arrow. In the Rename field, Enter and Escape put the focus back on the arrow; a click outside cancels and leaves the focus where the user clicked (coordinator decision, 2026-11-28).
 - A draft shows the title "New session".
 
-The S8 rule "the header holds only the title and Delete session" changes: the title and "Delete session" stay, but in the strip and the menu. This is a change of an approved S8 screen, so the user approves this mockup.
+The S8 rule "the header holds only the title and Delete session" changes: the title and "Delete session" stay, but in the strip and the menu (the menu item "Delete"). This is a change of an approved S8 screen, so the user approves this mockup.
 
 ## Data
 
 - No new table and no new column. `sessions.title` (migration 001, `TEXT NOT NULL`) holds the title.
 - Changed use of a saved column: `sessions.title` now changes after the first message, when the agent reports a title.
-- New column (migration 005): `sessions.title_source TEXT NOT NULL DEFAULT 'prompt' CHECK (title_source IN ('prompt', 'agent', 'user'))`. Existing rows get `prompt`. A title from the agent sets `agent`. A rename sets `user`. Open choice 1 is now B, because Rename is in S10.
+- New column (migration 005): `sessions.title_source TEXT NOT NULL DEFAULT 'prompt'`, with no CHECK. The store validates the value in code (`'prompt' | 'agent' | 'user'`) and refuses another value. Coordinator decision, 2026-11-28, by user preference 5: a rule in code, not in the database, when a database rule needs a table rebuild to change. Existing rows get `prompt`. A title from the agent sets `agent`. A rename sets `user`. Open choice 1 is now B, because Rename is in S10.
 - Rule: a title from the agent never replaces a title with the source `user`. The update is ignored, with no event.
 - This is a new saved format, so the user approves it in this design review.
 
@@ -77,7 +77,7 @@ The S8 rule "the header holds only the title and Delete session" changes: the ti
 - Provider (`src/providers/acp/acp-agents.ts`): a `session_info_update` with a string `title` becomes the port update `title`. A `session_info_update` with a null title or no `title` field gives no update. `updatedAt` and `_meta` are ignored.
 - Slice `record-agent-update`: the update `title` cleans the title, saves it in the store, then sends a session event through the transcript.
   - Any new dependency of `recordAgentUpdateHandler` must be optional. The locked test `tests/architecture/m1-chat-s9-retire-idle.test.ts` 193 calls it with `{ transcript, store }` only.
-- Session store: a new method to set the title, like `setModel`. It returns false for an unknown session.
+- Session store: a new method to set the title, like `setModel`. It returns false for an unknown session. The locked test S10-16 names it `setTitle(id, title, source)`, with the source `agent` or `user`. For a bad source it throws or returns false, and it writes nothing.
 - Transcript (`transcript.store.ts`): a new `setTitle` with the `gone` guard, like `setModel`, which emits the change.
 - Session event (`entry.ts`, `changeSchema`): a new change `{ type: 'title'; title: string }`.
 - Window (`session-view.ts`): the change `title` sets `view.session.title`. Fix the comment at line 66 ("No other event changes the session row").
@@ -110,10 +110,10 @@ The S8 rule "the header holds only the title and Delete session" changes: the ti
 | S10-8 | The window state | A `title` change comes | `view.session.title` is the new title. | Unit (`session-view.test.ts`) |
 | S10-9 | A started session, idle | A title comes outside a turn | The idle time restarts, as for other updates. | Unit (`send-message.test.ts`) |
 | S10-10 | A started session | The window shows | The title strip holds the title and the button "Session options". No header row with a trash button shows. | Acceptance |
-| S10-11 | A started session | The user clicks the title, then the arrow, then "Delete session" | The title click opens nothing. The arrow opens a menu with the folder row and "Delete session". "Delete session" asks the same confirmation as today. | Acceptance |
+| S10-11 | A started session | The user clicks the title, then the arrow, then the menu item "Delete" | The title click opens nothing. The arrow opens a menu with "Delete". "Delete" asks the same confirmation as today. | Acceptance |
 | S10-14 | A started session | The user chooses "Rename", types "My name" and presses Enter; then the agent sends the title "Agent name" | The title is "My name" in the strip and the sidebar, also after a restart. The agent title changes nothing. Escape in the field keeps the old title. A blank title is refused. | Acceptance |
 | S10-15 | A started session | The user opens the menu | The items are "Rename", "Fork", "Archive", "Delete", in this order. "Fork" and "Archive" are disabled with "Coming soon". Each row has an icon. "Rename" shows "R" and "Delete" shows "D". | Acceptance |
-| S10-16 | Migration 005 | A database at version 4 with sessions | Each session has `title_source = 'prompt'`. A bad value is refused. | Unit |
+| S10-16 | Migration 005 | A database at version 4 with sessions | Each session has `title_source = 'prompt'`. The store refuses a bad value; the database has no CHECK. | Unit |
 | S10-12 | A draft | The user opens the arrow menu | The title is "New session", and the menu shows "Discard draft". | Acceptance |
 | S10-13 | The menu is open | The user presses Escape | The menu closes, and the focus is on the arrow. | Acceptance |
 | A23 | A real Claude session (live, step 7) | The user sends a first message of 10 characters or more | Within a few seconds the title changes from the first line to Claude's title, or to the adapter's fallback title. | Live check of the validator |
@@ -124,7 +124,7 @@ Brief row A23 is new: "The user sends the first message. Claude names the sessio
 
 The header change breaks locked tests that expect a visible button "Delete session" in the page header:
 
-- `tests/acceptance/m1-chat/s3/sessions.spec.ts` (S3 delete, 117-133): the button is now the menu item "Delete session" behind "Session options". The confirmation dialog stays the same.
+- `tests/acceptance/m1-chat/s3/sessions.spec.ts` (S3 delete, 117-133): the button is now the menu item "Delete" behind "Session options" ("Discard draft" in a draft). The confirmation dialog stays the same.
 - `tests/acceptance/m1-chat/s8/frame.spec.ts` (67-79, 214-243) and `frame.ts` 18: the header row is gone. The title and "Session options" are in the strip, always in view.
 
 The title stays a heading of level 1, so the tests that find the title by `getByRole('heading')` keep their meaning. The test author changes only these lines, with the trailer `Locked-Test-Change: S10 moves the title and Delete session into the title strip and its menu (user decision 2026-11-28)`, and the coordinator approves it. The meaning of each check stays: the title is in view, and "Delete session" asks first.

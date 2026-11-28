@@ -1,5 +1,6 @@
-import { Loader, Trash2 } from 'lucide-react'
+import { Loader } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { sendMessage } from '../../../features/sessions/send-message/send-message.contract'
 import { setMode } from '../../../features/sessions/set-mode/set-mode.contract'
 import { setModel } from '../../../features/sessions/set-model/set-model.contract'
@@ -11,12 +12,14 @@ import { AttachmentIcon } from './AttachmentIcon'
 import { Dock } from './Dock'
 import { PlanWidget } from './PlanWidget'
 import { ReplyComposer } from './ReplyComposer'
+import { SessionTitle } from './SessionTitle'
 import { Transcript, type TranscriptHandle } from './Transcript'
 
 /**
  * A session in its window (brief, Session window). The window is a fixed frame (story S8): the
- * header at the top, the transcript as the only scroll area, and the bottom dock, always in view,
- * with the status line, the plan widget and the composer. The main process owns the conversation:
+ * title strip at the top, the transcript as the only scroll area, and the bottom dock, always in view,
+ * with the status line, the plan widget and the composer. The title and its menu are in the title
+ * strip of the shell (story S10): this page draws them into `stripSlot`. The main process owns the conversation:
  * this window shows the snapshot and its events, and sends the commands Send, Stop and the change
  * of the mode and the model of a draft. The composer holds only the text that the user has not sent.
  * `onSettingsSaved` tells the app to load a new snapshot of the sessions, because the mode and the
@@ -25,12 +28,15 @@ import { Transcript, type TranscriptHandle } from './Transcript'
 export function SessionPage({
   view,
   asking,
+  stripSlot,
   onSettingsSaved,
   onDelete
 }: {
   view: SessionSnapshot
   /** True while a question waits for the user. The agent has not started, so the page does not say so. */
   asking: boolean
+  /** The place of the title in the title strip of the shell, or null while the shell has not drawn it. */
+  stripSlot: HTMLElement | null
   onSettingsSaved(): void
   onDelete(): void
 }) {
@@ -127,12 +133,11 @@ export function SessionPage({
 
   return (
     <div className="session-frame">
-      <header className="page-head session-head">
-        <h1>{session.title}</h1>
-        <button type="button" className="icon-button" aria-label="Delete session" title="Delete session" onClick={onDelete}>
-          <Trash2 size={18} />
-        </button>
-      </header>
+      {stripSlot &&
+        createPortal(
+          <SessionTitle sessionId={session.id} title={session.title} draft={draft} onDelete={onDelete} onProblem={setProblem} />,
+          stripSlot
+        )}
       {draft ? (
         <div className="session-body">
           {attachments}

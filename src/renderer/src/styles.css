@@ -113,7 +113,73 @@ button:disabled {
 }
 
 .title-strip .toolbar {
+  flex: none;
   width: max-content;
+}
+
+/*
+ * The title strip also holds the title of the open session and its menu (story S10). It keeps the room
+ * of the window buttons at the right (the overlay is 140px wide at most). The strip drags the window.
+ * The title, its arrow and its text field do not, so that the tooltip and the clicks work.
+ */
+.title-strip {
+  display: flex;
+  align-items: center;
+  padding-right: 140px;
+}
+
+.strip-slot {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: 16px;
+}
+
+.strip-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-title,
+.session-title-field {
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  -webkit-app-region: no-drag;
+}
+
+.session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-title-field {
+  width: min(420px, 50vw);
+  color: inherit;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.session-title-field[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.icon-button.strip-arrow {
+  width: 26px;
+  height: 26px;
+  -webkit-app-region: no-drag;
+}
+
+.icon-button.strip-arrow:hover:not(:disabled),
+.icon-button.strip-arrow:has(+ .popover:popover-open) {
+  color: var(--text);
+  background: var(--selected);
 }
 
 .spacer {
@@ -517,6 +583,13 @@ button:disabled {
   position-area: top span-right;
 }
 
+/* The menu of the open session opens under its arrow. When it does not fit at the right, it opens to the left. */
+.popover.session-menu {
+  width: 280px;
+  position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+  -webkit-app-region: no-drag;
+}
+
 .suggestions {
   position: absolute;
   top: calc(100% + 4px);
@@ -573,6 +646,15 @@ button:disabled {
 
 .option:hover:not(:disabled) {
   background: var(--hover);
+}
+
+.option.danger {
+  color: var(--danger);
+}
+
+.session-menu .option > .muted {
+  flex: none;
+  font-size: 12px;
 }
 
 .option-check {
@@ -897,7 +979,7 @@ fieldset {
 }
 
 /*
- * The session window is a fixed frame: the header at the top, the transcript as the only scroll
+ * The session window is a fixed frame: the title strip at the top, the transcript as the only scroll
  * area, and the bottom dock, always in view. The log is the scroll element itself. It keeps a
  * height of 120px at least, also with a tall dock. The draft body has the same place and look.
  */
@@ -907,14 +989,6 @@ fieldset {
   height: 100%;
   min-height: 0;
   overflow: clip;
-}
-
-/* The header and the dock have the edge of the transcript: a column of 796px, 32px from the window at least. */
-.session-head {
-  flex: none;
-  margin: 0;
-  padding: 8px max(32px, calc((100% - 796px) / 2)) 12px;
-  border-bottom: 1px solid var(--line);
 }
 
 .session-body .description {

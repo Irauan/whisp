@@ -285,6 +285,13 @@ describe('the cards, the live mode and the model in the view', () => {
     expect(applyChange(snapshot(), { type: 'model', model: 'claude-opus-5-5' })?.session.model).toBe('claude-opus-5-5')
   })
 
+  it('shows the title of the agent at once, and changes nothing else of the session', () => {
+    const before = snapshot()
+    const after = applyChange(before, { type: 'title', title: 'Greeting test' })
+    expect(after?.session).toEqual({ ...before.session, title: 'Greeting test' })
+    expect(after?.entries).toBe(before.entries)
+  })
+
   it('applies a card change by its revision, like any other change', () => {
     const state = run([
       { type: 'snapshot', snapshot: snapshot({ revision: 1, draft: false }) },

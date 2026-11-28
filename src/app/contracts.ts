@@ -6,6 +6,7 @@ import { deleteSession } from '../features/sessions/delete/delete.contract'
 import { listSessions } from '../features/sessions/list/list.contract'
 import { SESSIONS_CHANGED } from '../features/sessions/entry'
 import { openSession } from '../features/sessions/open/open.contract'
+import { renameSession } from '../features/sessions/rename/rename.contract'
 import { sendMessage } from '../features/sessions/send-message/send-message.contract'
 import { setMode } from '../features/sessions/set-mode/set-mode.contract'
 import { setModel } from '../features/sessions/set-model/set-model.contract'
@@ -39,6 +40,7 @@ export const contracts: readonly Contract[] = [
   answerElicitation,
   setMode,
   setModel,
+  renameSession,
   deleteSession,
   listQuestions,
   answerQuestion

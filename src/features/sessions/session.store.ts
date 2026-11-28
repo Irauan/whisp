@@ -2,9 +2,12 @@ import { z } from 'zod'
 import type { Database } from '../../building-blocks/database'
 import type { Mode } from '../../building-blocks/mode'
 import { entrySchema, isOpenTool, type EntryView } from './entry'
-import { attachmentSchema, sessionSchema, starterSchema, type Session, type Starter } from './session'
+import { attachmentSchema, sessionSchema, starterSchema, titleSourceSchema, type Session, type Starter, type TitleSource } from './session'
 
 const attachmentsSchema = z.array(attachmentSchema)
+
+/** The sources that a save can name. `prompt` is only the start value of a row. */
+const changeSourceSchema = z.enum(['agent', 'user'])
 
 /** The name of an account that Aether creates. The user can change it. */
 const DEFAULT_LABEL = 'Claude'
@@ -130,6 +133,24 @@ export class SessionStore {
   /** Saves the model of a draft. Returns false when the session does not exist. */
   setModel(id: string, model: string): boolean {
     return this.database.prepare('UPDATE sessions SET model = ? WHERE id = ?').run(model, id).changes > 0
+  }
+
+  /**
+   * Saves the title of a session with its source (story S10). The source of a save is `agent` or
+   * `user`: another value is a defect, so it throws before any write. A title of the agent never
+   * replaces a title of the user. Returns true when it saved, and false for an unknown session or
+   * for a title of the agent over a title of the user.
+   */
+  setTitle(id: string, title: string, source: Exclude<TitleSource, 'prompt'>): boolean {
+    const checked = changeSourceSchema.parse(source)
+    const sql = checked === 'agent' ? "UPDATE sessions SET title = ?, title_source = ? WHERE id = ? AND title_source <> 'user'" : 'UPDATE sessions SET title = ?, title_source = ? WHERE id = ?'
+    return this.database.prepare(sql).run(title, checked, id).changes > 0
+  }
+
+  /** Where the title of the session comes from, or null when it does not exist. An unknown value in the row is a defect, so it throws. */
+  titleSourceOf(id: string): TitleSource | null {
+    const row = this.database.prepare('SELECT title_source FROM sessions WHERE id = ?').get(id)
+    return row ? titleSourceSchema.parse(row.title_source) : null
   }
 
   /**
