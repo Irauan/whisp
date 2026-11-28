@@ -13,7 +13,7 @@ export const DRAFT_TITLE = 'New session'
  * The title of the open session and its menu, in the title strip (story S10). The title is plain text:
  * only the arrow opens the menu. "Rename" turns the title into a text field in place. Enter saves,
  * and Escape or a click outside cancels. A blank title is refused, so the field stays. A shortcut letter
- * runs its item while the menu is open. A draft has one item only: "Discard draft".
+ * runs its item while the menu is open. A draft has one item only: "Discard draft", with no letter.
  * The main process owns the title: the window shows the title that the event `title` brings.
  */
 export function SessionTitle({
@@ -31,8 +31,7 @@ export function SessionTitle({
   onProblem(message: string): void
 }) {
   const root = useRef<HTMLDivElement>(null)
-  // View state: whether the menu is open, and whether the title is a text field now.
-  const [open, setOpen] = useState(false)
+  // View state: whether the title is a text field now.
   const [renaming, setRenaming] = useState(false)
 
   const shown = draft ? DRAFT_TITLE : title
@@ -43,20 +42,22 @@ export function SessionTitle({
   }
 
   // A shortcut letter runs its item while the menu is open. The menu closes first, as for a click.
+  // A draft has no letter: its one item, "Discard draft", has none in the mockup.
   useEffect(() => {
-    if (!open) return
-    const shortcuts: Record<string, () => void> = draft ? { d: onDelete } : { r: rename, d: onDelete }
+    if (draft) return
+    const shortcuts: Record<string, () => void> = { r: rename, d: onDelete }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return
+      const menu = document.getElementById(MENU_ID)
+      if (!menu?.matches(':popover-open') || event.ctrlKey || event.metaKey || event.altKey) return
       const run = shortcuts[event.key.toLowerCase()]
       if (!run) return
       event.preventDefault()
-      document.getElementById(MENU_ID)?.hidePopover()
+      menu.hidePopover()
       run()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, draft, onDelete])
+  }, [draft, onDelete])
 
   return (
     <div ref={root} className="strip-title">
@@ -81,7 +82,7 @@ export function SessionTitle({
           {shown}
         </h1>
       )}
-      <Menu id={MENU_ID} label="Session options" className="icon-button strip-arrow" menuClass="session-menu" trigger={<ChevronDown size={14} />} onToggle={setOpen}>
+      <Menu id={MENU_ID} label="Session options" className="icon-button strip-arrow" menuClass="session-menu" trigger={<ChevronDown size={14} />}>
         {draft ? (
           <MenuOption menu={MENU_ID} title="Discard draft" icon={<Trash2 size={16} />} danger onSelect={onDelete} />
         ) : (

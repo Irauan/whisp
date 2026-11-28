@@ -12,8 +12,6 @@ export function Menu(props: {
   className?: string
   /** An extra class of the popover, for a menu that has its own look. */
   menuClass?: string
-  /** Tells the caller when the menu opens or closes. */
-  onToggle?(open: boolean): void
   children: ReactNode
 }) {
   return (
@@ -34,7 +32,6 @@ export function Menu(props: {
         popover="auto"
         role="group"
         aria-label={props.label}
-        onToggle={props.onToggle && ((event) => props.onToggle?.((event as unknown as ToggleEvent).newState === 'open'))}
       >
         {props.children}
       </div>
