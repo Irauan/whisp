@@ -180,7 +180,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 
 ## Budget
 
-55 agent runs.
+55 agent runs. The user raised the cap to 62, 75, 80 and then 86 (2026-11-27 and 2026-11-28), because the specs and the stories S10 and S11 added work.
 
 - 9 stories at about 5 runs each: 45.
 - Validator: 2.
