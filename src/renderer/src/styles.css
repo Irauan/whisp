@@ -14,6 +14,9 @@
   --on-fill: #fff;
   --project: #c05a94;
   --danger: #e5786d;
+  /* The GitHub blue and the GitHub yellow: a new answer, and a session that needs the user. */
+  --unread: #4493f8;
+  --attention: #d29922;
   --strip: 44px;
   font: 14px/1.45 system-ui, 'Segoe UI', sans-serif;
   color: var(--text);
@@ -302,14 +305,91 @@ button:disabled {
   color: var(--muted);
 }
 
-.group-title {
-  padding: 6px 8px 2px;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 600;
+/* A session row under its group is indented by one icon width (28 px). */
+.row.child,
+.empty-row.child {
+  padding-left: 36px;
+}
+
+/* The group row: a container with the toggle and the "+". The icon is a folder, and a chevron on hover or focus. */
+.group-row {
+  position: relative;
+}
+
+.group-toggle .group-chevron {
+  display: none;
+}
+
+.group-row:hover .group-chevron,
+.group-row:focus-within .group-chevron {
+  display: block;
+}
+
+.group-row:hover .group-folder,
+.group-row:focus-within .group-folder {
+  display: none;
+}
+
+.group-plus {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 6px;
+  opacity: 0;
+}
+
+/* Hidden with the opacity, not with display, so that the keyboard reaches the button. */
+.group-row:hover .group-plus,
+.group-row:focus-within .group-plus {
+  opacity: 1;
+}
+
+.group-plus:hover {
+  color: var(--text);
+  background: var(--selected);
+}
+
+/* The state of a session row (story S11). These rules beat `.row > svg`. */
+.row > svg.state-unread {
+  color: var(--unread);
+}
+
+.row > svg.state-attention {
+  color: var(--attention);
+}
+
+.row > svg.state-working {
+  color: var(--text);
+  animation: fade 1.6s ease-in-out infinite;
+}
+
+@keyframes fade {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The menu of a folder opens at the pointer. The menu of "Sessions" opens under its button. */
+.popover.folder-menu {
+  position-area: none;
+  position: fixed;
+  width: 190px;
+  margin: 0;
+}
+
+.popover.sessions-menu {
+  width: 255px;
 }
 
 /* Profiles */
@@ -1174,6 +1254,12 @@ fieldset {
   }
 
   .spin {
+    animation: none;
+  }
+
+  /* No fade: the working icon stays in the accent color. */
+  .row > svg.state-working {
+    color: var(--accent);
     animation: none;
   }
 }

@@ -15,7 +15,8 @@ const HASHES: Record<number, string> = {
   2: 'bacb2a45fb0a1f4d5f0acf8e4ea0adbffd92344c26d266c935cf74e1e8b643ce',
   3: 'a283f8e1ea5bd771eae404bc687f4d0c7338d99a38eb812d70d66955d4101e15',
   4: '014b8186c16d97ad0d31d8aa5047d9cf103c800a757943f4f20aa0709fd9074b',
-  5: '97e8f47d354d65f438441e5e66ddc96d502bb92bd52ecc667bdf02e48878d402'
+  5: '97e8f47d354d65f438441e5e66ddc96d502bb92bd52ecc667bdf02e48878d402',
+  6: '320db5eb55cc6f41a92d26293b557e98c3ce06ee635b9fb33e34bb077bd71492'
 }
 
 const hashOf = (sql: string) => createHash('sha256').update(sql.replaceAll('\r\n', '\n')).digest('hex')
@@ -101,7 +102,7 @@ describe('the migrations of the product', () => {
       .run()
     // The snapshot columns of the first draft of version 2 do not exist.
     expect(Object.keys(database.prepare('SELECT * FROM sessions').get() ?? {}).sort()).toEqual(
-      ['attachments', 'created_at', 'id', 'mode', 'model', 'profile_id', 'prompt', 'provider_id', 'source_path', 'started_by', 'title', 'title_source'].sort()
+      ['attachments', 'created_at', 'id', 'mode', 'model', 'profile_id', 'prompt', 'provider_id', 'source_path', 'started_by', 'title', 'title_source', 'unread'].sort()
     )
 
     const insertRun = database.prepare(

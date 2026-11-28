@@ -24,6 +24,14 @@ export function isInsideFolder(folder: string, path: string): boolean {
   return !leaves && !isAbsolute(way)
 }
 
+/**
+ * True when both paths name the same folder. The comparison follows the platform: on Windows it ignores
+ * case, takes both slashes, and ignores a trailing separator.
+ */
+export function isSameFolder(a: string, b: string): boolean {
+  return relative(resolve(a), resolve(b)) === ''
+}
+
 /** The absolute path of a reference: an absolute path stays, and a relative path is taken from the base folder. */
 export function absoluteIn(base: string, reference: string): string {
   return resolve(base, reference)

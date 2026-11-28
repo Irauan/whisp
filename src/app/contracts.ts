@@ -1,6 +1,9 @@
 import type { Contract } from '../building-blocks/contract'
 import { answerElicitation } from '../features/sessions/answer-elicitation/answer-elicitation.contract'
 import { answerPermission } from '../features/sessions/answer-permission/answer-permission.contract'
+import { addFolder } from '../features/folders/add/add.contract'
+import { removeFolder } from '../features/folders/remove/remove.contract'
+import { setFolderCollapsed } from '../features/folders/set-collapsed/set-collapsed.contract'
 import { createSession } from '../features/sessions/create/create.contract'
 import { deleteSession } from '../features/sessions/delete/delete.contract'
 import { listSessions } from '../features/sessions/list/list.contract'
@@ -8,6 +11,7 @@ import { SESSIONS_CHANGED } from '../features/sessions/entry'
 import { openSession } from '../features/sessions/open/open.contract'
 import { renameSession } from '../features/sessions/rename/rename.contract'
 import { sendMessage } from '../features/sessions/send-message/send-message.contract'
+import { setViewing } from '../features/sessions/set-viewing/set-viewing.contract'
 import { setMode } from '../features/sessions/set-mode/set-mode.contract'
 import { setModel } from '../features/sessions/set-model/set-model.contract'
 import { stopSession } from '../features/sessions/stop/stop.contract'
@@ -42,6 +46,10 @@ export const contracts: readonly Contract[] = [
   setModel,
   renameSession,
   deleteSession,
+  setViewing,
+  addFolder,
+  setFolderCollapsed,
+  removeFolder,
   listQuestions,
   answerQuestion
 ]

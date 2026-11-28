@@ -11,6 +11,7 @@ import type { Processes, Turn } from '../processes.store'
 import { MESSAGES, PROVIDER_KIND, textForAgent, unsupportedAttachment, type Session } from '../session'
 import type { AgentRun, ProviderAccount, SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
+import type { Viewing } from '../viewing.store'
 import { additionalDirectoriesOf, linksOf } from './attachments.handler'
 import type { SendMessageError } from './send-message.contract'
 
@@ -40,6 +41,11 @@ export interface SendMessageDeps {
    * rule 2). The composition root connects it to the release. It never waits for it. A throw is logged.
    */
   turnEnded?(): void
+  /**
+   * What the user looks at now (story S11). Without it, no turn end sets the unread mark. The composition
+   * root passes the one instance that `set-viewing` and the window events feed.
+   */
+  viewing?: Viewing
   clock: Clock
   ids: Ids
   log(message: string, cause?: unknown): void
@@ -130,8 +136,25 @@ async function drive(deps: SendMessageDeps, session: Session, text: string, turn
     processes.endTurn(id, turn)
     // The idle time of the session starts here (spec S9). A session with no process has none.
     processes.markIdle(id, deps.clock.now())
+    // The mark comes before the status, so a window never shows the session as normal between them.
+    markUnread(deps, id, turn)
     transcript.setStatus(id, 'idle')
     announceTurnEnd(deps)
+  }
+}
+
+/**
+ * The unread rule at a turn end (story S11): the session gets the mark unless the user looks at it now.
+ * A normal end, a failed turn and a failed start count. A stop by the user and a turn that the quit of
+ * Aether ends do not: both set `turn.stopped`. A defect never breaks the turn end.
+ */
+function markUnread(deps: SendMessageDeps, sessionId: string, turn: Turn): void {
+  const { viewing } = deps
+  if (!viewing || turn.stopped || viewing.isSeen(sessionId)) return
+  try {
+    deps.transcript.setUnread(sessionId, true)
+  } catch (cause) {
+    deps.log('Aether could not mark the session as unread.', cause)
   }
 }
 

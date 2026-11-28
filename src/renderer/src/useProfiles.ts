@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { z } from 'zod'
 import type { Result } from '../../building-blocks/result'
+import { addFolder } from '../../features/folders/add/add.contract'
+import { removeFolder } from '../../features/folders/remove/remove.contract'
+import { setFolderCollapsed } from '../../features/folders/set-collapsed/set-collapsed.contract'
 import { createSession } from '../../features/sessions/create/create.contract'
 import { deleteSession } from '../../features/sessions/delete/delete.contract'
 import { listSessions } from '../../features/sessions/list/list.contract'
@@ -16,8 +19,10 @@ type Snapshot = z.output<typeof listProfiles.result>
 
 export type ProfileView = Snapshot['profiles'][number]
 export type Notice = Snapshot['notices'][number]
-/** A session of the current profile. In this version it is a draft: the agent does not run yet. */
+/** A session of the current profile, with its unread mark and its live state (story S11). */
 export type SessionView = z.output<typeof listSessions.result>['sessions'][number]
+/** A folder of the current profile: a group of the sidebar. */
+export type FolderView = z.output<typeof listSessions.result>['folders'][number]
 export type Mode = SessionView['mode']
 
 export interface ProfileState {
@@ -26,6 +31,8 @@ export interface ProfileState {
   notices: Notice[]
   /** The sessions of the current profile, oldest first. */
   sessions: SessionView[]
+  /** The folders of the current profile, the newest activity first. */
+  folders: FolderView[]
   /** The mode that a new session of the current profile starts with. The main process decides it. */
   newSessionMode: Mode
 }
@@ -41,6 +48,9 @@ export function useProfiles() {
   const [state, setState] = useState<ProfileState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latest = useRef(0)
+  // The collapsed state that the user chose and the main process may not have saved yet. A snapshot
+  // that was late must not undo a click, so each snapshot takes these values on top of its own.
+  const collapsedChoices = useRef(new Map<string, boolean>())
 
   const load = useCallback(async () => {
     latest.current += 1
@@ -52,6 +62,7 @@ export function useProfiles() {
     }
     const { profiles, currentId, notices } = listed.value
     let sessions: SessionView[] = []
+    let folders: FolderView[] = []
     let newSessionMode: Mode = 'ask'
     if (currentId) {
       const found = await invokeContract(listSessions, { profileId: currentId })
@@ -60,12 +71,13 @@ export function useProfiles() {
         return
       }
       sessions = found.value.sessions
+      folders = found.value.folders.map((folder) => ({ ...folder, collapsed: collapsedChoices.current.get(folder.id) ?? folder.collapsed }))
       newSessionMode = found.value.newSessionMode
     }
     // A newer load replaces this one.
     if (mine !== latest.current) return
     setError(null)
-    setState({ profiles, currentId, notices, sessions, newSessionMode })
+    setState({ profiles, currentId, notices, sessions, folders, newSessionMode })
   }, [])
 
   useEffect(() => {
@@ -78,6 +90,25 @@ export function useProfiles() {
       if (!result.ok) return result.error.message
       await load()
       return null
+    },
+    [load]
+  )
+
+  /**
+   * Saves the collapsed state of a folder. The group changes at once, and no snapshot loads after the
+   * save: a snapshot that is late must not undo a later click. After a failure the snapshot loads again.
+   */
+  const setCollapsed = useCallback(
+    (folderId: string, collapsed: boolean): void => {
+      collapsedChoices.current.set(folderId, collapsed)
+      setState((current) =>
+        current ? { ...current, folders: current.folders.map((folder) => (folder.id === folderId ? { ...folder, collapsed } : folder)) } : current
+      )
+      void invokeContract(setFolderCollapsed, { folderId, collapsed }).then((saved) => {
+        if (saved.ok) return
+        collapsedChoices.current.delete(folderId)
+        void load()
+      })
     },
     [load]
   )
@@ -104,6 +135,14 @@ export function useProfiles() {
       await load()
       return { id: created.value.id }
     },
+    /**
+     * Adds a folder to the sidebar of a profile. The snapshot loads again. On a failure it returns the
+     * text of the error.
+     */
+    addFolder: async (profileId: string, path: string): Outcome => finish(await invokeContract(addFolder, { profileId, path })),
+    /** Removes an empty folder from the sidebar. The snapshot loads again. */
+    removeFolder: async (folderId: string): Outcome => finish(await invokeContract(removeFolder, { folderId })),
+    setCollapsed,
     /** Deletes a session. A session that is gone already counts as deleted, and the snapshot loads again. */
     deleteSession: async (id: string): Outcome => {
       const deleted = await invokeContract(deleteSession, { id })

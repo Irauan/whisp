@@ -17,3 +17,10 @@ it('stops at both ends', () => {
   expect(step(start, -1)).toBe(start)
   expect(step(start, 1)).toBe(start)
 })
+
+it('takes the New page with a folder as another view than the New page without one', () => {
+  const withFolder = push(start, { kind: 'home', folder: 'C:\\work\\repo-b' })
+  expect(withFolder.entries).toHaveLength(2)
+  expect(push(withFolder, { kind: 'home', folder: 'C:\\work\\repo-b' })).toBe(withFolder)
+  expect(push(withFolder, { kind: 'home' }).entries).toHaveLength(3)
+})

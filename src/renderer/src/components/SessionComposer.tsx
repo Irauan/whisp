@@ -67,24 +67,27 @@ interface Props {
   /** The mode that a new session starts with. The main process decides it (decision 0012). */
   newSessionMode: Mode
   githubLogin: string | null
+  /** The folder that the composer starts with: the "+" of a group of the sidebar chose it. */
+  presetFolder?: string
   /** Creates the session. It returns the text of an error, or null after a success. */
   onSubmit(prompt: string, settings: SessionSettings): Promise<string | null>
 }
 
 /** The settings of a new session: the folder and the model of the last session, and the mode that the main process gives. */
-function startSettings(last: SessionView | undefined, mode: Mode): SessionSettings {
+function startSettings(last: SessionView | undefined, mode: Mode, presetFolder: string | undefined): SessionSettings {
   const model = MODELS.find((option) => option.id === last?.model)?.id
-  return { ...FIRST_SETTINGS, mode, folder: last?.sourcePath ?? '', model: model ?? FIRST_SETTINGS.model }
+  return { ...FIRST_SETTINGS, mode, folder: presetFolder ?? last?.sourcePath ?? '', model: model ?? FIRST_SETTINGS.model }
 }
 
-export function SessionComposer({ sessions, newSessionMode, githubLogin, onSubmit }: Props) {
+export function SessionComposer({ sessions, newSessionMode, githubLogin, presetFolder, onSubmit }: Props) {
   const [text, setText] = useState('')
-  const [settings, setSettings] = useState<SessionSettings>(() => startSettings(sessions.at(-1), newSessionMode))
+  const [settings, setSettings] = useState<SessionSettings>(() => startSettings(sessions.at(-1), newSessionMode, presetFolder))
   const [busy, setBusy] = useState(false)
   const [caret, setCaret] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
   const [active, setActive] = useState(0)
-  const [chosenFolders, setChosenFolders] = useState<string[]>([])
+  // The folder of the preset can be a folder with no session, so the menu lists it as a chosen folder.
+  const [chosenFolders, setChosenFolders] = useState<string[]>(() => (presetFolder ? [presetFolder] : []))
   const [info, setInfo] = useState<FolderInfo | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
