@@ -170,14 +170,14 @@ button:disabled {
   border-color: var(--danger);
 }
 
-.strip-arrow {
+.icon-button.strip-arrow {
   width: 26px;
   height: 26px;
   -webkit-app-region: no-drag;
 }
 
-.strip-arrow:hover:not(:disabled),
-.strip-arrow:has(+ .popover:popover-open) {
+.icon-button.strip-arrow:hover:not(:disabled),
+.icon-button.strip-arrow:has(+ .popover:popover-open) {
   color: var(--text);
   background: var(--selected);
 }

@@ -17,6 +17,7 @@ import { Sidebar } from './components/Sidebar'
 import { ProfileDialog, type ProfileValues } from './components/ProfileDialog'
 import { ProfileSwitcher } from './components/ProfileSwitcher'
 import { QuestionDialog } from './components/QuestionDialog'
+import { focusSessionOptions } from './components/SessionTitle'
 import { SESSIONS_CHANGED, sessionEventSchema } from '../../features/sessions/open/open.contract'
 import { sendMessage } from '../../features/sessions/send-message/send-message.contract'
 import type { SessionSettings } from '../../shared/model'
@@ -201,7 +202,12 @@ export function App() {
             title={`Delete ${target ? `"${target.title}"` : 'this session'}?`}
             body="You cannot undo this. The old files of Aether stay as they are."
             confirmLabel="Delete session"
-            onClose={closeDialog}
+            // After Cancel the focus goes back to the arrow "Session options", where the user chose "Delete".
+            onClose={() => {
+              closeDialog()
+              // The modal dialog keeps the page inert until React removes it, so the focus moves after that.
+              setTimeout(focusSessionOptions, 0)
+            }}
             onConfirm={() => {
               void deleteSession(sessionId).then((message) => {
                 closeDialog()

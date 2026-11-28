@@ -86,7 +86,8 @@ export const MESSAGES = {
   folderMissing: 'The session folder does not exist any more. Create it again, or start a new session in another folder.',
   turnActive: 'The agent is still working on the last message.',
   sessionStarted: 'The mode of a session that started cannot change here.',
-  blankTitle: 'The title needs some text.'
+  blankTitle: 'The title needs some text.',
+  draftTitle: 'A session that has not started has no title to change.'
 } as const
 
 /** The kind of provider that every session uses now (decision 0013). */

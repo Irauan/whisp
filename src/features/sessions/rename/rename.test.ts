@@ -7,7 +7,7 @@ import { Transcript } from '../transcript.store'
 import { renameSession } from './rename.contract'
 import { renameSessionHandler } from './rename.handler'
 
-function setup() {
+function setup(started = true) {
   const opened = openDatabase(':memory:', MIGRATIONS)
   if (!opened.ok) throw new Error(opened.error.message)
   const { database } = opened.value
@@ -18,6 +18,8 @@ function setup() {
     )
     .run()
   const store = new SessionStore(database)
+  // A started session has its first message. Without it the session is a draft.
+  if (started) store.insertEntry('s1', { id: 'u1', entry: { kind: 'user', text: 'Say hello' } }, 0, '2026-01-01')
   const events: SessionEvent[] = []
   const transcript = new Transcript(store, (event) => events.push(event), { now: () => new Date('2026-01-02T00:00:00.000Z') }, { next: () => 'e1' })
   return { store, events, rename: (id: string, title: string) => renameSessionHandler({ store, transcript }, { id, title }) }
@@ -38,6 +40,14 @@ describe('sessions.rename (S10-14)', () => {
     const { store, events, rename } = setup()
     expect(rename('s1', '   ')).toMatchObject({ ok: false, error: { code: 'blank-title' } })
     expect(rename('s1', '\nSecond line')).toMatchObject({ ok: false, error: { code: 'blank-title' } })
+    expect(store.find('s1')?.title).toBe('Say hello')
+    expect(store.titleSourceOf('s1')).toBe('prompt')
+    expect(events).toEqual([])
+  })
+
+  it('refuses a draft, and changes nothing', () => {
+    const { store, events, rename } = setup(false)
+    expect(rename('s1', 'My name')).toMatchObject({ ok: false, error: { code: 'draft' } })
     expect(store.find('s1')?.title).toBe('Say hello')
     expect(store.titleSourceOf('s1')).toBe('prompt')
     expect(events).toEqual([])

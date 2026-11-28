@@ -1,4 +1,5 @@
 import { err, ok, type Result } from '../../../building-blocks/result'
+import { isDraft } from '../entry'
 import { MESSAGES, titleOf } from '../session'
 import type { SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
@@ -20,6 +21,9 @@ export function renameSessionHandler(
 ): Result<Record<string, never>, RenameSessionError> {
   const session = store.find(id)
   if (!session) return err('unknown-session', MESSAGES.unknownSession)
+  // A draft has no title of its own: the window shows "New session", and its menu has no "Rename".
+  const draft = isDraft({ entryCount: store.entryCount(id), agentSessionId: store.agentRunOf(id)?.externalId ?? null, status: transcript.statusOf(id) })
+  if (draft) return err('draft', MESSAGES.draftTitle)
   const clean = titleOf(title)
   if (clean === '') return err('blank-title', MESSAGES.blankTitle)
   store.setTitle(id, clean, 'user')

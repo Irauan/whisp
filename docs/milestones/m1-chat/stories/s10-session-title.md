@@ -58,7 +58,7 @@ Mockup: `s10-session-title.mockup.html`, states 0 (today) to 4. The user's words
   5. "Delete" (trash, D), red. It runs the same command and confirmation as the trash button today.
 - Items of a draft: only "Discard draft" in red. A draft is a saved session that has not started, as in S3 and S8. "Discard draft" asks the same confirmation as Delete (coordinator decision, 2026-11-28).
 - Left out: "Open in" (user decision, 2026-11-28: "you can remove the open in menu"), and the items that Aether has no feature for: Share, Detach to top level, Transcript view, Output style, Continue in cloud.
-- With the menu open, a shortcut letter runs its item. Escape, a click outside and a choice close the menu. Focus goes back to the arrow.
+- With the menu open, a shortcut letter runs its item. Escape, a click outside and a choice close the menu. Only Escape and a choice put the focus back on the arrow: a click outside leaves the focus where the user clicked. After "Delete" and Cancel in the dialog, the focus goes back to the arrow. In the Rename field, Enter and Escape put the focus back on the arrow; a click outside cancels and leaves the focus where the user clicked (coordinator decision, 2026-11-28).
 - A draft shows the title "New session".
 
 The S8 rule "the header holds only the title and Delete session" changes: the title and "Delete session" stay, but in the strip and the menu (the menu item "Delete"). This is a change of an approved S8 screen, so the user approves this mockup.

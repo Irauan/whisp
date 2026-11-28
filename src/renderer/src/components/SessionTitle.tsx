@@ -2,9 +2,17 @@ import { Archive, ChevronDown, GitBranch, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { renameSession } from '../../../features/sessions/rename/rename.contract'
 import { invokeContract } from '../invoke'
+import { focusesArrowAfter, type FieldEnd } from '../title-field'
 import { Menu, MenuOption } from './Menu'
 
 const MENU_ID = 'session-menu'
+
+const ARROW = 'button[aria-label="Session options"]'
+
+/** Puts the focus on the arrow "Session options", if the open session has one. */
+export function focusSessionOptions(): void {
+  document.querySelector<HTMLButtonElement>(ARROW)?.focus()
+}
 
 /** The title that a draft shows (spec S10, "Screens"). A draft has no title from the agent. */
 export const DRAFT_TITLE = 'New session'
@@ -30,12 +38,10 @@ export function SessionTitle({
   /** Shows the text of a command that failed. */
   onProblem(message: string): void
 }) {
-  const root = useRef<HTMLDivElement>(null)
   // View state: whether the title is a text field now.
   const [renaming, setRenaming] = useState(false)
 
   const shown = draft ? DRAFT_TITLE : title
-  const arrow = () => root.current?.querySelector<HTMLButtonElement>('button[aria-label="Session options"]') ?? null
 
   const rename = () => {
     setRenaming(true)
@@ -60,7 +66,7 @@ export function SessionTitle({
   }, [draft, onDelete])
 
   return (
-    <div ref={root} className="strip-title">
+    <div className="strip-title">
       {renaming ? (
         <TitleField
           initial={title}
@@ -71,10 +77,10 @@ export function SessionTitle({
             if (!result.ok) onProblem(result.error.message)
             return true
           }}
-          onClose={() => {
+          onClose={(end) => {
             setRenaming(false)
-            // Focus goes back to the arrow, which the field replaced as the place of the keyboard.
-            queueMicrotask(() => arrow()?.focus())
+            // Enter and Escape bring the focus back to the arrow. A blur leaves it where the user clicked.
+            if (focusesArrowAfter(end)) queueMicrotask(focusSessionOptions)
           }}
         />
       ) : (
@@ -101,9 +107,9 @@ export function SessionTitle({
 
 /**
  * The text field of Rename. It starts with the title selected. `onSave` answers false when the title is
- * refused, and the field stays. The field closes itself once, by Enter, Escape or a click outside.
+ * refused, and the field stays. The field closes itself once, by Enter, Escape or a click outside (a blur cancels).
  */
-function TitleField({ initial, onSave, onClose }: { initial: string; onSave(value: string): Promise<boolean>; onClose(): void }) {
+function TitleField({ initial, onSave, onClose }: { initial: string; onSave(value: string): Promise<boolean>; onClose(end: FieldEnd): void }) {
   const field = useRef<HTMLInputElement>(null)
   const closed = useRef(false)
   const [value, setValue] = useState(initial)
@@ -114,10 +120,10 @@ function TitleField({ initial, onSave, onClose }: { initial: string; onSave(valu
     field.current?.select()
   }, [])
 
-  const close = () => {
+  const close = (end: FieldEnd) => {
     if (closed.current) return
     closed.current = true
-    onClose()
+    onClose(end)
   }
 
   const save = async () => {
@@ -126,7 +132,7 @@ function TitleField({ initial, onSave, onClose }: { initial: string; onSave(valu
       setRefused(true)
       return
     }
-    if (await onSave(value)) close()
+    if (await onSave(value)) close('saved')
     else setRefused(true)
   }
 
@@ -147,10 +153,10 @@ function TitleField({ initial, onSave, onClose }: { initial: string; onSave(valu
           void save()
         } else if (event.key === 'Escape') {
           event.preventDefault()
-          close()
+          close('escape')
         }
       }}
-      onBlur={close}
+      onBlur={() => close('blur')}
     />
   )
 }
