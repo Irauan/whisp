@@ -124,6 +124,7 @@ Each check runs with the simulated agent in CI. Checks marked "live" also run wi
 | A20 | The agent process exits during a turn | — | An error notice shows the exit code. The next message starts a new process and resumes. |
 | A21 | A person's session is idle for 30 minutes, measured with a test clock | — | Its process closes. The next message resumes the session. |
 | A22 | 7 idle sessions with open processes | — | The oldest idle process closes. An active session never closes for this limit. |
+| A23 | A started session | The user sends a first message of 10 characters or more | Claude names the session. The title strip and the sidebar show its title. A title that the user set with Rename stays. Added by the user on 2026-11-28 (S10). |
 
 ## Non-goals
 
