@@ -179,12 +179,17 @@ export async function chooseMode(page: Page, mode: Mode, check: string): Promise
   await expect(control, `${check}: the button "Mode" does not show the chosen mode.`).toHaveText(MODE_LABELS[mode])
 }
 
-/** Opens the composer of a new session with the button "New session" of the sidebar. */
+/**
+ * Opens the composer of a new session with the row "New" of the sidebar (the New page). From S11
+ * (user decision, 2026-11-28), the "+" of "Sessions" opens a menu, so the helper uses the row "New".
+ */
 export async function openNewSession(page: Page): Promise<void> {
-  const button = sidebar(page).getByRole('button', { name: 'New session', exact: true })
-  await expect(button, 'The sidebar has no button "New session".').toBeVisible()
-  await button.click()
+  const row = sidebar(page).getByRole('button', { name: 'New', exact: true })
+  await expect(row, 'The sidebar has no row "New".').toBeVisible()
+  await row.click()
+  await expect(row, 'The row "New" does not open the New page.').toHaveAttribute('aria-current', 'page')
   await expect(main(page).getByRole('textbox', { name: 'Prompt', exact: true })).toBeVisible()
+  await expect(main(page).getByRole('button', { name: 'Start session', exact: true })).toBeVisible()
 }
 
 /** Writes the prompt in the composer of a new session and starts the session. */

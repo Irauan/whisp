@@ -139,7 +139,9 @@ export const changeSchema = z.discriminatedUnion('type', [
   /** The session uses this model now, after the refusal fallback. */
   z.strictObject({ type: z.literal('model'), model: z.string() }),
   /** The session has this title now: the agent named it, or the user renamed it. */
-  z.strictObject({ type: z.literal('title'), title: z.string() })
+  z.strictObject({ type: z.literal('title'), title: z.string() }),
+  /** The unread mark of the session changed (story S11). The session window shows nothing for it. */
+  z.strictObject({ type: z.literal('unread'), unread: z.boolean() })
 ])
 
 export type Change = z.output<typeof changeSchema>

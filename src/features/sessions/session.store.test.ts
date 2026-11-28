@@ -289,3 +289,77 @@ describe('SessionStore: the cards that were open at a stop', () => {
     expect(store.interruptOpenCards()).toBe(0)
   })
 })
+
+describe('SessionStore: the folders and the unread mark (S11)', () => {
+  const session = (id: string, profileId: string, sourcePath: string, createdAt: string) => ({
+    id,
+    profileId,
+    title: 't',
+    prompt: 'p',
+    mode: 'ask' as const,
+    providerId: null,
+    sourcePath,
+    model: 'default',
+    attachments: [],
+    createdAt
+  })
+
+  it('adds the folder row of a new session once for each profile and path, in the same insert', () => {
+    const { database, store } = setup()
+    store.insert(session('n1', 'p1', 'C:\work\new', '2026-02-01'))
+    store.insert(session('n2', 'p1', 'C:\work\new', '2026-02-02'))
+    store.insert(session('n3', 'p2', 'C:\work\new', '2026-02-03'))
+    expect(database.prepare("SELECT profile_id, created_at FROM folders WHERE path = 'C:\work\new' ORDER BY profile_id").all().map((row) => ({ ...row }))).toEqual([
+      { profile_id: 'p1', created_at: '2026-02-01' },
+      { profile_id: 'p2', created_at: '2026-02-03' }
+    ])
+  })
+
+  it('adds no folder row when the insert of the session fails', () => {
+    const { database, store } = setup()
+    expect(() => store.insert(session('s1', 'p1', 'C:\work\other', '2026-02-01'))).toThrow()
+    expect(database.prepare("SELECT 1 FROM folders WHERE path = 'C:\work\other'").get()).toBeUndefined()
+  })
+
+  it('keeps the folder row when the last session of the folder goes', () => {
+    const { database, store } = setup()
+    store.insert(session('n1', 'p1', 'C:\work\new', '2026-02-01'))
+    expect(store.remove('n1')).toBe(true)
+    expect(database.prepare("SELECT 1 FROM folders WHERE path = 'C:\work\new'").get()).toBeDefined()
+  })
+
+  it('saves the unread mark, and tells whether the saved value changed', () => {
+    const { store } = setup()
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+    expect(store.setUnread('s1', true)).toBe(true)
+    expect(store.setUnread('s1', true)).toBe(false)
+    expect(store.setUnread('missing', true)).toBe(false)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set(['s1']))
+    expect(store.unreadIdsOf('p2')).toEqual(new Set())
+    expect(store.setUnread('s1', false)).toBe(true)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+  })
+
+  // The comparison follows the platform: on Windows it ignores the case and the kind of slash.
+  it.runIf(process.platform === 'win32')('gives a session the folder row of the same folder, also with another case or slash', () => {
+    const { database, store } = setup()
+    store.insert(session('w1', 'p1', 'C:\\Work\\Repo', '2026-02-01'))
+    store.insert(session('w2', 'p1', 'c:\\work\\repo', '2026-02-02'))
+    store.insert(session('w3', 'p1', 'C:/Work/Repo/', '2026-02-03'))
+    store.insert(session('w4', 'p2', 'c:\\work\\repo', '2026-02-04'))
+    expect(database.prepare('SELECT profile_id, path FROM folders WHERE lower(path) = ? ORDER BY profile_id').all('c:\\work\\repo').map((row) => ({ ...row }))).toEqual([
+      { profile_id: 'p1', path: 'C:\\Work\\Repo' },
+      { profile_id: 'p2', path: 'c:\\work\\repo' }
+    ])
+    expect(['w1', 'w2', 'w3'].map((id) => store.find(id)?.sourcePath)).toEqual(['C:\\Work\\Repo', 'C:\\Work\\Repo', 'C:\\Work\\Repo'])
+    expect(store.find('w4')?.sourcePath).toBe('c:\\work\\repo')
+    expect(store.foldersOf('p1').filter((folder) => folder.path === 'C:\\Work\\Repo')).toHaveLength(1)
+  })
+
+  it('keeps two different folders apart', () => {
+    const { database, store } = setup()
+    store.insert(session('d1', 'p1', 'C:\\Work\\One', '2026-02-01'))
+    store.insert(session('d2', 'p1', 'C:\\Work\\Two', '2026-02-02'))
+    expect(database.prepare("SELECT count(*) AS n FROM folders WHERE profile_id = 'p1' AND path IN (?, ?)").get('C:\\Work\\One', 'C:\\Work\\Two')).toEqual({ n: 2 })
+  })
+})
