@@ -106,6 +106,25 @@ export class Transcript {
     return this.cards.get(sessionId)?.length ?? 0
   }
 
+  /** The IDs of the cards that wait for the user, in the order of arrival. */
+  openCardIds(sessionId: string): string[] {
+    return (this.cards.get(sessionId) ?? []).map((card) => card.id)
+  }
+
+  /** The revision of the last event of the session, or 0 when it had none since the start. */
+  revisionOf(sessionId: string): number {
+    return this.revisions.get(sessionId) ?? 0
+  }
+
+  /**
+   * Saves the unread mark of the session and tells the window. It acts only when the saved value
+   * changes, and never for a session that was forgotten (story S11).
+   */
+  setUnread(sessionId: string, unread: boolean): void {
+    if (this.gone.has(sessionId) || !this.store.setUnread(sessionId, unread)) return
+    this.emit(sessionId, { type: 'unread', unread })
+  }
+
   /** The open card of a request, or undefined when it is closed. */
   findCard(sessionId: string, requestId: string): OpenCard | undefined {
     return this.cards.get(sessionId)?.find((card) => card.id === requestId)

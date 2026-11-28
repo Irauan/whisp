@@ -68,6 +68,9 @@ export function applyChange(view: SessionSnapshot, change: Change): SessionSnaps
     case 'title':
       // The title of the agent, or of a rename, shows at once. The `model` and `title` events change the session row.
       return { ...view, session: { ...view.session, title: change.title } }
+    case 'unread':
+      // The unread mark belongs to the sidebar. The window only moves its revision on.
+      return view
   }
 }
 

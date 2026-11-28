@@ -289,3 +289,54 @@ describe('SessionStore: the cards that were open at a stop', () => {
     expect(store.interruptOpenCards()).toBe(0)
   })
 })
+
+describe('SessionStore: the folders and the unread mark (S11)', () => {
+  const session = (id: string, profileId: string, sourcePath: string, createdAt: string) => ({
+    id,
+    profileId,
+    title: 't',
+    prompt: 'p',
+    mode: 'ask' as const,
+    providerId: null,
+    sourcePath,
+    model: 'default',
+    attachments: [],
+    createdAt
+  })
+
+  it('adds the folder row of a new session once for each profile and path, in the same insert', () => {
+    const { database, store } = setup()
+    store.insert(session('n1', 'p1', 'C:\work\new', '2026-02-01'))
+    store.insert(session('n2', 'p1', 'C:\work\new', '2026-02-02'))
+    store.insert(session('n3', 'p2', 'C:\work\new', '2026-02-03'))
+    expect(database.prepare("SELECT profile_id, created_at FROM folders WHERE path = 'C:\work\new' ORDER BY profile_id").all().map((row) => ({ ...row }))).toEqual([
+      { profile_id: 'p1', created_at: '2026-02-01' },
+      { profile_id: 'p2', created_at: '2026-02-03' }
+    ])
+  })
+
+  it('adds no folder row when the insert of the session fails', () => {
+    const { database, store } = setup()
+    expect(() => store.insert(session('s1', 'p1', 'C:\work\other', '2026-02-01'))).toThrow()
+    expect(database.prepare("SELECT 1 FROM folders WHERE path = 'C:\work\other'").get()).toBeUndefined()
+  })
+
+  it('keeps the folder row when the last session of the folder goes', () => {
+    const { database, store } = setup()
+    store.insert(session('n1', 'p1', 'C:\work\new', '2026-02-01'))
+    expect(store.remove('n1')).toBe(true)
+    expect(database.prepare("SELECT 1 FROM folders WHERE path = 'C:\work\new'").get()).toBeDefined()
+  })
+
+  it('saves the unread mark, and tells whether the saved value changed', () => {
+    const { store } = setup()
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+    expect(store.setUnread('s1', true)).toBe(true)
+    expect(store.setUnread('s1', true)).toBe(false)
+    expect(store.setUnread('missing', true)).toBe(false)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set(['s1']))
+    expect(store.unreadIdsOf('p2')).toEqual(new Set())
+    expect(store.setUnread('s1', false)).toBe(true)
+    expect(store.unreadIdsOf('p1')).toEqual(new Set())
+  })
+})

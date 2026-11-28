@@ -28,7 +28,12 @@ export class ImportStore {
     this.database.prepare('INSERT INTO app_state (key, value) VALUES (?, ?)').run(IMPORTED, at)
   }
 
+  /** Saves the session row, and the folder row of its folder when the profile has none (story S11). */
   insertDraft(draft: DraftRow): void {
+    this.database.transaction(() => this.insert(draft))
+  }
+
+  private insert(draft: DraftRow): void {
     this.database
       .prepare(
         `INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, attachments, created_at)
@@ -45,5 +50,12 @@ export class ImportStore {
         JSON.stringify(draft.attachments),
         draft.createdAt
       )
+    // The folder keeps the time of its oldest session, as migration 006 fills it.
+    this.database
+      .prepare(
+        `INSERT INTO folders (id, profile_id, path, created_at) VALUES (lower(hex(randomblob(16))), ?, ?, ?)
+         ON CONFLICT (profile_id, path) DO UPDATE SET created_at = min(created_at, excluded.created_at)`
+      )
+      .run(draft.profileId, draft.sourcePath, draft.createdAt)
   }
 }

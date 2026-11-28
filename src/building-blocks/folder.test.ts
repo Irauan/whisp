@@ -2,7 +2,20 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { absoluteIn, isExistingFolder, isInsideFolder } from './folder'
+import { absoluteIn, isExistingFolder, isInsideFolder, isSameFolder } from './folder'
+
+describe('isSameFolder', () => {
+  it('is true for the same folder with another case, slash or trailing separator', () => {
+    expect(isSameFolder('C:\\Work\\Repo-A', 'c:/work/repo-a/')).toBe(true)
+    expect(isSameFolder('C:\\work\\repo-a', 'C:\\work\\repo-a')).toBe(true)
+  })
+
+  it('is false for another folder, a parent and a child', () => {
+    expect(isSameFolder('C:\\work\\repo-a', 'C:\\work\\repo-b')).toBe(false)
+    expect(isSameFolder('C:\\work\\repo-a', 'C:\\work')).toBe(false)
+    expect(isSameFolder('C:\\work\\repo-a', 'C:\\work\\repo-a\\src')).toBe(false)
+  })
+})
 
 describe('isInsideFolder', () => {
   it('is true for the folder itself and for a path under it', () => {

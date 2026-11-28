@@ -10,6 +10,8 @@ export function HomePage(props: {
   sessions: SessionView[]
   newSessionMode: Mode
   githubLogin: string | null
+  /** The folder that the composer starts with, from "New session in <folder>". Without it, the folder of the newest session. */
+  folder?: string
   /** Creates the session. It returns the text of an error, or null after a success. */
   onStart(prompt: string, settings: SessionSettings): Promise<string | null>
 }) {
@@ -20,6 +22,7 @@ export function HomePage(props: {
         sessions={props.sessions}
         newSessionMode={props.newSessionMode}
         githubLogin={props.githubLogin}
+        presetFolder={props.folder}
         onSubmit={props.onStart}
       />
     </div>

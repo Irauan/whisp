@@ -75,26 +75,64 @@ export class SessionStore {
     return this.database.prepare('SELECT 1 FROM profiles WHERE id = ?').get(profileId) !== undefined
   }
 
-  /** Saves a session. `startedBy` is `person` unless an automation creates the session. */
+  /**
+   * Saves a session. `startedBy` is `person` unless an automation creates the session. A session in a
+   * folder with no row adds the row in the same transaction (story S11, "Data"). The folder is joined by
+   * the profile and the path, so the row is the path as the session has it.
+   */
   insert(session: Session, startedBy: Starter = 'person'): void {
-    this.database
+    this.database.transaction(() => {
+      this.database
+        .prepare(
+          `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at, started_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          session.id,
+          session.profileId,
+          session.providerId,
+          session.title,
+          session.prompt,
+          session.mode,
+          session.sourcePath,
+          session.model,
+          JSON.stringify(session.attachments),
+          session.createdAt,
+          starterSchema.parse(startedBy)
+        )
+      this.database
+        .prepare("INSERT OR IGNORE INTO folders (id, profile_id, path, created_at) VALUES (lower(hex(randomblob(16))), ?, ?, ?)")
+        .run(session.profileId, session.sourcePath, session.createdAt)
+    })
+  }
+
+  /**
+   * The folders of one profile for the sidebar, with the newest activity first: the newest session of the
+   * folder, or the time that the folder was added. Two folders with one time keep the order of insertion.
+   */
+  foldersOf(profileId: string): { id: string; path: string; collapsed: boolean }[] {
+    return this.database
       .prepare(
-        `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at, started_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `SELECT f.id, f.path, f.collapsed FROM folders f WHERE f.profile_id = ?
+          ORDER BY coalesce((SELECT max(s.created_at) FROM sessions s WHERE s.profile_id = f.profile_id AND s.source_path = f.path), f.created_at) DESC, f.rowid DESC`
       )
-      .run(
-        session.id,
-        session.profileId,
-        session.providerId,
-        session.title,
-        session.prompt,
-        session.mode,
-        session.sourcePath,
-        session.model,
-        JSON.stringify(session.attachments),
-        session.createdAt,
-        starterSchema.parse(startedBy)
-      )
+      .all(profileId)
+      .map((row) => ({ id: String(row.id), path: String(row.path), collapsed: row.collapsed === 1 }))
+  }
+
+  /** The IDs of the sessions of one profile that have the unread mark. */
+  unreadIdsOf(profileId: string): Set<string> {
+    return new Set(
+      this.database
+        .prepare('SELECT id FROM sessions WHERE profile_id = ? AND unread = 1')
+        .all(profileId)
+        .map((row) => String(row.id))
+    )
+  }
+
+  /** Saves the unread mark. Returns true when the saved value changed: false for an unknown session or the same value. */
+  setUnread(id: string, unread: boolean): boolean {
+    return this.database.prepare('UPDATE sessions SET unread = ? WHERE id = ? AND unread <> ?').run(unread ? 1 : 0, id, unread ? 1 : 0).changes > 0
   }
 
   /** Who started the session, or null when it does not exist. An unknown value in the row is a defect, so it throws. */

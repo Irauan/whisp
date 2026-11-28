@@ -39,6 +39,26 @@
     "sha256": "1863b9f1763a12aead8b57cda717e694731ca2a90c6976fb9b121dee8fa89f44",
     "story": "m1-chat/s10"
   },
+  "tests/acceptance/m1-chat/s11/fixture.ts": {
+    "sha256": "c699dfd7348efc96431802c100a94b5b00c92f2c3f7a770d5b199c63ee5fd3f4",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/folders.spec.ts": {
+    "sha256": "a019d9db664c31a62c5d029d9eb3f85027808e93114b37cd4bac951d2892c39f",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/groups.spec.ts": {
+    "sha256": "4eee69861ac665cb41c31f311097b52754160aff33138dd86524d22a49a8965b",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/status.spec.ts": {
+    "sha256": "5b9ccd5837f1ad14f0534807b85faa501320f4058a2e80bb11cddbfe97bdccb7",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/viewing.spec.ts": {
+    "sha256": "1ebc929753b585817cb38df8e97b4957e814f71df030f460299e82dd07e1fc24",
+    "story": "m1-chat/s11"
+  },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
     "sha256": "cdf6466be56ad240410022591f71b0cf0220013d848092b4e689ecf682f5a32c",
     "story": "m1-chat/s2"
@@ -52,7 +72,7 @@
     "story": "m1-chat/s2"
   },
   "tests/acceptance/m1-chat/s3/fixture.ts": {
-    "sha256": "3373e3f9bf90249a2d8ca8afbe6effbb5e6752ecb764b0f64a51a319fe962177",
+    "sha256": "f8e27b660d2846cf077b364e9462b949632b20fad9fb6f9a55acc7d1ac679dd6",
     "story": "m1-chat/s3"
   },
   "tests/acceptance/m1-chat/s3/new-session-mode.spec.ts": {
@@ -230,6 +250,18 @@
   "tests/architecture/m1-chat-s10-title-agent.test.ts": {
     "sha256": "da9fb69b550679c96ddc2382b74b3608de8d55f50af172ddda0659faa8d0123e",
     "story": "m1-chat/s10"
+  },
+  "tests/architecture/m1-chat-s11-folders.test.ts": {
+    "sha256": "a51c57fa678c76eefdf3f7b3565a80871b704eaa1a5f4d7f00783b720ab95a4a",
+    "story": "m1-chat/s11"
+  },
+  "tests/architecture/m1-chat-s11-sidebar.test.ts": {
+    "sha256": "06351ef79f9f58a301fa8cee77d95682777e18494372ef06d1b9cee640ea667f",
+    "story": "m1-chat/s11"
+  },
+  "tests/architecture/m1-chat-s11-unread.test.ts": {
+    "sha256": "3d5edfc472c4fa78e373a5be2a3b2b65471dfd0269ee7bd3f582799c0a88d3f1",
+    "story": "m1-chat/s11"
   },
   "tests/architecture/m1-chat-s5-permission-queue.test.ts": {
     "sha256": "873505c076b396bbdef2a6f2a5cb3531a9a0a7c0b346f5f5a4b8d4507acfb671",
