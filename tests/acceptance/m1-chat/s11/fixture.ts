@@ -7,6 +7,9 @@
 // `agents.json`, and the check that the real data folder (`%APPDATA%\aether`) does not change. The
 // profiles and their drafts come from an old `workspace.json`, in plain folders under the workspace
 // directory, so Aether asks no trust question (S6). All data is fake. The product has no test hook.
+// The groups of these drafts come from the import of the old file into a new database: the tests
+// expect one folder row for each folder of the imported sessions, as migration 006 fills `folders`
+// from the sessions of an old database (spec, "Data").
 //
 // The simulated agent is used as it is (its files are locked). A test gives the steps of a turn with
 // the scenario `steps`. A gate holds a turn, so that the test can move the view first. A gate stays
@@ -32,8 +35,10 @@
 // - Status icon: the icon of the state is an `svg` in the row button. The tests read the class that
 //   `lucide-react` gives each icon: `lucide-message-square` (the chat icon) and `lucide-hand`.
 //   "New answer" colors the chat icon `--unread` (#4493f8); "Needs your answer" colors the hand
-//   `--attention` (#d29922). "Working" runs an animation in the row (`getAnimations`), and none with
-//   `prefers-reduced-motion: reduce`.
+//   `--attention` (#d29922). The tests read the computed CSS `color` of the `svg` (lucide draws with
+//   `stroke="currentColor"`), so the color must come from CSS `color`, not from the `color` prop of
+//   the icon, which sets `stroke`. "Working" runs an animation in the row (`getAnimations`), and none
+//   with `prefers-reduced-motion: reduce`.
 // - Group toggle: one button for each folder, named exactly the folder name, with `aria-expanded`.
 //   A click, Enter or Space collapses or expands the group. The session rows of a collapsed group
 //   are hidden.

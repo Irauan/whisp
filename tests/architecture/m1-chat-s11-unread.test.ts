@@ -184,8 +184,8 @@ describe('S11-7 (unit): the rule of the unread mark at a turn end', () => {
       const check = 'S11-7'
       const u = await startUnit()
       const a = await createSession(u, 'Fix the login page')
-      await setViewing(u, a, check)
       windowFocus(u, false, check)
+      await setViewing(u, a, check)
       await u.control.scenario('steps', reply())
       await runTurn(u, a, check)
       expect(await unreadOf(u, a, check), `${check}: a turn end without the focus must set the mark.`).toBe(true)
