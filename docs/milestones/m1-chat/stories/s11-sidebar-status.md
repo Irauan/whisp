@@ -38,7 +38,7 @@ Later the same day: "save the collapsed groups too", and "I think we need the gr
 8. A click on the toggle button, or Enter or Space on it, collapses or expands the group. The state is saved in `folders.collapsed`. The collapse state lives in `App`, so it does not reset when the sidebar hides.
 9. A collapsed group expands when it gets a new session, or when the user opens one of its sessions (for example with Back).
 10. A collapsed group shows the strongest status of its sessions at its right: the hand, then the blue icon. Working does not show on the group.
-11. "+" of a group opens the New page with that folder chosen in the composer. It works also when the New page is open already, and for a second group: the composer takes the new folder (the `key` of `HomePage` includes the folder, or the composer reacts to the preset). "New session" of the "Sessions" heading menu keeps the rule of today: the folder of the newest session.
+11. "+" of a group opens the New page with that folder chosen in the composer. It works also when the New page is open already, and for a second group: the composer takes the new folder (the `key` of `HomePage` includes the folder, or the composer reacts to the preset). The "New" row of the sidebar keeps the rule of today: the folder of the newest session.
 12. The "+" of the "Sessions" heading opens a menu in the GitHub style, like the Copilot app:
    - "Start session in" (muted caption), then one row for each folder of the profile, with a folder icon. A row does the same as the "+" of that group.
    - Separator.
