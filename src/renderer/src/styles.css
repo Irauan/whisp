@@ -311,9 +311,26 @@ button:disabled {
   padding-left: 36px;
 }
 
-/* The group row: a container with the toggle and the "+". The icon is a folder, and a chevron on hover or focus. */
+/*
+ * The group row: a container with the toggle and the "+". The icon is a folder, and a chevron on hover or focus.
+ * The "+" is in the row flow, so the name shrinks with an ellipsis, the state icon of a collapsed group stays
+ * visible next to the "+", and nothing overlaps.
+ */
 .group-row {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  border-radius: 7px;
+}
+
+.group-row:hover {
+  background: var(--hover);
+}
+
+.group-toggle {
+  flex: 1;
+  min-width: 0;
 }
 
 .group-toggle .group-chevron {
@@ -331,9 +348,7 @@ button:disabled {
 }
 
 .group-plus {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+  flex: none;
   display: grid;
   place-items: center;
   width: 26px;

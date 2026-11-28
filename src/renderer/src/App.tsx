@@ -24,7 +24,7 @@ import { setViewing } from '../../features/sessions/set-viewing/set-viewing.cont
 import type { SessionSettings } from '../../shared/model'
 import { invokeContract } from './invoke'
 import { useNavigation, type View } from './navigation'
-import { applySidebarEvent } from './sidebar-state'
+import { applySidebarEvent, replaySidebarEvents } from './sidebar-state'
 import type { SessionEvent } from './session-view'
 import { useProfiles, type SessionView } from './useProfiles'
 import { useQuestions } from './useQuestions'
@@ -71,11 +71,12 @@ export function App() {
   const sessionList = state?.sessions ?? null
   useLayoutEffect(() => {
     if (sessionList === null) return
-    let items: ReadonlyMap<string, SessionView> = new Map(sessionList.map((session) => [session.id, session]))
-    for (const event of recentEvents.current) items = applySidebarEvent(items, event) ?? items
-    liveRef.current = { source: sessionList, items }
+    const replayed = replaySidebarEvents(new Map(sessionList.map((session) => [session.id, session])), recentEvents.current)
+    liveRef.current = { source: sessionList, items: replayed.items }
     setLive(liveRef.current)
-  }, [sessionList])
+    // A gap in the replay loads the list again, as a gap in the live path does.
+    if (replayed.gap) void reload()
+  }, [sessionList, reload])
   useEffect(
     () =>
       window.aether.subscribe(SESSIONS_CHANGED, (payload) => {

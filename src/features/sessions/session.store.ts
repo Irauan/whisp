@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Database } from '../../building-blocks/database'
+import { isSameFolder } from '../../building-blocks/folder'
 import type { Mode } from '../../building-blocks/mode'
 import { entrySchema, isOpenTool, type EntryView } from './entry'
 import { attachmentSchema, sessionSchema, starterSchema, titleSourceSchema, type Session, type Starter, type TitleSource } from './session'
@@ -78,10 +79,18 @@ export class SessionStore {
   /**
    * Saves a session. `startedBy` is `person` unless an automation creates the session. A session in a
    * folder with no row adds the row in the same transaction (story S11, "Data"). The folder is joined by
-   * the profile and the path, so the row is the path as the session has it.
+   * the profile and the path. When the profile has a row for the same folder (on Windows the case and the
+   * kind of slash do not count), the session takes the path of that row, so the sidebar, which compares the
+   * text, puts the session in that folder and no second row appears.
    */
-  insert(session: Session, startedBy: Starter = 'person'): void {
+  insert(input: Session, startedBy: Starter = 'person'): void {
     this.database.transaction(() => {
+      const known = this.database
+        .prepare('SELECT path FROM folders WHERE profile_id = ?')
+        .all(input.profileId)
+        .map((row) => String(row.path))
+        .find((path) => isSameFolder(path, input.sourcePath))
+      const session = known === undefined ? input : { ...input, sourcePath: known }
       this.database
         .prepare(
           `INSERT INTO sessions (id, profile_id, provider_id, title, prompt, mode, source_path, model, attachments, created_at, started_by)

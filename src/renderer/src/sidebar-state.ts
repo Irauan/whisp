@@ -54,6 +54,24 @@ export function applySidebarEvent<Item extends SidebarItem>(items: ReadonlyMap<s
   return next
 }
 
+/**
+ * Replays the latest events on a new list, oldest first. An event that the list already holds changes nothing.
+ * A gap stops the replay: `gap` is true, and the caller loads the list again, as the live path does. The
+ * items are those that the events before the gap give.
+ */
+export function replaySidebarEvents<Item extends SidebarItem>(
+  items: ReadonlyMap<string, Item>,
+  events: readonly SessionEvent[]
+): { items: ReadonlyMap<string, Item>; gap: boolean } {
+  let current = items
+  for (const event of events) {
+    const next = applySidebarEvent(current, event)
+    if (next === null) return { items: current, gap: true }
+    current = next
+  }
+  return { items: current, gap: false }
+}
+
 function changed<Item extends SidebarItem>(item: Item, change: SessionEvent['change']): Item {
   switch (change.type) {
     case 'status':

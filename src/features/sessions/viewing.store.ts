@@ -6,6 +6,7 @@
  *
  * A session is seen when it is the viewed session and the window has the focus. At each change that
  * makes a session seen, `onSeen` runs with its ID, so that the composition root clears its unread mark.
+ * An error of `onSeen` is logged, and it does not leave the class.
  */
 export class Viewing {
   private viewed: string | null = null
@@ -39,7 +40,16 @@ export class Viewing {
     this.focused = false
   }
 
+  /**
+   * `onSeen` writes to the database. It runs inside the focus event of the window, so a failure is logged
+   * and stops here: an exception must not reach the main process.
+   */
   private checkSeen(): void {
-    if (this.focused && this.viewed !== null) this.onSeen(this.viewed)
+    if (!this.focused || this.viewed === null) return
+    try {
+      this.onSeen(this.viewed)
+    } catch (error) {
+      console.error('Aether could not clear the unread mark of a session.', error instanceof Error ? error.message : error)
+    }
   }
 }

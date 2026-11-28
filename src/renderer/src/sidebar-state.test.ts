@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applySidebarEvent, groupState, sessionState, type SidebarItem } from './sidebar-state'
+import { applySidebarEvent, groupState, replaySidebarEvents, sessionState, type SidebarItem } from './sidebar-state'
 
 const item = (overrides: Partial<SidebarItem> = {}): SidebarItem => ({ id: 's1', status: 'idle', openCardIds: [], unread: false, revision: 3, ...overrides })
 const mapOf = (...items: SidebarItem[]) => new Map(items.map((entry) => [entry.id, entry]))
@@ -46,5 +46,27 @@ describe('applySidebarEvent', () => {
     const items = mapOf(item())
     applySidebarEvent(items, { sessionId: 's1', revision: 4, change: { type: 'unread', unread: true } })
     expect(items.get('s1')).toEqual(item())
+  })
+})
+
+describe('replaySidebarEvents', () => {
+  const status = (revision: number, value: 'working' | 'idle', sessionId = 's1') => ({ sessionId, revision, change: { type: 'status' as const, status: value } })
+
+  it('replays the newer events in order and skips those that the list holds', () => {
+    const replayed = replaySidebarEvents(mapOf(item()), [status(3, 'working'), status(4, 'working'), status(5, 'idle'), status(6, 'working')])
+    expect(replayed.gap).toBe(false)
+    expect(replayed.items.get('s1')).toEqual(item({ revision: 6, status: 'working' }))
+  })
+
+  it('reports a gap, and stops at it, so the caller loads the list again', () => {
+    const replayed = replaySidebarEvents(mapOf(item()), [status(4, 'working'), status(6, 'idle')])
+    expect(replayed.gap).toBe(true)
+    expect(replayed.items.get('s1')).toEqual(item({ revision: 4, status: 'working' }))
+  })
+
+  it('reports no gap for no events, or for events of a session that the list does not hold', () => {
+    const items = mapOf(item())
+    expect(replaySidebarEvents(items, [])).toEqual({ items, gap: false })
+    expect(replaySidebarEvents(items, [status(9, 'working', 'other')])).toEqual({ items, gap: false })
   })
 })
