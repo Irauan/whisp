@@ -1,4 +1,4 @@
-import { Check, ChevronRight } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export function Menu(props: {
@@ -8,13 +8,17 @@ export function Menu(props: {
   disabled?: boolean
   /** Opens above the button. */
   above?: boolean
+  /** The class of the button. The default is the button of the bar below the composer of a new session. */
+  className?: string
+  /** An extra class of the popover, for a menu that has its own look. */
+  menuClass?: string
   children: ReactNode
 }) {
   return (
     <>
       <button
         type="button"
-        className="bar-button"
+        className={props.className ?? 'bar-button'}
         aria-label={props.label}
         title={props.label}
         popoverTarget={props.id}
@@ -24,7 +28,7 @@ export function Menu(props: {
       </button>
       <div
         id={props.id}
-        className={props.above ? 'popover above' : 'popover'}
+        className={[props.above ? 'popover above' : 'popover', props.menuClass].filter(Boolean).join(' ')}
         popover="auto"
         role="group"
         aria-label={props.label}
@@ -45,13 +49,17 @@ export function MenuOption(props: {
   hint?: string
   checked?: boolean
   disabled?: boolean
+  /** The row of an action that deletes: red, with its icon. */
+  danger?: boolean
   onSelect(): void
 }) {
   return (
     <button
       type="button"
-      className="option"
+      className={props.danger ? 'option danger' : 'option'}
       aria-pressed={props.checked}
+      // The text and the tag join without a space, so a screen reader needs the full name.
+      aria-label={props.tag ? `${props.title}, ${props.tag.toLowerCase()}` : undefined}
       disabled={props.disabled}
       onClick={props.onSelect}
       popoverTarget={props.menu}
@@ -65,27 +73,5 @@ export function MenuOption(props: {
       {props.hint && <span className="muted">{props.hint}</span>}
       {props.tag && <span className="tag">{props.tag}</span>}
     </button>
-  )
-}
-
-export function Submenu(props: { id: string; label: string; value: string; children: ReactNode }) {
-  return (
-    <>
-      <button type="button" className="option" popoverTarget={props.id}>
-        <span className="option-check" />
-        <span className="option-text">{props.label}</span>
-        <span className="muted">{props.value}</span>
-        <ChevronRight size={16} />
-      </button>
-      <div
-        id={props.id}
-        className="popover submenu"
-        popover="auto"
-        role="group"
-        aria-label={props.label}
-      >
-        {props.children}
-      </div>
-    </>
   )
 }

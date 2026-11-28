@@ -17,6 +17,9 @@
 //   - A report that no wait took stays kept. A later wait for the same gate takes it, even when
 //     it belongs to an earlier turn. Take each report that a turn makes, or use a gate name for
 //     each turn, so that a later wait does not meet a stale report.
+// Each agent process reports its process ID, its folder, its environment and its arguments when it connects.
+// `pids`, `environments` and `processMessages` keep them, so a test can tell the processes apart.
+// `children` keeps each child process that an agent started with the step 'child', and its parent.
 // The protocol is described at the top of `agent.mjs`.
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server, type Socket } from 'node:net'
@@ -35,19 +38,73 @@ export interface AcpMessage {
 
 export type ScenarioName = keyof typeof scenarios
 
+/** The start of one agent process: its process ID, its folder, its environment and its arguments. */
+export interface AgentEnvironment {
+  pid: number
+  cwd: string
+  env: Record<string, string>
+  /** The arguments after the script of the agent: the pipe name, then any argument that the client added. */
+  args: string[]
+}
+
+/** An ACP message and the process ID of the agent that received it. */
+export interface ProcessMessage {
+  pid: number
+  message: AcpMessage
+}
+
+/** A child process that an agent started with the step 'child' (story S9 of m1-chat). */
+export interface ChildProcessReport {
+  /** The process ID of the child. */
+  pid: number
+  /** The process ID of the agent that started it. */
+  parent: number
+}
+
 /** What the agent reports on the control pipe. */
 export type AgentEvent =
   | { type: 'hello'; pid: number }
+  | ({ type: 'environment' } & AgentEnvironment)
   | { type: 'message'; message: AcpMessage }
   | { type: 'gate'; name: string; state: 'waiting' | 'passed' }
   | { type: 'exit'; code: number }
-  /** The control server adds this when the agent closes its pipe. */
-  | { type: 'closed' }
+  /** A step started a child process that outlives the agent. `parent` is the process ID of the agent. */
+  | ({ type: 'child' } & ChildProcessReport)
+  /** The control server adds this when the agent closes its pipe. The pid is absent when no hello came. */
+  | { type: 'closed'; pid?: number }
+  /** The client answered the permission request of the tool call `id` (`requests.mjs`). */
+  | ({ type: 'permission' } & PermissionAnswer)
+  /** The client answered the elicitation `id` (`requests.mjs`). */
+  | ({ type: 'elicitation' } & ElicitationAnswer)
+
+/** The error of an answer: the JSON-RPC error that the client sent. */
+export interface AnswerError {
+  code: number | null
+  message: string
+}
+
+/** What the client answered to one permission request: the ACP `outcome`, or an error. */
+export interface PermissionAnswer {
+  /** The toolCallId of the request. */
+  id: string
+  outcome?: { outcome: 'selected'; optionId: string } | { outcome: 'cancelled' }
+  error?: AnswerError
+}
+
+/** What the client answered to one elicitation: the ACP response, or an error. */
+export interface ElicitationAnswer {
+  /** The id of the step `elicit`. */
+  id: string
+  response?: { action: 'accept'; content?: Record<string, unknown> } | { action: 'decline' } | { action: 'cancel' }
+  error?: AnswerError
+}
 
 interface Connection {
   socket: Socket
   /** True after the agent said hello and got its start message. */
   started: boolean
+  /** The process ID from the hello of the agent. */
+  pid?: number
   acks: Map<number, { resolve(): void; reject(error: Error): void }>
 }
 
@@ -76,6 +133,18 @@ class Inbox {
 export class ControlServer {
   /** Every ACP message that agents received, in the order of their reports. */
   readonly messages: AcpMessage[] = []
+  /** The same messages, each with the process ID of the agent that received it. */
+  readonly processMessages: ProcessMessage[] = []
+  /** The process ID of each agent that connected, in the order of their hello. */
+  readonly pids: number[] = []
+  /** The start of each agent process, in the order of their reports. */
+  readonly environments: AgentEnvironment[] = []
+  /** Each child process that an agent started with the step 'child', in the order of their reports. */
+  readonly children: ChildProcessReport[] = []
+  /** Each answer to a permission request, in the order of the reports (`requests.mjs`). */
+  readonly permissionAnswers: PermissionAnswer[] = []
+  /** Each answer to an elicitation, in the order of the reports (`requests.mjs`). */
+  readonly elicitationAnswers: ElicitationAnswer[] = []
 
   private chosen: { name: string; options: Record<string, unknown> } = { name: 'text', options: {} }
   private readonly opened = new Set<string>()
@@ -141,19 +210,59 @@ export class ControlServer {
     await this.inbox.take((e) => e.type === 'gate' && e.name === name && e.state === 'passed')
   }
 
-  /** Waits until an agent connects to the pipe. Use it to see a new process start. */
-  async waitForAgent(): Promise<void> {
-    await this.inbox.take((e) => e.type === 'hello')
+  /** Waits until an agent connects to the pipe. Use it to see a new process start. Returns its process ID. */
+  async waitForAgent(): Promise<number> {
+    const event = await this.inbox.take((e) => e.type === 'hello')
+    return (event as Extract<AgentEvent, { type: 'hello' }>).pid
   }
 
-  /** Waits until an agent closes its pipe, for example after its process ends. */
-  async waitForClose(): Promise<void> {
-    await this.inbox.take((e) => e.type === 'closed')
+  /** Waits for the next start report of an agent process: its process ID, its folder, its environment and its arguments. */
+  async waitForEnvironment(): Promise<AgentEnvironment> {
+    const { type: _type, ...start } = (await this.inbox.take((e) => e.type === 'environment')) as Extract<
+      AgentEvent,
+      { type: 'environment' }
+    >
+    return start
+  }
+
+  /** Waits until an agent closes its pipe, for example after its process ends. Returns its process ID, if it said hello. */
+  async waitForClose(): Promise<number | undefined> {
+    const event = await this.inbox.take((e) => e.type === 'closed')
+    return (event as Extract<AgentEvent, { type: 'closed' }>).pid
+  }
+
+  /** Waits for the next report of a child process that an agent started (step 'child'). */
+  async waitForChild(): Promise<ChildProcessReport> {
+    const event = (await this.inbox.take((e) => e.type === 'child')) as Extract<AgentEvent, { type: 'child' }>
+    return { pid: event.pid, parent: event.parent }
+  }
+
+  /** Waits for the answer of the client to the permission request of the tool call `id`. */
+  async waitForPermission(id: string): Promise<PermissionAnswer> {
+    const { type: _type, ...answer } = (await this.inbox.take((e) => e.type === 'permission' && e.id === id)) as Extract<
+      AgentEvent,
+      { type: 'permission' }
+    >
+    return answer
+  }
+
+  /** Waits for the answer of the client to the elicitation `id`. */
+  async waitForElicitation(id: string): Promise<ElicitationAnswer> {
+    const { type: _type, ...answer } = (await this.inbox.take((e) => e.type === 'elicitation' && e.id === id)) as Extract<
+      AgentEvent,
+      { type: 'elicitation' }
+    >
+    return answer
   }
 
   /** The ACP messages of one method that agents received so far. */
   received(method: string): AcpMessage[] {
     return this.messages.filter((message) => message.method === method)
+  }
+
+  /** The ACP messages of one method that agents received so far, each with the process ID of its agent. */
+  receivedBy(method: string): ProcessMessage[] {
+    return this.processMessages.filter(({ message }) => message.method === method)
   }
 
   async close(): Promise<void> {
@@ -180,7 +289,7 @@ export class ControlServer {
       this.connections.delete(connection)
       for (const ack of connection.acks.values()) ack.resolve()
       connection.acks.clear()
-      this.inbox.push({ type: 'closed' })
+      this.inbox.push(connection.pid === undefined ? { type: 'closed' } : { type: 'closed', pid: connection.pid })
     })
   }
 
@@ -195,9 +304,25 @@ export class ControlServer {
     if (event.type === 'hello') {
       // The agent handles no request before this message, so it has the scenario in time.
       connection.started = true
+      connection.pid = event.pid
+      this.pids.push(event.pid)
       this.write(connection, { type: 'start', scenario: this.chosen, opened: [...this.opened] })
     }
-    if (event.type === 'message') this.messages.push(event.message)
+    if (event.type === 'environment') this.environments.push({ pid: event.pid, cwd: event.cwd, env: event.env, args: event.args })
+    if (event.type === 'child') this.children.push({ pid: event.pid, parent: event.parent })
+    if (event.type === 'permission') {
+      const { type: _type, ...answer } = event
+      this.permissionAnswers.push(answer)
+    }
+    if (event.type === 'elicitation') {
+      const { type: _type, ...answer } = event
+      this.elicitationAnswers.push(answer)
+    }
+    if (event.type === 'message') {
+      this.messages.push(event.message)
+      // A message comes after the hello of its agent, so the pid is known. A bare test socket may skip the hello.
+      this.processMessages.push({ pid: connection.pid ?? -1, message: event.message })
+    }
     this.inbox.push(event)
   }
 

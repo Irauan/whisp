@@ -20,26 +20,23 @@ import { flushSync } from 'react-dom'
 import type { FolderInfo } from '../../../shared/bridge'
 import {
   baseName,
-  labelOf,
   MODELS,
-  MODES,
   parseRequest,
-  PERMISSIONS,
   type Attachment,
-  type Session,
   type SessionSettings
 } from '../../../shared/model'
 import { findMention, insertTrigger, removeMention, type Edit, type Trigger } from '../mention'
 import { useSuggestions } from '../useSuggestions'
+import type { Mode, SessionView } from '../useProfiles'
 import { AttachmentIcon } from './AttachmentIcon'
-import { Menu, MenuOption, Submenu } from './Menu'
+import { Menu, MenuOption } from './Menu'
+import { ModeMenu } from './ModeMenu'
+import { ModelMenu } from './ModelMenu'
 
 const FIRST_SETTINGS: SessionSettings = {
   folder: '',
-  mode: 'interactive',
-  permissions: 'ask',
+  mode: 'ask',
   model: 'default',
-  checkout: 'worktree',
   attachments: []
 }
 
@@ -53,8 +50,7 @@ const MAX_RECENT_FOLDERS = 6
 
 const REFERENCES: { trigger: Trigger; title: string; icon: LucideIcon }[] = [
   { trigger: '@', title: 'Repository file or folder…', icon: FolderGit2 },
-  { trigger: '#', title: 'Issue or pull request…', icon: CircleDot },
-  { trigger: '&', title: 'Session…', icon: MessageSquare }
+  { trigger: '#', title: 'Issue or pull request…', icon: CircleDot }
 ]
 
 /** These attachments belong to the repository of the session folder. */
@@ -66,22 +62,32 @@ const REPOSITORY_KINDS: Attachment['kind'][] = [
 ]
 
 interface Props {
-  /** The sessions of the account, oldest first. They give the recent folders and settings. */
-  sessions: Session[]
+  /** The sessions of the profile, oldest first. They give the recent folders and the model. */
+  sessions: SessionView[]
+  /** The mode that a new session starts with. The main process decides it (decision 0012). */
+  newSessionMode: Mode
   githubLogin: string | null
-  onSubmit(prompt: string, settings: SessionSettings): void
+  /** The folder that the composer starts with: the "+" of a group of the sidebar chose it. */
+  presetFolder?: string
+  /** Creates the session. It returns the text of an error, or null after a success. */
+  onSubmit(prompt: string, settings: SessionSettings): Promise<string | null>
 }
 
-export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
+/** The settings of a new session: the folder and the model of the last session, and the mode that the main process gives. */
+function startSettings(last: SessionView | undefined, mode: Mode, presetFolder: string | undefined): SessionSettings {
+  const model = MODELS.find((option) => option.id === last?.model)?.id
+  return { ...FIRST_SETTINGS, mode, folder: presetFolder ?? last?.sourcePath ?? '', model: model ?? FIRST_SETTINGS.model }
+}
+
+export function SessionComposer({ sessions, newSessionMode, githubLogin, presetFolder, onSubmit }: Props) {
   const [text, setText] = useState('')
-  const [settings, setSettings] = useState<SessionSettings>(() => ({
-    ...(sessions.at(-1)?.settings ?? FIRST_SETTINGS),
-    attachments: []
-  }))
+  const [settings, setSettings] = useState<SessionSettings>(() => startSettings(sessions.at(-1), newSessionMode, presetFolder))
+  const [busy, setBusy] = useState(false)
   const [caret, setCaret] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
   const [active, setActive] = useState(0)
-  const [chosenFolders, setChosenFolders] = useState<string[]>([])
+  // The folder of the preset can be a folder with no session, so the menu lists it as a chosen folder.
+  const [chosenFolders, setChosenFolders] = useState<string[]>(() => (presetFolder ? [presetFolder] : []))
   const [info, setInfo] = useState<FolderInfo | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -109,17 +115,14 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
 
   const found = findMention(text, caret)
   const mention = found?.start === dismissed ? null : found
-  const suggestions = useSuggestions(mention, { folder, githubLogin, sessions })
+  const suggestions = useSuggestions(mention, { folder, githubLogin })
   const activeIndex = Math.min(active, Math.max(0, (suggestions?.items.length ?? 0) - 1))
 
   const recentFolders = [
-    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.settings.folder)])
+    ...new Set([...chosenFolders, ...sessions.toReversed().map((session) => session.sourcePath)])
   ].slice(0, MAX_RECENT_FOLDERS)
 
-  // A folder without Git cannot have a worktree.
-  const canUseWorktree = Boolean(info?.branch)
-  const checkout = canUseWorktree ? settings.checkout : 'folder'
-  const ready = parseRequest(text) !== null && info?.exists === true
+  const ready = !busy && parseRequest(text) !== null && info?.exists === true
 
   const pickFolder = (path: string) => {
     setProblem(null)
@@ -181,7 +184,20 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
   }
 
   const submit = () => {
-    if (ready) onSubmit(text.trim(), { ...settings, checkout })
+    if (!ready) return
+    setBusy(true)
+    setProblem(null)
+    void onSubmit(text.trim(), settings).then(
+      (message) => {
+        // After a success the window shows the new session, and this composer goes away.
+        setBusy(false)
+        if (message !== null) setProblem(message)
+      },
+      (cause: unknown) => {
+        setBusy(false)
+        setProblem(`Aether could not create the session. ${String(cause)}`)
+      }
+    )
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -210,9 +226,6 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
     submit()
   }
 
-  const mode = labelOf(MODES, settings.mode)
-  const permissions = labelOf(PERMISSIONS, settings.permissions)
-
   return (
     <>
       <form
@@ -226,7 +239,7 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
           <textarea
             ref={textarea}
             aria-label="Prompt"
-            placeholder="Ask anything. Use @ for files, # for issues, & for sessions."
+            placeholder="Ask anything. Use @ for files, # for issues."
             aria-autocomplete="list"
             aria-controls={mention ? 'suggestions' : undefined}
             aria-activedescendant={
@@ -305,6 +318,14 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
                   onSelect={() => startMention(reference.trigger)}
                 />
               ))}
+              <MenuOption
+                menu="add-menu"
+                title="Session…"
+                icon={<MessageSquare size={16} />}
+                tag="Coming soon"
+                disabled
+                onSelect={() => undefined}
+              />
               <hr />
               <MenuOption
                 menu="add-menu"
@@ -319,56 +340,8 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
                 onSelect={() => void addPaths('folder')}
               />
             </Menu>
-            <Menu
-              id="mode-menu"
-              label="Mode and tool permissions"
-              trigger={settings.permissions === 'ask' ? mode : `${mode} · ${permissions}`}
-            >
-              <p className="popover-title">Mode</p>
-              {MODES.map((option) => (
-                <MenuOption
-                  key={option.id}
-                  menu="mode-menu"
-                  title={option.label}
-                  note={option.note}
-                  checked={settings.mode === option.id}
-                  onSelect={() => change({ mode: option.id })}
-                />
-              ))}
-              <hr />
-              <Submenu id="permissions-menu" label="Tool permissions" value={permissions}>
-                {PERMISSIONS.map((option) => (
-                  <MenuOption
-                    key={option.id}
-                    menu="mode-menu"
-                    title={option.label}
-                    note={option.note}
-                    checked={settings.permissions === option.id}
-                    onSelect={() => change({ permissions: option.id })}
-                  />
-                ))}
-              </Submenu>
-            </Menu>
-            <Menu id="model-menu" label="Model" trigger={labelOf(MODELS, settings.model)}>
-              <p className="popover-title">Claude</p>
-              {MODELS.map((option) => (
-                <MenuOption
-                  key={option.id}
-                  menu="model-menu"
-                  title={option.label}
-                  checked={settings.model === option.id}
-                  onSelect={() => change({ model: option.id })}
-                />
-              ))}
-              <hr />
-              <MenuOption
-                menu="model-menu"
-                title="ChatGPT"
-                tag="Coming soon"
-                disabled
-                onSelect={() => undefined}
-              />
-            </Menu>
+            <ModeMenu mode={settings.mode} onChange={(mode) => change({ mode })} />
+            <ModelMenu model={settings.model} onChange={(model) => change({ model })} />
             <span className="spacer" />
             <span title="Voice input: coming soon">
               <button type="button" className="icon-button" aria-label="Voice input, coming soon" disabled>
@@ -428,39 +401,17 @@ export function SessionComposer({ sessions, githubLogin, onSubmit }: Props) {
               onSelect={() => undefined}
             />
           </Menu>
-          <Menu
-            id="checkout-menu"
-            label="Worktree"
-            disabled={!info?.exists}
-            trigger={
-              <>
-                <GitBranch size={16} />
-                <span className="bar-label">
-                  {checkout === 'worktree' ? 'New worktree' : (info?.branch ?? 'Folder as it is')}
-                </span>
-              </>
-            }
+          <button
+            type="button"
+            className="bar-button"
+            aria-label="Worktree, coming soon"
+            title="Worktree: coming soon"
+            disabled
           >
-            <MenuOption
-              menu="checkout-menu"
-              title="New worktree"
-              note={
-                canUseWorktree
-                  ? 'Work on a separate copy of the repository'
-                  : 'The folder is not a Git repository with a commit'
-              }
-              checked={checkout === 'worktree'}
-              disabled={!canUseWorktree}
-              onSelect={() => change({ checkout: 'worktree' })}
-            />
-            <MenuOption
-              menu="checkout-menu"
-              title="Folder as it is"
-              note={info?.branch ? `Work on the branch ${info.branch}` : 'Work in the folder'}
-              checked={checkout === 'folder'}
-              onSelect={() => change({ checkout: 'folder' })}
-            />
-          </Menu>
+            <GitBranch size={16} />
+            <span className="bar-label">Worktree</span>
+            <span className="tag">Coming soon</span>
+          </button>
         </div>
         {(problem || info?.exists === false) && (
           <p className="error composer-error" role="alert">

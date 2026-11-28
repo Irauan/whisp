@@ -1,0 +1,102 @@
+/* The composer of the session window: one rounded box with the control row inside, at its bottom. */
+
+.composer {
+  --line-height: 20px;
+  --pad: 12px;
+  width: 100%;
+}
+
+.box {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.box:focus-within {
+  border-color: var(--accent);
+}
+
+/* At least 2 lines, up to --max-lines lines (COMPOSER_MAX_LINES), then it scrolls inside. */
+.field {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--line-height) * 2 + var(--pad));
+  max-height: calc(var(--line-height) * var(--max-lines) + var(--pad));
+  padding: 10px 14px 2px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: var(--line-height);
+  resize: none;
+  background: none;
+  border: 0;
+  outline: 0;
+  field-sizing: content;
+}
+
+/* The box shows the focus (.box:focus-within), so the text area has no ring of its own. */
+.field:focus-visible {
+  outline: none;
+}
+
+.field::placeholder {
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 8px;
+}
+
+.plus {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--muted);
+  border-radius: 6px;
+}
+
+/* A small text-only button with no border: the Mode control and the model button. */
+.control {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+
+.control:hover:not(:disabled),
+.control:has(+ :popover-open) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--on-fill);
+  background: var(--fill);
+  border-radius: 50%;
+}
+
+.send:disabled {
+  color: var(--muted);
+  background: var(--selected);
+  opacity: 1;
+}

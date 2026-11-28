@@ -29,16 +29,18 @@ The order follows the dependencies. S1 to S4 form the walking skeleton. After S4
 | Story | Path step | Behavior a person can see | Defects fixed | Checks | Depends on |
 |---|---|---|---|---|---|
 | S1 Remove projects and work items | 4 | Projects and work items show "coming soon". | — | A19 | M0 |
-| S2 Workspaces in SQLite | 3 | First start imports accounts as workspaces and asks for each root. Workspace settings edit root, GitHub account, Claude folder and profile. | Unreadable conversation file loads as empty | A17, A18 | S1 |
+| S2 Profiles in SQLite | 3 | First start imports accounts as profiles and asks for each workspace directory. Profile settings edit name, workspace directory, GitHub account, Claude folder and Claude profile name. Decision 0013 records the model. | Unreadable conversation file loads as empty | A17, A18 | S1 |
 | S3 Session slices | 5 | Create, list, open and delete sessions from the database. Draft sessions open with their prompt and their imported mode. One Mode control with five values replaces Mode and Tool permissions. Worktree and the session attachment show "coming soon". | New session copies "Approve all" | A13, A14 | S2 |
-| S4 Chat in a session | 6 | The session window streams replies. Send, stop, restart and resume work. Missing sign-in and crash show clear notices. | Shared process before ready; no permission mode; whole environment | A1, A2, A3, A6, A7, A8, A16, A20 | S3 |
-| S5 Permission queue | 6 | Parallel requests show as a queue. Each answer reaches its own request. Stop cancels all. | Second request cancels the first | A4, A5 | S4 |
+| S4 Chat in a session | 6 | The session window streams replies. Send, stop, restart and resume work. Missing sign-in and crash show clear notices. S4 tests replace G11 and G12 of m0-gates S5: temporary data folder, real data folder untouched, wait at a gate (user decision, 2026-11-26). Migration 002 rebuilds `providers` for many accounts, and adds `agent_sessions` and `entries`; a resume uses the provider of its agent run (decisions 0013 and 0014). S4 creates an empty current account at the first start when the profile has none. | Shared process before ready; no permission mode; whole environment | A1, A2, A3, A6, A7, A8, A16, A20 | S3 |
+| S5 Permission queue | 6 | Parallel requests show as a queue. Each answer reaches its own request. Stop cancels all. | Second request cancels the first | A4, A5 | S4, S7 (the port update `mode`), S8 (the log as the scroll element, the follow rule and the status line) |
 | S6 Repository and directory trust | 6 | The trust question and the directory questions show before any process starts. | Hooks and MCP servers run without a question | A9, A10 | S4 |
 | S7 Session settings reach the agent | — | Model, mode and attachments reach the agent. A model that cannot use Auto shows the notice. | — | A12, A15 | S4 |
 | S8 Plan widget | — | The plan shows as a todo list above the composer, with three states. | — | A11 | S4 |
-| S9 Idle release and process limit | 6 | Idle processes close after the release time. At most 6 idle processes stay open. | — | A21, A22 | S4 |
+| S9 Idle release and process limit | 6 | Idle processes close after the release time. At most 6 idle processes stay open. | — | A21, A22 | S4, S6 (migration 003 before 004) |
+| S10 Session title and menu | — | Claude names the session. The title sits in the top strip with an arrow menu: Rename, Fork and Archive (coming soon), Delete. Added by the user on 2026-11-28 after the hand test. | — | A23 | S4, S5, S8, S9 (migration 004 before 005) |
+| S11 Sidebar folders and session status | — | Folders like the GitHub Copilot app (folder icon, collapse saved, '+' and right-click menu, empty folders stay). Session icons: Working, New answer, Needs your answer. Added by the user on 2026-11-28. | — | A24, A25 | S3, S4, S5, S6, S10 (App.tsx subscription, migration 005 before 006) |
 
-S5 to S9 are independent after S4. They can run in parallel worktrees. S5, S6 and S9 touch the agent process code, so the coordinator merges them one at a time.
+S6 to S8 are independent after S4. S5 needs S8, because S5 puts its cards inline in the log of S8, and its jump button in the status line of S8. S5 also needs S7, because the live mode uses the port update `mode` of S7. S9 needs S6, because its migration 004 follows migration 003 of S6. S5, S7 and S9 touch `acp-agents.ts`, and S5, S6, S7 and S9 touch `send-message.handler.ts`, so the coordinator merges them one at a time. Story specs: `stories/` in this folder.
 
 ## Check coverage
 
@@ -53,28 +55,33 @@ S5 to S9 are independent after S4. They can run in parallel worktrees. S5, S6 an
 | A17, A18 | S2 |
 | A19 | S1 |
 | A21, A22 | S9 |
+| A23 | S10 |
+| A24, A25 | S11 |
 
 ## Live checks (step 7)
 
-The validator runs A1, A2, A3, A4, A6, A8 and A12 with real Claude. These checks wait for decision 0011. All stories and CI checks can proceed without it.
+The validator runs A1, A2, A3, A4, A6, A8, A12 and A23 with real Claude. Decision 0011 (2026-11-27): these checks use the subscription of the user.
 
 ## Todo list
 
 - [x] User approves the brief and this plan.
 - [x] User accepts that the live checks wait for decision 0011.
-- [ ] Milestone 0 is merged.
-- [ ] Coordinator reads the files and lists what it cannot answer. User answers.
-- [ ] Coordinator creates `milestone/m1-chat`.
-- [ ] S1 Remove projects and work items
-- [ ] S2 Workspaces in SQLite
-- [ ] S3 Session slices, with decision 0012
-- [ ] S4 Chat in a session
-- [ ] Demo of the walking skeleton to the user
-- [ ] S5 Permission queue
-- [ ] S6 Repository and directory trust
-- [ ] S7 Session settings reach the agent
-- [ ] S8 Plan widget
-- [ ] S9 Idle release and process limit
-- [ ] Step 7: milestone validation, with the live checks
+- [x] Milestone 0 is merged. PR #21, merge commit `9a0cd0f` on `main`.
+- [x] Coordinator reads the files and lists what it cannot answer. User answers.
+- [x] Coordinator creates `milestone/m1-chat`.
+- [x] S1 Remove projects and work items. PR #23, squash merge `65c54cc`.
+- [x] S2 Profiles in SQLite. PR #24, squash merge `e113836`.
+- [x] S3 Session slices, with decision 0012. PR #25, squash merge `2858c5f`.
+- [x] S4 Chat in a session. PR #26, squash merge `c649218`.
+- [x] Demo of the walking skeleton to the user, after the S4 merge.
+- [x] S5 Permission queue. PR #42, squash merge `8ed051a`.
+- [x] S6 Repository and directory trust. PR #28, squash merge `50bd85a`.
+- [x] S7 Session settings reach the agent. PR #27, squash merge `597d6c5`.
+- [x] S8 Frame, composer and plan widget. PR #35, squash merge `a92cb98`.
+- [x] S9 Idle release and process limit. PR #40, squash merge `c485a92`.
+- [x] Step 7: milestone validation, with the live checks. PASS, PR #44, squash merge `02136b2`.
+- [x] S10 Session title and menu (user decision, 2026-11-28). PR #48, squash merge `dcfb310`.
+- [x] S11 Sidebar folders and session status (user decision, 2026-11-28). PR #52, squash merge `481930d`; review fixes PR #53, `98d923e`.
+- [x] Step 7 again for S10 and S11, with the live check A23. PASS, PR #55, squash merge `bfc2cdc`.
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective

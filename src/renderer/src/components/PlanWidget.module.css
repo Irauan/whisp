@@ -1,0 +1,82 @@
+/* The plan widget of the bottom dock. The list has a cap and scrolls inside its own area. */
+
+.widget {
+  flex: none;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.head:hover {
+  background: var(--hover);
+}
+
+.chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+.head[aria-expanded='false'] .chevron {
+  transform: rotate(-90deg);
+}
+
+.title {
+  font-weight: 600;
+}
+
+.steps {
+  display: grid;
+  gap: 4px;
+  max-height: 160px;
+  padding: 0 12px 10px 36px;
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.steps li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.steps li > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.waiting {
+  color: var(--muted);
+}
+
+.active,
+.done {
+  color: var(--accent);
+}
+
+.completed {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* The state as text for a screen reader, hidden from the eye. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

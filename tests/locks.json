@@ -1,50 +1,306 @@
 {
-  "tests/acceptance/m0-gates/s5/app.spec.ts": {
-    "sha256": "4afe6d45c222b707d544a710a449d6dadd31eeefdf0a1a8a10e6043815f097bd",
-    "story": "m0-gates/s5"
-  },
-  "tests/acceptance/m0-gates/s5/fixture.ts": {
-    "sha256": "98162db78ffe5186868c2108e85087e04fa743e391fb2efea6bce64cee61df13",
-    "story": "m0-gates/s5"
-  },
   "tests/acceptance/m0-gates/s8/fake-gh.cs": {
     "sha256": "2b0e09cf756653e0e893b1101d083b6a24ed656e2284ce1d1a08cab36b8bf80a",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/fixture.ts": {
-    "sha256": "ba79154e045057cff86eb707730f141f2650baae4061ee5282367c3c72f6d957",
+    "sha256": "ab45ad9ea4433e8f5bb7b7568278648122bb003a4d205a64ddc8fcade1f30d1a",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/github-accounts.spec.ts": {
-    "sha256": "bfec79cc6175411097ebceab695902a18c2b7a9cc12399128697bae2df5defb3",
+    "sha256": "54a2ab93eaa276f6bb4e3c0392c2fe29591e56bdfbb906320bf8dd7e3db64032",
     "story": "m0-gates/s8"
   },
   "tests/acceptance/m0-gates/s8/invoke-guard.spec.ts": {
     "sha256": "a75747e5dd94fa687869b704532df93590e09fc657746f171bea582d6f5b983f",
     "story": "m0-gates/s8"
   },
+  "tests/acceptance/m1-chat/s1/coming-soon.spec.ts": {
+    "sha256": "7948b4ef5a682f5d0fbe17ae095026ae65f4cb1b2dc1cbf0ef19161fccf93d94",
+    "story": "m1-chat/s1"
+  },
+  "tests/acceptance/m1-chat/s1/fixture.ts": {
+    "sha256": "97d3457712ff811a51bd1b55d5cd5cdf42441cf11e2c3997d9cb3b1d5c54b44f",
+    "story": "m1-chat/s1"
+  },
+  "tests/acceptance/m1-chat/s10/fixture.ts": {
+    "sha256": "ec110dd4f7978a90704f0c98ea5db2ce2cc7eff456483bb774a5fdf0d1ba9afd",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/rename.spec.ts": {
+    "sha256": "ba4bc43605e52216130fc4edbbc5f3684a7e05196666b1d71c0b5e96d6e34079",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/strip.spec.ts": {
+    "sha256": "9193d4d029ccc8fc16651e4b631a76d79e2381846a30b983b2d09ad14a439bed",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/title.spec.ts": {
+    "sha256": "1863b9f1763a12aead8b57cda717e694731ca2a90c6976fb9b121dee8fa89f44",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s11/fixture.ts": {
+    "sha256": "c699dfd7348efc96431802c100a94b5b00c92f2c3f7a770d5b199c63ee5fd3f4",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/folders.spec.ts": {
+    "sha256": "a019d9db664c31a62c5d029d9eb3f85027808e93114b37cd4bac951d2892c39f",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/groups.spec.ts": {
+    "sha256": "4eee69861ac665cb41c31f311097b52754160aff33138dd86524d22a49a8965b",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/status.spec.ts": {
+    "sha256": "5b9ccd5837f1ad14f0534807b85faa501320f4058a2e80bb11cddbfe97bdccb7",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s11/viewing.spec.ts": {
+    "sha256": "1ebc929753b585817cb38df8e97b4957e814f71df030f460299e82dd07e1fc24",
+    "story": "m1-chat/s11"
+  },
+  "tests/acceptance/m1-chat/s2/fixture.ts": {
+    "sha256": "cdf6466be56ad240410022591f71b0cf0220013d848092b4e689ecf682f5a32c",
+    "story": "m1-chat/s2"
+  },
+  "tests/acceptance/m1-chat/s2/import.spec.ts": {
+    "sha256": "ce9a9c1a5ffc78cbe5f0bb6093366977b1099cef148c78d3cf0c03d75eb65222",
+    "story": "m1-chat/s2"
+  },
+  "tests/acceptance/m1-chat/s2/unreadable-files.spec.ts": {
+    "sha256": "9035305b8bb175053ac002be676fae564d54833aa120f6c1d619c04f2c6c68fc",
+    "story": "m1-chat/s2"
+  },
+  "tests/acceptance/m1-chat/s3/fixture.ts": {
+    "sha256": "f8e27b660d2846cf077b364e9462b949632b20fad9fb6f9a55acc7d1ac679dd6",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/new-session-mode.spec.ts": {
+    "sha256": "d511234347c36504d5d8cbb14222977c0747d193cabfaf48ba5a6b0d21caaff9",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/sessions.spec.ts": {
+    "sha256": "b44a0cf39437a376c91015e7aff5340330fbde145403e7a32953f563415d176b",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s3/settings-menu.spec.ts": {
+    "sha256": "04ad4aa9b606a6aafbaed0195d603360215eb262b21d625d96ac99d1e2421029",
+    "story": "m1-chat/s3"
+  },
+  "tests/acceptance/m1-chat/s4/chat.spec.ts": {
+    "sha256": "46713b66affdc0875bda766328e1e93456459d35d1be1fe8d2234e31eb19503e",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/environment.spec.ts": {
+    "sha256": "505e4ec97d09ce88a007ecea7b9518281e31abb783872bd867f3d31c020d284f",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/fixture.ts": {
+    "sha256": "2a8bb2ba1d4af4f433ec2cb187081e9e16f8f349daa12a588896871eac41f367",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/mode.spec.ts": {
+    "sha256": "2acff407e2e194d10cae0d9eb9530f8594299d07e4415cf0a1a2bad87d191eb3",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/processes.spec.ts": {
+    "sha256": "7b22ee2fc1c9b51686009c1b076a51139dc426f42ffe59360b6984b5bdf2c32b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/provider-snapshot.spec.ts": {
+    "sha256": "9b5d2bfd90b3f71a0e42237eace674c4643b421f350e0e6d3f0a3e1fadd7b75b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/restart.spec.ts": {
+    "sha256": "f8984f112a23faad380a3d5ba0a76e0031840949e420f45701d06a2c00c11a5b",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s4/sign-in.spec.ts": {
+    "sha256": "b5edd0479a06424004ecf07dc3f7cabc334396c2946aa94e7098ff65d185b0ed",
+    "story": "m1-chat/s4"
+  },
+  "tests/acceptance/m1-chat/s5/closed-cards.spec.ts": {
+    "sha256": "67a744163cfa18bd631da82c26d00bac2f5c9ba2a37eea80fb8c4a43a10d6001",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/decision-cards.spec.ts": {
+    "sha256": "aac503dc8122f452407e317c05b50f6f98dc661ed4e479f391e5ca754d5426d4",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/fixture.ts": {
+    "sha256": "4cf549a7d157885263f6669b75f97479e2d6e996888f6caf0cb42051446d9ede",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/live-mode.spec.ts": {
+    "sha256": "e0902d44bd15e030903b8e9d7d122edca796a884f0a51c93962af94002aef225",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/question-cards.spec.ts": {
+    "sha256": "bb3f5f08728ea357a0e8cebc1f854d3be582cf68bd628873cf896b4ae47f1db7",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/queue.spec.ts": {
+    "sha256": "c623005f8242e0d499a4715645c546b1334356afce42adc3ffc9b68cee1c329c",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s5/trust-root.spec.ts": {
+    "sha256": "8aca53e681a87ef3c46ced31707934a7756afd387f40f0ec9795055490657f82",
+    "story": "m1-chat/s5"
+  },
+  "tests/acceptance/m1-chat/s6/claude-hooks.mjs": {
+    "sha256": "6bf7c216d9d578bedd5bd1cb000b65667dda6d726a9896fa16c335db366ded90",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/directories.spec.ts": {
+    "sha256": "1040d22fa0dde737e81f6b646e70754739661ba79a9e3971fada1629bbd4dc8b",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/fixture.ts": {
+    "sha256": "34b3dd6184148ab4417f93f1ab6a7179db937506f22d88d7755b1ac04f8f2d10",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s6/trust.spec.ts": {
+    "sha256": "ad1db064746ccc0be8df163c120a5d678003e807536541e725b430e43fa4a18a",
+    "story": "m1-chat/s6"
+  },
+  "tests/acceptance/m1-chat/s7/attachments.spec.ts": {
+    "sha256": "2a19d436cb9d7661dc2ef347388617865973532cf31aa2ed88547530640417e5",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/claude-account.spec.ts": {
+    "sha256": "20f34d9a71bda1110e27415f4ed73664c27943a2b2233f113e7112b8275b8f05",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/directories.spec.ts": {
+    "sha256": "8b40f295e249a9dd44d7ffdfc65710ea54e16fbba0a4705c6db0b8c0a5c9366d",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/fixture.ts": {
+    "sha256": "cac2b44a7efc8d2ef60a58efb30cd06dd610b28d222d808b5b52d8b60555ce56",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/refusals.spec.ts": {
+    "sha256": "bac0c11d55663742015de519437169eaffa111c8e05c8003ca3c7b98dd3c2eae",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s7/settings.spec.ts": {
+    "sha256": "702d35ccb30b77629d48c1990a47d35db1e1ea35fa8b94a6353d027e765534a7",
+    "story": "m1-chat/s7"
+  },
+  "tests/acceptance/m1-chat/s8/composer.spec.ts": {
+    "sha256": "007e014859e491af589f4c0e3bd23fe0bc6721362a490bad0e9a6cf964c1dff0",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/failed-turn.spec.ts": {
+    "sha256": "8e9b93935b771ec57875dee4b405c9900427ba29317306626ccffbfe6067e02d",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/fixture.ts": {
+    "sha256": "8a5f6bd18ab944a0311044e60b91c6baf913e2dd3d924145aec18b996704cdab",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/frame.spec.ts": {
+    "sha256": "78dfe135064e90b18d554733047442a31decbc1aa646ef7781ddc70f7b693cc7",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/frame.ts": {
+    "sha256": "5e9d603c608dac56e29d4ca045b7be861f8c32448fa468f332ca072cabd8eb66",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/model.spec.ts": {
+    "sha256": "f6dcb6a92905bb3642430132f5ef23fdf4d29bf5bc4712145f46729260e08006",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-updates.spec.ts": {
+    "sha256": "ad8c8ce8b3e93160690687dc84f4f819b8fd582e24455588aef8179659f24460",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s8/plan-widget.spec.ts": {
+    "sha256": "ff6a18dbdb77f8942f2fc9c6f6f3212b2907ed97aec8a48032977fe9715d97af",
+    "story": "m1-chat/s8"
+  },
+  "tests/acceptance/m1-chat/s9/child-process.spec.ts": {
+    "sha256": "a7a1e85c639cd43126c8d3130794fc278c2dfa429952812d90e8de2c8248b7a9",
+    "story": "m1-chat/s9"
+  },
+  "tests/acceptance/m1-chat/s9/fixture.ts": {
+    "sha256": "701812639d141907254b105c4a70a4726ed59fff31216d7c573096eeeded2868",
+    "story": "m1-chat/s9"
+  },
+  "tests/acceptance/m1-chat/s9/process-limit.spec.ts": {
+    "sha256": "1f2aad35814ec8f8a7566974cab38f6a45bc6598ea0859abc1cfd0a250a26e83",
+    "story": "m1-chat/s9"
+  },
+  "tests/acceptance/support/hidden-windows.cjs": {
+    "sha256": "c9a4f113a4afe89aa95bd39ac70ef25532e4020bd8b39dde3adc8240bd60f9cb",
+    "story": "m1-chat/test-windows"
+  },
+  "tests/acceptance/support/windows.ts": {
+    "sha256": "526861bc6b9fab4217a00ec62d79b5dafe1b9a6aecd7e47bb71b9ef5755f1114",
+    "story": "m1-chat/test-windows"
+  },
   "tests/architecture/contracts.test.ts": {
-    "sha256": "5a17578af85187b9f72d69464b765573cdf4469471a35056a30a32b1aa893e0d",
+    "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
   },
+  "tests/architecture/m1-chat-s10-session-title.test.ts": {
+    "sha256": "bd3fd7788f74aea1bb1607d01db49734870951f6b0f57bb6a97afbc998a95dca",
+    "story": "m1-chat/s10"
+  },
+  "tests/architecture/m1-chat-s10-title-agent.test.ts": {
+    "sha256": "da9fb69b550679c96ddc2382b74b3608de8d55f50af172ddda0659faa8d0123e",
+    "story": "m1-chat/s10"
+  },
+  "tests/architecture/m1-chat-s11-folders.test.ts": {
+    "sha256": "a51c57fa678c76eefdf3f7b3565a80871b704eaa1a5f4d7f00783b720ab95a4a",
+    "story": "m1-chat/s11"
+  },
+  "tests/architecture/m1-chat-s11-sidebar.test.ts": {
+    "sha256": "06351ef79f9f58a301fa8cee77d95682777e18494372ef06d1b9cee640ea667f",
+    "story": "m1-chat/s11"
+  },
+  "tests/architecture/m1-chat-s11-unread.test.ts": {
+    "sha256": "3d5edfc472c4fa78e373a5be2a3b2b65471dfd0269ee7bd3f582799c0a88d3f1",
+    "story": "m1-chat/s11"
+  },
+  "tests/architecture/m1-chat-s5-permission-queue.test.ts": {
+    "sha256": "873505c076b396bbdef2a6f2a5cb3531a9a0a7c0b346f5f5a4b8d4507acfb671",
+    "story": "m1-chat/s5"
+  },
+  "tests/architecture/m1-chat-s9-idle-release.test.ts": {
+    "sha256": "c9611d42b75acf3321aec8f2095f23f7e57be3e74d25d99da7a36c47ae1709d9",
+    "story": "m1-chat/s9"
+  },
+  "tests/architecture/m1-chat-s9-retire-idle.test.ts": {
+    "sha256": "09f46808d87c0a31c20c3a16b1264a5cd2dbee01a2f14b1006732ba3ada687a6",
+    "story": "m1-chat/s9"
+  },
   "tests/simulated-agent/agent.mjs": {
-    "sha256": "2a56a52920ecaee2a2c5e5ad5b681b973c193f5e079ee9aa7006227bb3755996",
+    "sha256": "bb2b814339b3ed4ed3877cb87f0d918dab8e897063a1ace8b2dae78e0aae193a",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/agent.test.ts": {
-    "sha256": "36310c6ef5795ef8d1a12ec82ef3c910697df3182813d126791bb4c5c0a01b6a",
+    "sha256": "5748c5e0dccb72a2f4d32a232da869298b15ccba5a4f239a0d7912f27f0c1390",
     "story": "m0-gates/s4"
+  },
+  "tests/simulated-agent/child.mjs": {
+    "sha256": "d12275a748e0ff9d96a65e91a19d69e89f2911b7e98166b1d8ceaa0f4db56fa2",
+    "story": "m1-chat/s9"
   },
   "tests/simulated-agent/control.test.ts": {
     "sha256": "2ce59003adff9c60ac321a8e8ae5865985db11209b2fd717dd83dd8558794a4b",
     "story": "m0-gates/s4"
   },
   "tests/simulated-agent/control.ts": {
-    "sha256": "1a469c4c6ccfcd9f8d4164a565defe2295e27fde61f20f232d2b634a12bbaa87",
+    "sha256": "ec1e6660421e6ace52ce0343eca5d6b9e750b458f1df280acff5b4181a184269",
     "story": "m0-gates/s4"
   },
+  "tests/simulated-agent/requests.mjs": {
+    "sha256": "a71897f58c79614b260a2d43867eef18bfdc2795a5d8138615e5abec5ee44bde",
+    "story": "m1-chat/s5"
+  },
   "tests/simulated-agent/scenarios.mjs": {
-    "sha256": "aaaedd34158983d4bba9c035a500d016dc6762accdd7f5cc4097fcbd5e059754",
+    "sha256": "4091dc34defa79955c5bb43fb8a4c4014e3d99ffade4210b4b0c37884e7bb30f",
     "story": "m0-gates/s4"
   }
 }

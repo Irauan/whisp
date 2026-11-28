@@ -18,11 +18,16 @@ import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { _electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
+import { windowArgs } from '../../support/windows'
 
 const ROOT = resolve(__dirname, '../../../..')
 
-/** The contract of the GitHub accounts query. The plan names it, see `docs/milestones/m0-gates/plan.md`. */
-export const LIST_GITHUB_ACCOUNTS = 'workspaces.list-github-accounts'
+/**
+ * The contract of the GitHub accounts query. The plan of m0-gates named it
+ * `workspaces.list-github-accounts`. User decision, 2026-11-26: "Profile" everywhere, so its name
+ * is now `profiles.list-github-accounts`.
+ */
+export const LIST_GITHUB_ACCOUNTS = 'profiles.list-github-accounts'
 
 /** The two fake accounts that the fake `gh` reports. */
 export const ACCOUNTS = [
@@ -218,7 +223,7 @@ export const test = base.extend<{ github: GithubApp }>({
     )
 
     const app = await _electron.launch({
-      args: [ROOT, `--user-data-dir=${dataDir}`],
+      args: windowArgs([ROOT, `--user-data-dir=${dataDir}`]),
       cwd: ROOT,
       env: appEnvironment(root, gh.folder)
     })

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S8 Plan widget mockup</title>
+<style>
+/* Tokens copied from src/renderer/src/styles.css (:root). */
+:root {
+  color-scheme: dark;
+  --canvas: #070709;
+  --sidebar: #101013;
+  --raised: #0d0d0f;
+  --selected: #212126;
+  --hover: #18181b;
+  --line: #2d2d33;
+  --text: #eeeef1;
+  --muted: #9d9ea6;
+  --accent: #ac99ff;
+  --fill: #6030f0;
+  --on-fill: #fff;
+  --danger: #e5786d;
+  /* Mockup only: the color of the change marks. */
+  --mark: #f2c14e;
+  font: 14px/1.45 system-ui, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--canvas);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px 64px; background: var(--canvas); }
+h1, h2, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, 'Cascadia Code', Menlo, monospace; font-size: 12px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Mockup frame */
+.intro { max-width: 860px; margin: 0 auto 24px; }
+.intro h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+.intro p { margin-bottom: 6px; }
+.state { max-width: 860px; margin: 0 auto 40px; }
+.state > h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.state > p { margin-bottom: 10px; }
+.window { border: 1px solid var(--line); border-radius: 12px; padding: 8px 32px 24px; background: var(--canvas); }
+.mark { outline: 2px dashed var(--mark); outline-offset: 4px; }
+.mark-label { display: inline-block; margin-bottom: 6px; padding: 1px 8px; color: var(--canvas); background: var(--mark); border-radius: 6px; font-size: 12px; font-weight: 600; }
+.struck { text-decoration: line-through; text-decoration-color: var(--mark); text-decoration-thickness: 2px; }
+
+/* App parts, from styles.css */
+.page-head { margin: 8px 0 16px; }
+.page-head h1 { font-size: 24px; font-weight: 600; line-height: 1.25; }
+.transcript { display: grid; gap: 10px; }
+.msg { white-space: pre-wrap; }
+.msg.user { justify-self: end; max-width: 85%; padding: 8px 12px; background: var(--selected); border-radius: 12px 12px 4px 12px; }
+.tool { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.notice { color: var(--muted); font-size: 13px; }
+.agent-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.composer { margin-top: 16px; max-width: 760px; }
+.composer-box { background: var(--canvas); border: 1px solid var(--line); border-radius: 14px; }
+.composer textarea { display: block; width: 100%; padding: 14px 16px 4px; font: inherit; font-size: 15px; color: inherit; resize: none; background: none; border: 0; outline: 0; }
+.composer-actions { display: flex; align-items: center; gap: 4px; padding: 6px 10px 10px; }
+.bar-button { display: inline-flex; align-items: center; height: 32px; padding: 0 8px; color: var(--muted); border-radius: 7px; }
+.spacer { flex: 1; }
+.send { display: grid; place-items: center; width: 34px; height: 34px; color: var(--on-fill); background: var(--fill); border-radius: 50%; }
+.send.off { color: var(--muted); background: var(--selected); }
+
+/* Icons */
+.icon { width: 16px; height: 16px; flex: none; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+/* New: the plan widget */
+.plan-widget { max-width: 760px; margin-top: 16px; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; }
+.plan-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; text-align: left; border-radius: 10px; }
+.plan-head:hover { background: var(--hover); }
+.plan-head .chevron { color: var(--muted); transition: transform .15s; }
+.plan-head[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
+.plan-title { font-weight: 600; }
+.plan-steps { display: grid; gap: 4px; max-height: 220px; overflow: auto; padding: 0 12px 10px 36px; }
+.plan-steps li { display: flex; align-items: flex-start; gap: 8px; }
+.plan-steps li .icon { margin-top: 2px; }
+.plan-steps li.pending .icon { color: var(--muted); }
+.plan-steps li.in-progress .icon { color: var(--accent); }
+.plan-steps li.completed { color: var(--muted); text-decoration: line-through; }
+.plan-steps li.completed .icon { color: var(--accent); }
+
+/* New (S8 builds it, user decision 2026-11-27): the session window is a fixed frame.
+   The header stays at the top, the transcript is the only scroll area, and the bottom dock stays in view. */
+.frame { display: flex; flex-direction: column; height: 560px; padding: 0; overflow: hidden; }
+.frame-head { flex: none; padding: 8px 32px 0; border-bottom: 1px solid var(--line); }
+.frame-head .page-head { margin-bottom: 8px; }
+.frame > .transcript { flex: 1; min-height: 0; overflow: auto; padding: 16px 32px; align-content: start; }
+.dock { flex: none; display: grid; gap: 10px; padding: 10px 32px 16px; background: var(--canvas); box-shadow: 0 -12px 16px -12px rgba(0,0,0,.8); }
+.dock > * { max-width: 760px; width: 100%; }
+/* The header keeps only the title and the button "Delete session". */
+.head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.delete { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); border-radius: 7px; }
+.text-button svg { width: 12px; height: 12px; margin-left: 4px; }
+.dock .agent-status, .dock .composer, .dock .plan-widget { margin-top: 0; }
+.dock-mark { outline: 2px dashed var(--mark); outline-offset: 2px; }
+/* Changed (S8 builds it, user decision 2026-11-27): the composer like the GitHub app.
+   The text area is at least 2 lines high and grows up to COMPOSER_MAX_LINES (8), then scrolls.
+   The control row sits inside the box, at its bottom. No row below the box in the session window. */
+.composer.gh { margin-top: 0; }
+.composer.gh .composer-box { border-radius: 12px; }
+.composer.gh textarea { padding: 10px 14px 2px; font-size: 14px; line-height: 20px; min-height: calc(20px * 2 + 12px); max-height: calc(20px * 8 + 12px); overflow-y: auto; field-sizing: content; }
+.composer.gh textarea::placeholder { color: var(--muted); }
+.composer-controls { display: flex; align-items: center; gap: 2px; padding: 2px 8px 8px; }
+.composer-controls .plus { display: grid; place-items: center; width: 26px; height: 26px; color: var(--muted); border-radius: 6px; font-size: 18px; line-height: 1; }
+.text-button { display: inline-flex; align-items: center; height: 26px; padding: 0 8px; color: var(--muted); font-size: 12.5px; border-radius: 6px; }
+.text-button:hover:not(:disabled) { color: var(--text); background: var(--hover); }
+.composer.gh .send { width: 28px; height: 28px; font-size: 14px; }
+/* Changed (S8): a failed turn shows as one muted line with an info icon. It keeps role="alert". */
+.fail-line { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 13px; }
+.fail-line .info { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 700; font-style: normal; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-spinner" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+
+<header class="intro">
+  <h1>S8 Plan widget</h1>
+  <p class="muted">Mockup for the design review of m1-chat. Static HTML. All data is fake.</p>
+  <p><span class="mark-label">New</span> or <span class="mark-label">Changed</span> marks each change against the current screen.</p>
+  <p class="muted">Frame (user decision, 2026-11-27, open choice 3 option B): the header stays at the top. The transcript is the only scroll area. It scrolls under the bottom dock and stays at the bottom while new entries arrive. S8 builds the frame. The cards of S5 show inline in the transcript, where Claude asked, not in the dock.</p>
+  <p class="muted">Bottom dock, from the top: status line, plan widget, composer. The cards of S5 show inline in the transcript, where Claude asked, not in the dock (user decision, 2026-11-27). The header holds only the title and "Delete session": the facts row goes away (user decision, 2026-11-27).</p>
+  <p class="muted">Composer (user decision, 2026-11-27): like the GitHub app. The text area is at least 2 lines high and grows up to 8 lines, then scrolls. A control row sits inside the box, at its bottom: "+" (disabled, "Add context", coming soon), then the Mode control and the model as small text-only buttons at the left, and the small round Send or Stop at the right. No mic. No row below the box in the session window. The accessible names Prompt, Send, Stop, Mode and Add context stay.</p>
+</header>
+
+<section class="state">
+  <h2>0. Current screen (S4), for comparison</h2>
+  <p class="muted">Today the whole page scrolls, and the composer scrolls with it. Each plan update adds the line "Updated the plan" to the transcript. No widget shows the steps.</p>
+  <div class="window">
+    <div class="page-head"><h1>Plan the change</h1></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
+      <p class="notice">Updated the plan</p>
+      <p class="notice">Updated the plan</p>
+      <div class="msg"><p>The first step is done.</p></div>
+    </div>
+    <form class="composer"><div class="composer-box"><textarea rows="3" aria-label="Prompt"></textarea>
+      <div class="composer-actions"><span class="bar-button">Ask ▾</span><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+  </div>
+</section>
+
+<section class="state">
+  <h2>1. Empty: no plan</h2>
+  <p class="muted">The session has no plan entry, or the latest plan has no steps. No widget shows. The frame still applies: the dock holds only the composer.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head mark"><span class="mark-label">Changed: fixed header, title and Delete session only, no facts row</span>
+      <div class="page-head head-row"><h1>Say hello</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Say hello.</p></div>
+      <div class="msg"><p>Hello.</p></div>
+    </div>
+    <div class="dock dock-mark">
+      <span class="mark-label" style="justify-self:start;width:auto">New: bottom dock, always in view</span>
+      <span class="mark-label" style="justify-self:start;width:auto">Changed: composer like the GitHub app</span>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>2. During a turn (A11): "Plan 1 of 3"</h2>
+  <p class="muted">The agent sent a plan with three steps, then marked step 1 completed and step 2 in progress. The count counts the completed steps. The step in progress has the only spinner. The first plan of the session adds no "Updated the plan" (open choice 2). The progress update adds none either. A long transcript scrolls under the dock.</p>
+  <div class="window frame">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Look at the module and tell me what it does.</p></div>
+      <div class="msg"><p>The module reads the settings file, checks each value, and gives the defaults for the missing ones. It has no tests.</p></div>
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
+      <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: no marker for the first plan and for progress</span>
+        <p class="notice struck">Updated the plan</p>
+        <p class="notice struck">Updated the plan</p>
+      </div>
+      <div class="tool"><span>◌</span><span class="mono">Write tests\module.test.ts</span><span style="margin-left:auto">Running</span></div>
+    </div>
+    <div class="dock">
+      <p class="agent-status muted"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Working</span></p>
+      <div class="mark"><span class="mark-label">New: plan widget (region "Plan"), in the dock</span>
+        <section class="plan-widget" aria-label="Plan">
+          <button class="plan-head" type="button" aria-expanded="true">
+            <svg class="icon chevron"><use href="#i-chevron"/></svg>
+            <span class="plan-title">Plan 1 of 3</span>
+          </button>
+          <ol class="plan-steps" role="list">
+            <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
+            <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Write the tests</span><span class="visually-hidden">In progress</span></li>
+            <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Change the module</span><span class="visually-hidden">Pending</span></li>
+          </ol>
+        </section>
+      </div>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send" type="button" aria-label="Stop">■</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>3. After the turn: unfolded and folded</h2>
+  <p class="muted">The widget stays after the turn ends, and after a restart. The header is the one button with aria-expanded. Folded, the count stays, the list hides, and the transcript gets the space.</p>
+  <div class="window frame" style="height:420px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
+      <div class="msg"><p>The first step is done.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="true">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 1 of 3</span>
+        </button>
+        <ol class="plan-steps" role="list">
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
+          <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Write the tests</span><span class="visually-hidden">In progress</span></li>
+          <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Change the module</span><span class="visually-hidden">Pending</span></li>
+        </ol>
+      </section>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+  <p class="muted" style="margin:14px 0 6px;font-size:13px">Folded:</p>
+  <div class="window frame" style="height:340px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="msg"><p>I made a plan.</p></div>
+      <div class="msg"><p>The first step is done.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="false">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 1 of 3</span>
+        </button>
+      </section>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>4. A new plan replaces the old one</h2>
+  <p class="muted">In a later turn the agent sends other steps. The widget shows only the new plan. The transcript shows "Updated the plan" at that point, and stays at the bottom.</p>
+  <div class="window frame" style="height:460px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Use another approach.</p></div>
+      <div class="msg"><p>I change the approach.</p></div>
+      <div class="mark" style="margin:6px 0"><span class="mark-label">Kept: marker for a new plan</span>
+        <p class="notice">Updated the plan</p>
+      </div>
+      <div class="msg"><p>Now I follow the new plan.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="true">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 0 of 2</span>
+        </button>
+        <ol class="plan-steps" role="list">
+          <li class="in-progress"><svg class="icon spin"><use href="#i-spinner"/></svg><span>Remove the old files</span><span class="visually-hidden">In progress</span></li>
+          <li class="pending"><svg class="icon"><use href="#i-circle"/></svg><span>Write the new files</span><span class="visually-hidden">Pending</span></li>
+        </ol>
+      </section>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>5. All steps completed, with a long plan</h2>
+  <p class="muted">The widget stays with "Plan 5 of 5". A long plan scrolls inside the widget, so the composer stays in view. A long step text wraps.</p>
+  <div class="window frame" style="height:480px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg"><p>All steps are done.</p></div>
+    </div>
+    <div class="dock">
+      <section class="plan-widget" aria-label="Plan">
+        <button class="plan-head" type="button" aria-expanded="true">
+          <svg class="icon chevron"><use href="#i-chevron"/></svg>
+          <span class="plan-title">Plan 5 of 5</span>
+        </button>
+        <ol class="plan-steps" role="list" style="max-height:140px">
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Read the old module</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Write the tests for the parser, the formatter and the error messages of the command line</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Change the module</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Run the tests</span><span class="visually-hidden">Completed</span></li>
+          <li class="completed"><svg class="icon"><use href="#i-check"/></svg><span>Update the notes</span><span class="visually-hidden">Completed</span></li>
+        </ol>
+      </section>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>6. An empty plan clears the widget</h2>
+  <p class="muted">The agent sent a plan with no steps. The widget does not show, also after a restart. The transcript shows the marker at that point, because a plan existed before.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <p class="notice">Updated the plan</p>
+      <div class="msg"><p>I cleared the plan.</p></div>
+    </div>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">Changed: no widget for an empty plan</span>
+        <p class="muted" style="font-size:13px">No region "Plan" in the dock.</p>
+      </div>
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>7. A failed turn</h2>
+  <p class="muted">A turn fails. The transcript shows one muted line with an info icon, at the point of the failure. The style follows the reference "Execution failed: Model … is not available". The line keeps the role "alert" and the texts of S4 and S7, so their error tests still find it. The composer is ready for the next message.</p>
+  <div class="window frame" style="height:380px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Plan the change</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <div class="msg user"><p>Change the module, with tests first.</p></div>
+      <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: failed turn as one muted line</span>
+        <p class="fail-line" role="alert"><i class="info" aria-hidden="true">i</i><span>Claude Code did not accept the model "claude-fake-1".</span></p>
+      </div>
+      <div class="mark" style="margin:6px 0"><span class="mark-label">Changed: exit code in the line, log lines in a fold-out</span>
+        <div class="fail-line" role="alert"><i class="info" aria-hidden="true">i</i><div><span>Claude Code stopped (exit code 7).</span><details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px">Show log</summary><pre class="mono" style="margin:6px 0 0;white-space:pre-wrap">simulated agent: the disk is full
+write failed: ENOSPC</pre></details></div></div>
+      </div>
+    </div>
+    <div class="dock">
+      <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt" placeholder="Reply to Claude"></textarea>
+        <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode" disabled>Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" disabled>Default</button><span class="spacer"></span><button class="send off" type="button" aria-label="Send">↑</button></div></div></form>
+    </div>
+  </div>
+</section>
+
+<section class="state">
+  <h2>8. Loading and error of the widget</h2>
+  <p class="muted">Neither applies. The widget has no load and no command of its own. It shows the latest plan entry of the snapshot of <span class="mono">sessions.open</span>, and each event updates it at once. The waiting state is the step in progress with its spinner (state 2). With reduced motion, the spinner stops, like the other spinners of the app.</p>
+</section>
+
+<section class="state">
+  <h2>9. A draft: Mode and model enabled</h2>
+  <p class="muted">User decision C. In a draft, the Mode control and the model button are enabled until the first message. The model button opens the menu "Model" and saves the choice with sessions.set-model. After the first message both are disabled. The model changes later only after the refusal fallback of S5.</p>
+  <div class="window frame" style="height:360px">
+    <div class="frame-head">
+      <div class="page-head head-row"><h1>Fix the login page</h1><button class="delete" type="button" aria-label="Delete session" title="Delete session"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    </div>
+    <div class="transcript" role="log" aria-label="Transcript">
+      <p class="muted" style="font-size:13px">This session has not started. Send starts it with the prompt below.</p>
+    </div>
+    <div class="dock">
+      <div class="mark"><span class="mark-label">New: the model button is enabled in a draft</span>
+        <form class="composer gh"><div class="composer-box"><textarea rows="2" aria-label="Prompt">Fix the login page: the error text overlaps the button.</textarea>
+          <div class="composer-controls"><button class="plus" type="button" aria-label="Add context" title="Coming soon" disabled>+</button><button class="text-button" type="button" aria-label="Mode">Ask<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><button class="text-button" type="button" aria-haspopup="menu">Opus 5.5<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><span class="spacer"></span><button class="send" type="button" aria-label="Send">↑</button></div></div></form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Mockup only: show each transcript scrolled to the bottom, as the app keeps it.
+  for (const log of document.querySelectorAll('.frame > .transcript')) log.scrollTop = log.scrollHeight
+</script>
+</body>
+</html>

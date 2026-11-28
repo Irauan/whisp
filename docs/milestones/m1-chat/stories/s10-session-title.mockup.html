@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S10 Session title mockup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --canvas: #070709; --sidebar: #101013; --raised: #0d0d0f; --selected: #212126; --hover: #18181b;
+    --line: #2d2d33; --text: #eeeef1; --muted: #9d9ea6; --accent: #ac99ff; --danger: #e5786d; --strip: 44px;
+    font: 14px/1.45 system-ui, 'Segoe UI', sans-serif; color: var(--text); background: #000;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; display: grid; gap: 32px; }
+  h2 { margin: 0 0 4px; font-size: 15px; }
+  .note { margin: 0 0 10px; color: var(--muted); font-size: 13px; max-width: 900px; }
+  .change { color: var(--accent); }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Window */
+  .win { display: flex; width: 980px; height: 300px; background: var(--canvas); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .side { width: 260px; flex: none; background: var(--sidebar); border-right: 1px solid var(--line); }
+  .toolbar { display: flex; align-items: center; gap: 4px; height: var(--strip); padding: 0 10px; color: var(--muted); }
+  .toolbar .spacer { flex: 1; }
+  .icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: var(--muted); }
+  .icon:hover { background: var(--hover); color: var(--text); }
+  .nav { padding: 4px 8px; display: grid; gap: 2px; }
+  .nav div { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; }
+  .nav .on { background: var(--selected); }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+  /* NEW: the title strip of the main area holds the title and the arrow. */
+  .strip { display: flex; align-items: center; gap: 2px; height: var(--strip); padding: 0 140px 0 16px; }
+  .title { min-width: 0; padding: 4px 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .arrow { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; color: var(--muted); }
+  .arrow:hover, .arrow[aria-expanded='true'] { background: var(--selected); color: var(--text); }
+  .arrow svg { width: 14px; height: 14px; }
+  .winctl { position: absolute; top: 0; right: 0; display: flex; height: var(--strip); color: var(--muted); }
+  .winctl span { width: 46px; display: grid; place-items: center; }
+
+  .log { flex: 1; display: grid; align-content: start; padding: 8px 32px; }
+  .msg { justify-self: end; max-width: 70%; padding: 8px 12px; background: var(--selected); border-radius: 12px 12px 4px 12px; }
+  .msg.agent { justify-self: start; background: none; padding: 8px 0; }
+
+  /* Menu in the GitHub style: icon rows, a separator, the danger row in red. */
+  .menu { position: absolute; top: 40px; width: 280px; padding: 6px; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); z-index: 2; }
+  .menu hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+  .row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 8px; text-align: left; }
+  .row:hover { background: var(--hover); }
+  .row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.info { cursor: default; }
+  .row.info:hover { background: none; }
+  .row .muted { color: var(--muted); }
+  .row.danger { color: var(--danger); }
+  .row .key { color: var(--muted); font-size: 12px; }
+  .row .more { color: var(--muted); }
+  .row[disabled] { opacity: 0.45; cursor: default; }
+  .row[disabled]:hover { background: none; }
+  .soon { padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; }
+  .menu.sub { width: 200px; }
+
+  .old .strip { display: none; }
+  .old .head { display: flex; align-items: center; justify-content: space-between; padding: 8px 32px 12px; border-bottom: 1px solid var(--line); font-size: 22px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"/></symbol>
+  <symbol id="trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></symbol>
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></symbol>
+  <symbol id="left" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+  <symbol id="open" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.5"/></symbol>
+  <symbol id="pencil" viewBox="0 0 16 16"><path d="M10.5 3l2.5 2.5L6 12.5H3.5V10z"/></symbol>
+  <symbol id="fork" viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="11.5" cy="3.5" r="1.5"/><circle cx="8" cy="12.5" r="1.5"/><path d="M4.5 5v1.5a1.5 1.5 0 0 0 1.5 1.5h4a1.5 1.5 0 0 0 1.5-1.5V5M8 8v3"/></symbol>
+  <symbol id="archive" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M6.5 8.5h3"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+</svg>
+
+<template id="sidebar">
+  <div class="side">
+    <div class="toolbar">
+      <span class="icon"><svg><use href="#panel"/></svg></span><span class="spacer"></span>
+      <span class="icon"><svg><use href="#search"/></svg></span>
+      <span class="icon"><svg><use href="#left"/></svg></span>
+      <span class="icon"><svg><use href="#right"/></svg></span>
+    </div>
+    <div class="nav">
+      <div><svg><use href="#plus"/></svg>New</div>
+      <div class="on">Greeting test</div>
+      <div>Fix the login form</div>
+    </div>
+  </div>
+</template>
+
+<section>
+  <h2>0. Today (S8), for comparison</h2>
+  <p class="note">The title is a large header row inside the page, with the trash button on the right and a line under it.</p>
+  <div class="win old" data-side>
+    <div class="main">
+      <div class="toolbar"></div>
+      <div class="winctl"><span>–</span><span>□</span><span>✕</span></div>
+      <div class="head">First test run of aether. how are you doing claude? <span class="icon"><svg><use href="#trash"/></svg></span></div>
+      <div class="log"><div class="msg">First test run of aether. how are you doing claude?</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>1. Started session, menu closed</h2>
+  <p class="note"><span class="change">Changed:</span> the title moves into the top strip, on the line of the window buttons, as in the Claude app. The header row and its line go away, and the transcript starts higher. The title is plain text and does nothing on click. A separate arrow button follows it. The title shows Claude's title (S10) once it comes.</p>
+  <div class="win" data-side>
+    <div class="main">
+      <div class="strip"><span class="title">Greeting test</span><button class="arrow" aria-label="Session options" aria-expanded="false"><svg><use href="#chev"/></svg></button></div>
+      <div class="winctl"><span>–</span><span>□</span><span>✕</span></div>
+      <div class="log"><div class="msg">First test run of aether. how are you doing claude?</div><div class="msg agent">Doing well, thanks. What should we test first?</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>2. Started session, menu open (only the arrow opens it)</h2>
+  <p class="note"><span class="change">New:</span> the menu in the GitHub style: a row for each item with an icon, a separator, and the danger row in red. Items in the order of the Claude app, each with an icon and Claude's shortcut letter: "Rename" (R), "Fork" (Coming soon), "Archive" (Coming soon), "Delete" (D) in red. "Delete" opens the same confirmation as the trash button today. Claude items with no Aether feature (Open in, Share, Detach, Transcript view, Output style, Continue in cloud) are left out. Escape or a click outside closes the menu.</p>
+  <div class="win" data-side>
+    <div class="main">
+      <div class="strip"><span class="title">Greeting test</span><button class="arrow" aria-label="Session options" aria-expanded="true"><svg><use href="#chev"/></svg></button></div>
+      <div class="winctl"><span>–</span><span>□</span><span>✕</span></div>
+      <div class="menu" style="left:16px">
+        <button class="row"><svg><use href="#pencil"/></svg><span class="label">Rename</span><span class="key">R</span></button>
+        <button class="row" disabled><svg><use href="#fork"/></svg><span class="label">Fork</span><span class="soon">Coming soon</span></button>
+        <hr>
+        <button class="row" disabled><svg><use href="#archive"/></svg><span class="label">Archive</span><span class="soon">Coming soon</span></button>
+        <button class="row danger"><svg><use href="#trash"/></svg><span class="label">Delete</span><span class="key">D</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Draft, menu open</h2>
+  <p class="note"><span class="change">Changed:</span> a draft shows "New session" as its title. Its menu holds only "Discard draft" in red, as in the GitHub app.</p>
+  <div class="win" data-side>
+    <div class="main">
+      <div class="strip"><span class="title">New session</span><button class="arrow" aria-label="Session options" aria-expanded="true"><svg><use href="#chev"/></svg></button></div>
+      <div class="winctl"><span>–</span><span>□</span><span>✕</span></div>
+      <div class="menu" style="left:16px">
+        <button class="row danger"><svg><use href="#trash"/></svg><span class="label">Discard draft</span></button>
+      </div>
+  </div>
+</section>
+
+<section>
+  <h2>4. Long title</h2>
+  <p class="note">A long title ends with an ellipsis before the window buttons. The arrow always stays in view. The full title shows as a tooltip.</p>
+  <div class="win" data-side>
+    <div class="main">
+      <div class="strip"><span class="title" title="Investigate why the release build of the desktop app fails on Windows when the path has spaces">Investigate why the release build of the desktop app fails on Windows when the path has spaces</span><button class="arrow" aria-label="Session options"><svg><use href="#chev"/></svg></button></div>
+      <div class="winctl"><span>–</span><span>□</span><span>✕</span></div>
+      <div class="log"></div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const side = document.getElementById('sidebar');
+  document.querySelectorAll('[data-side]').forEach((win) => win.prepend(side.content.cloneNode(true)));
+</script>
+</body>
+</html>
