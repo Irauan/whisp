@@ -23,6 +23,22 @@
     "sha256": "97d3457712ff811a51bd1b55d5cd5cdf42441cf11e2c3997d9cb3b1d5c54b44f",
     "story": "m1-chat/s1"
   },
+  "tests/acceptance/m1-chat/s10/fixture.ts": {
+    "sha256": "ec110dd4f7978a90704f0c98ea5db2ce2cc7eff456483bb774a5fdf0d1ba9afd",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/rename.spec.ts": {
+    "sha256": "ba4bc43605e52216130fc4edbbc5f3684a7e05196666b1d71c0b5e96d6e34079",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/strip.spec.ts": {
+    "sha256": "9193d4d029ccc8fc16651e4b631a76d79e2381846a30b983b2d09ad14a439bed",
+    "story": "m1-chat/s10"
+  },
+  "tests/acceptance/m1-chat/s10/title.spec.ts": {
+    "sha256": "1863b9f1763a12aead8b57cda717e694731ca2a90c6976fb9b121dee8fa89f44",
+    "story": "m1-chat/s10"
+  },
   "tests/acceptance/m1-chat/s2/fixture.ts": {
     "sha256": "cdf6466be56ad240410022591f71b0cf0220013d848092b4e689ecf682f5a32c",
     "story": "m1-chat/s2"
@@ -206,6 +222,14 @@
   "tests/architecture/contracts.test.ts": {
     "sha256": "3cf6b799df821008d98ee2e2865600b6fbd5f0c639858648da4d1c8c6630489c",
     "story": "m0-gates/s8"
+  },
+  "tests/architecture/m1-chat-s10-session-title.test.ts": {
+    "sha256": "014375c243e5edc5387fdb3149fb2cbe7966ffe3d9821dcb1ed0ae0ed8c51ea8",
+    "story": "m1-chat/s10"
+  },
+  "tests/architecture/m1-chat-s10-title-agent.test.ts": {
+    "sha256": "da9fb69b550679c96ddc2382b74b3608de8d55f50af172ddda0659faa8d0123e",
+    "story": "m1-chat/s10"
   },
   "tests/architecture/m1-chat-s5-permission-queue.test.ts": {
     "sha256": "873505c076b396bbdef2a6f2a5cb3531a9a0a7c0b346f5f5a4b8d4507acfb671",
