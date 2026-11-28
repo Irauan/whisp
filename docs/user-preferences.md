@@ -81,3 +81,12 @@ The advisor reads this file before each decision. It predicts from it if the use
 | 2026-11-27 | Merge of main into the milestone | The coordinator merges the sync PR | Keep the milestone current |
 | 2026-11-27 | Acceptance runs of a story | Only the scenarios it touches; the full suite at milestone validation | Faster stories |
 | 2026-11-27 | Acceptance test windows | Hide them | No flashing, no stolen focus |
+| 2026-11-28 | M2 source of the command list | The agent over ACP only | One source of truth |
+| 2026-11-28 | When the agent starts | When a session opens, not on `/` | The agent is ready for the first message too |
+| 2026-11-28 | Draft agent on the New session page | On intent, never at launch | No process or trust dialog at each launch |
+| 2026-11-28 | A failed start on open | A notice in the transcript | Say why (pattern 13) |
+| 2026-11-28 | `/remote-control` in the menu | Hide it | Security |
+| 2026-11-28 | `#` menu | None until issues and pull requests are a feature | Only `/` and `@` menus now |
+| 2026-11-28 | M2 start | Now, from `milestone/m1-chat` | Speed |
+| 2026-11-28 | A file picked with `@` | An inline link in the text, like the Copilot app, not a chip | Follow the Copilot app (pattern 10) |
+| 2026-11-28 | A command picked with `/` | A tag at the start of the text; the message text follows it | Follow the Copilot app (pattern 10) |
