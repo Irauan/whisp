@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { openDatabase } from '../../../building-blocks/database'
 import { MIGRATIONS } from '../../../building-blocks/migrations'
-import { listSessions } from './list.contract'
+import { SessionStore } from '../session.store'
+import { Transcript } from '../transcript.store'
+import { listSessions, sessionItemSchema } from './list.contract'
 import { listSessionsController } from './list.controller'
 
 function setup() {
@@ -14,11 +16,14 @@ function setup() {
   const insert = database.prepare(
     'INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   )
-  return { database, insert, list: listSessionsController(database) }
+  const store = new SessionStore(database)
+  let next = 0
+  const transcript = new Transcript(store, () => undefined, { now: () => new Date('2026-03-01T00:00:00.000Z') }, { next: () => `id-${(next += 1)}` })
+  return { database, insert, store, transcript, list: listSessionsController(database, transcript) }
 }
 
 describe('sessions.list', () => {
-  it('lists the sessions of one profile, oldest first, with all their fields', async () => {
+  it('lists the sessions of one profile, oldest first, with all their fields and the idle live state', async () => {
     const { insert, list } = setup()
     const attachments = JSON.stringify([{ kind: 'file', ref: 'C:\\notes.txt', label: 'notes.txt' }])
     insert.run('s2', 'w1', 'Second', 'Second prompt', 'plan', 'C:\\work', 'claude-opus-5-5', attachments, '2026-01-02')
@@ -26,7 +31,7 @@ describe('sessions.list', () => {
     insert.run('s3', 'w2', 'Other', 'Other prompt', 'ask', 'C:\\other', 'default', '[]', '2026-01-01')
 
     const result = await list({ profileId: 'w1' })
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       value: {
         sessions: [
@@ -40,7 +45,11 @@ describe('sessions.list', () => {
             sourcePath: 'C:\\work',
             model: 'default',
             attachments: [],
-            createdAt: '2026-01-01'
+            createdAt: '2026-01-01',
+            unread: false,
+            status: 'idle',
+            openCardIds: [],
+            revision: 0
           },
           {
             id: 's2',
@@ -52,7 +61,11 @@ describe('sessions.list', () => {
             sourcePath: 'C:\\work',
             model: 'claude-opus-5-5',
             attachments: [{ kind: 'file', ref: 'C:\\notes.txt', label: 'notes.txt' }],
-            createdAt: '2026-01-02'
+            createdAt: '2026-01-02',
+            unread: false,
+            status: 'idle',
+            openCardIds: [],
+            revision: 0
           }
         ],
         newSessionMode: 'plan'
@@ -63,8 +76,8 @@ describe('sessions.list', () => {
 
   it('lists nothing for a profile without sessions or an unknown profile, and a new session starts with Ask', async () => {
     const { list } = setup()
-    expect(await list({ profileId: 'w2' })).toEqual({ ok: true, value: { sessions: [], newSessionMode: 'ask' } })
-    expect(await list({ profileId: 'missing' })).toEqual({ ok: true, value: { sessions: [], newSessionMode: 'ask' } })
+    expect(await list({ profileId: 'w2' })).toEqual({ ok: true, value: { sessions: [], folders: [], newSessionMode: 'ask' } })
+    expect(await list({ profileId: 'missing' })).toEqual({ ok: true, value: { sessions: [], folders: [], newSessionMode: 'ask' } })
   })
 
   it('gives the mode of the newest created session to a new session, and Ask after Approve all', async () => {
@@ -91,5 +104,67 @@ describe('sessions.list', () => {
       )
       .run()
     await expect(list({ profileId: 'w1' })).rejects.toThrow()
+  })
+
+  it('gives the unread mark of each session, from the saved column', async () => {
+    const { store, insert, list } = setup()
+    insert.run('s1', 'w1', 'First', 'p', 'ask', 'C:\\work', 'default', '[]', '2026-01-01')
+    insert.run('s2', 'w1', 'Second', 'p', 'ask', 'C:\\work', 'default', '[]', '2026-01-02')
+    store.setUnread('s2', true)
+    const result = await list({ profileId: 'w1' })
+    expect(result.ok && result.value.sessions.map((session) => [session.id, session.unread])).toEqual([['s1', false], ['s2', true]])
+  })
+
+  it('gives the live status, the open card IDs and the revision of the session events (S11-22)', async () => {
+    const { insert, transcript, list } = setup()
+    insert.run('s1', 'w1', 'First', 'p', 'ask', 'C:\\work', 'default', '[]', '2026-01-01')
+    insert.run('s2', 'w1', 'Second', 'p', 'ask', 'C:\\work', 'default', '[]', '2026-01-02')
+    transcript.setStatus('s1', 'working')
+    transcript.openPermission('s1', { id: 'req-1', toolId: 'tool-1', title: 'npm test', toolKind: 'execute', locations: [], options: [] })
+    const result = await list({ profileId: 'w1' })
+    if (!result.ok) throw new Error('The list failed.')
+    const [first, second] = result.value.sessions
+    expect(first).toMatchObject({ id: 's1', status: 'working', openCardIds: ['req-1'], revision: 2 })
+    expect(second).toMatchObject({ id: 's2', status: 'idle', openCardIds: [], revision: 0 })
+  })
+
+  it('lists the folders of the profile with the newest activity first, and the empty ones by the time that they were added', async () => {
+    const { database, insert, list } = setup()
+    const folder = database.prepare("INSERT INTO folders (id, profile_id, path, collapsed, created_at) VALUES (?, ?, ?, ?, ?)")
+    folder.run('fa', 'w1', 'C:\\a', 0, '2026-01-01')
+    folder.run('fb', 'w1', 'C:\\b', 1, '2026-01-02')
+    folder.run('fc', 'w1', 'C:\\c', 0, '2026-01-05')
+    folder.run('fo', 'w2', 'C:\\a', 0, '2026-01-09')
+    insert.run('s1', 'w1', 'In a', 'p', 'ask', 'C:\\a', 'default', '[]', '2026-01-07')
+    insert.run('s2', 'w1', 'In b', 'p', 'ask', 'C:\\b', 'default', '[]', '2026-01-03')
+    const result = await list({ profileId: 'w1' })
+    if (!result.ok) throw new Error('The list failed.')
+    expect(result.value.folders).toEqual([
+      { id: 'fa', path: 'C:\\a', collapsed: false },
+      { id: 'fc', path: 'C:\\c', collapsed: false },
+      { id: 'fb', path: 'C:\\b', collapsed: true }
+    ])
+  })
+
+  it('refuses a live field in the saved session, and an unknown field in an item', () => {
+    const item = {
+      id: 's1',
+      profileId: 'w1',
+      title: 't',
+      prompt: 'p',
+      mode: 'ask',
+      providerId: null,
+      sourcePath: 'C:\\work',
+      model: 'default',
+      attachments: [],
+      createdAt: '2026-01-01',
+      unread: false,
+      status: 'idle',
+      openCardIds: [],
+      revision: 0
+    }
+    expect(sessionItemSchema.safeParse(item).success).toBe(true)
+    expect(sessionItemSchema.safeParse({ ...item, extra: 1 }).success).toBe(false)
+    expect(sessionItemSchema.safeParse({ ...item, status: 'sleeping' }).success).toBe(false)
   })
 })

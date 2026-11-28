@@ -86,7 +86,14 @@ function createWindow(): void {
   })
   const contentsId = window.webContents.id
   appWindows.add(contentsId)
-  window.once('closed', () => appWindows.delete(contentsId))
+  window.once('closed', () => {
+    appWindows.delete(contentsId)
+    main?.windowClosed()
+  })
+  // The unread mark reads the focus at a turn end (story S11). The flag starts from the window, then follows its events.
+  main?.windowFocus(window.isFocused())
+  window.on('focus', () => main?.windowFocus(true))
+  window.on('blur', () => main?.windowFocus(false))
   window.once('ready-to-show', () => window.show())
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   // Allow a reload of the current page only. Hot reload needs it.

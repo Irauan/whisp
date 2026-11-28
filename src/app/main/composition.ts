@@ -29,6 +29,12 @@ import type { Notice } from '../../features/profiles/profile'
 import { ProfileStore } from '../../features/profiles/profile.store'
 import { answerQuestion } from '../../features/repositories/answer-question/answer-question.contract'
 import { answerQuestionController } from '../../features/repositories/answer-question/answer-question.controller'
+import { addFolder } from '../../features/folders/add/add.contract'
+import { addFolderController } from '../../features/folders/add/add.controller'
+import { removeFolder } from '../../features/folders/remove/remove.contract'
+import { removeFolderController } from '../../features/folders/remove/remove.controller'
+import { setFolderCollapsed } from '../../features/folders/set-collapsed/set-collapsed.contract'
+import { setFolderCollapsedController } from '../../features/folders/set-collapsed/set-collapsed.controller'
 import { checkDirectoryHandler } from '../../features/repositories/check-directory/check-directory.handler'
 import { listQuestions } from '../../features/repositories/list-questions/list-questions.contract'
 import { listQuestionsController } from '../../features/repositories/list-questions/list-questions.controller'
@@ -54,9 +60,12 @@ import { setMode } from '../../features/sessions/set-mode/set-mode.contract'
 import { setModeController } from '../../features/sessions/set-mode/set-mode.controller'
 import { setModel } from '../../features/sessions/set-model/set-model.contract'
 import { setModelController } from '../../features/sessions/set-model/set-model.controller'
+import { setViewing } from '../../features/sessions/set-viewing/set-viewing.contract'
+import { setViewingController } from '../../features/sessions/set-viewing/set-viewing.controller'
 import { stopSession } from '../../features/sessions/stop/stop.contract'
 import { stopSessionController } from '../../features/sessions/stop/stop.controller'
 import { Transcript } from '../../features/sessions/transcript.store'
+import { Viewing } from '../../features/sessions/viewing.store'
 import { createSession } from '../../features/sessions/create/create.contract'
 import { createSessionController } from '../../features/sessions/create/create.controller'
 import { deleteSession } from '../../features/sessions/delete/delete.contract'
@@ -87,6 +96,13 @@ export interface Composition {
    * and closes the database after it.
    */
   shutdown(): Promise<void>
+  /**
+   * The window got or lost the focus (story S11). The entry point calls it from the window events `focus`
+   * and `blur`, and once when it creates the window. The unread mark reads this flag at a turn end.
+   */
+  windowFocus(focused: boolean): void
+  /** The window closed: no session is viewed, and nothing has the focus. */
+  windowClosed(): void
   /** Closes the database. */
   close(): void
 }
@@ -156,6 +172,8 @@ export function composeMain({
   const transcript = new Transcript(sessionStore, (event) => publish(SESSIONS_CHANGED, event), clock, ids, cardsClosed)
   // The live mode lives with the process. When the process is gone, the window shows the saved mode again.
   const processes: Processes = new Processes((sessionId) => transcript.clearLiveMode(sessionId, sessionStore.find(sessionId)?.mode))
+  // What the user looks at: the viewed session and the focus flag. A session that becomes seen loses its unread mark.
+  const viewing = new Viewing((sessionId) => transcript.setUnread(sessionId, false))
   // The edit of an account and the first start of a session share this set (decision 0014).
   const startingAccounts = new AccountsInStart()
   // The slices never call each other, so the composition root connects them: the agent process of a
@@ -208,10 +226,10 @@ export function composeMain({
         await Promise.all(sessionStore.idsByProfile(input.id).map(release))
         return removeProfile(input)
       },
-      [listSessions.name]: listSessionsController(database),
+      [listSessions.name]: listSessionsController(database, transcript),
       [createSession.name]: createSessionController(database, clock, ids),
       [openSession.name]: openSessionController(database, transcript),
-      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, recordRequest, guard, turnEnded: retireIdle, clock, ids, log }),
+      [sendMessage.name]: sendMessageController({ store: sessionStore, transcript, processes, agents, github, starting: startingAccounts, record, recordRequest, guard, turnEnded: retireIdle, viewing, clock, ids, log }),
       // Stop also answers "cancel" for the open question of the session. The turn then ends with "Stopped.".
       [stopSession.name]: async (input: { id: string }) => {
         const result = await stop(input)
@@ -225,9 +243,15 @@ export function composeMain({
       [setMode.name]: setModeController({ store: sessionStore, transcript }),
       [setModel.name]: setModelController({ store: sessionStore, transcript }),
       [renameSession.name]: renameSessionController({ store: sessionStore, transcript }),
-      [deleteSession.name]: deleteSessionController(database, release)
+      [deleteSession.name]: deleteSessionController(database, release),
+      [setViewing.name]: setViewingController(viewing),
+      [addFolder.name]: addFolderController(database, clock, ids),
+      [setFolderCollapsed.name]: setFolderCollapsedController(database),
+      [removeFolder.name]: removeFolderController(database)
     },
     notices,
+    windowFocus: (focused) => viewing.setFocused(focused),
+    windowClosed: () => viewing.reset(),
     shutdown: () => {
       // The timer stops first: no release runs while the processes end, or after the database closes.
       stopRetiring()
