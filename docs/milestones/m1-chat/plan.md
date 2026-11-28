@@ -80,8 +80,8 @@ The validator runs A1, A2, A3, A4, A6, A8, A12 and A23 with real Claude. Decisio
 - [x] S8 Frame, composer and plan widget. PR #35, squash merge `a92cb98`.
 - [x] S9 Idle release and process limit. PR #40, squash merge `c485a92`.
 - [x] Step 7: milestone validation, with the live checks. PASS, PR #44, squash merge `02136b2`.
-- [ ] S10 Session title and menu (user decision, 2026-11-28). Design review approved on 2026-11-28.
-- [ ] S11 Sidebar folders and session status (user decision, 2026-11-28). Design review approved on 2026-11-28.
-- [ ] Step 7 again for S10 and S11, with the live check A23
+- [x] S10 Session title and menu (user decision, 2026-11-28). PR #48, squash merge `dcfb310`.
+- [x] S11 Sidebar folders and session status (user decision, 2026-11-28). PR #52, squash merge `481930d`; review fixes PR #53, `98d923e`.
+- [x] Step 7 again for S10 and S11, with the live check A23. PASS, PR #55, squash merge `bfc2cdc`.
 - [ ] Step 8: user acceptance
 - [ ] Step 9: retrospective

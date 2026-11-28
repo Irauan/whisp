@@ -74,6 +74,7 @@ The advisor reads this file before each decision. It predicts from it if the use
 | 2026-11-27 | Trust dialog | Show the repository root path, warn when it holds the workspace directory. Modal in m1 | Security |
 | 2026-11-27 | S9 choices | `started_by` in migration 004, constant times, background shells not counted, A21 as a slice test, the child-process fix | The recommendations |
 | 2026-11-27 | Run cap of m1 | 62, then 75 | The specs added work |
+| 2026-11-28 | S10 and S11 after the hand test | "add it to M1 as S10"; "Add S11 to M1 and raise the cap to 80"; "Raise to 86" | The user adds UI work found in a hand test to the open milestone, and raises the cap for it |
 | 2026-11-27 | Commits when 1Password cannot approve | Commit through `gh` with the Irauan account; GitHub signs | Work continues away from the PC |
 | 2026-11-27 | Line above the dock | No line between the transcript and the composer area; the header line stays | A clean frame |
 | 2026-11-27 | Cost of ending child processes (S9) | Accept about 0.9 s per close for m1; a faster design later | Correct first |
