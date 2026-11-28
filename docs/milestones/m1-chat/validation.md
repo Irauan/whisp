@@ -1,6 +1,6 @@
 # Milestone m1-chat: validation
 
-Status: step 7 of `docs/process.md`, round 1, on 2026-11-27. Validator run 1 of the 2 in the budget.
+Status: step 7 of `docs/process.md`, round 1, on 2026-11-27. Validator run 1 of the 2 in the budget. Round 2 (S10, S11 and PR #53), on 2026-11-28, is at the end of this file: see "Round 2: second pass".
 
 - Head: `milestone/m1-chat` at `f4eb2f2`, fetched over HTTPS. All 9 stories are merged.
 - Machine: Windows 11, Node 24.22, Electron 45.5 (`npm ci`, then `node node_modules/electron/install.js`), adapter `@agentclientprotocol/claude-agent-acp` 0.112.0.
@@ -249,3 +249,179 @@ From the files of the milestone. The coordinator holds the count of agent runs.
 | Test disputes | 1: the `killApp` helper of S5-31, resolved by `f72b86d` (PR #42) |
 | Escalations | The user answers of 2026-11-27 in `user-preferences.md` |
 | Agent runs against budget | Validator: 1 of 2. Milestone total: not in the files. Budget: 55 in the brief, 75 in `user-preferences.md` (F3). |
+
+## Round 2: second pass
+
+Status: step 7 of `docs/process.md`, round 2, on 2026-11-28. Validator run 2 of the 2 in the budget of the brief.
+
+- Head: `milestone/m1-chat` at `98d923e`, fetched over HTTPS, detached checkout.
+- New since round 1 (`f4eb2f2`, report `02136b2`):
+  - PR #46 (`0056caf`): composer focus ring. CSS only.
+  - S10 Session title and menu (PR #48, `dcfb310`): check A23.
+  - S11 Sidebar folders and session status (PR #52, `481930d`): checks A24 and A25.
+  - PR #53 (`98d923e`): S11 review fixes. It had no separate review. This pass reviews it. See "Review of PR #53".
+- Machine: Windows 11, Node 24.22, Electron 45.5 (`npm ci`, then `node node_modules/electron/install.js`), adapter `@agentclientprotocol/claude-agent-acp` 0.112.0.
+- Every run used a temporary data folder. The real Aether data folder was not written. See "Data folder, round 2".
+
+### Result, round 2
+
+- Each check A1 to A25 has evidence. All pass.
+- The regression passes in full, locally and in CI: gates, 1167 vitest tests and 142 acceptance tests.
+- The live run with real Claude passes: A23, A25, the live parts of A24, and A1 as a smoke test.
+- The review of PR #53 found no defect.
+- No serious finding is open. Four low findings and three notes are open. See "Findings, round 2".
+
+Verdict of the validator: PASS.
+
+### Regression, round 2
+
+| Gate | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | Passed: main, renderer, shared and test configs |
+| Lint | `npm run lint` | Passed |
+| Architecture | `npm run architecture` | Passed |
+| Test lock | `npm run lock -- --base origin/milestone/m1-chat` | Passed |
+| Unit, slice, contract and architecture tests | `npx vitest run` | 89 files, 1167 tests, 1167 passed, 0 skipped, 86 s |
+| Build | `npm run build` | Passed |
+| Full acceptance suite | `npx playwright test` after the build | 142 tests, 142 passed, 0 failed, 6.7 min, one worker, hidden windows |
+
+- Acceptance count by folder: m0-gates s8 6, s1 3, s2 8, s3 11, s4 11, s5 23, s6 15, s7 21, s8 15, s9 2, s10 9, s11 18. Round 1 had 115. S10 adds 9 and S11 adds 18.
+
+#### CI on the milestone branch, round 2
+
+- Run 46114727699: a manual run (`workflow_dispatch`) on `98d923e`. All six jobs passed: typecheck, lint, architecture, unit, lock, acceptance.
+- Its acceptance job printed "acceptance-scope: full suite" and ended with "142 passed (6.4m)". So CI ran the full suite at the head, with the same count as the local run.
+- The CI runners are `windows-latest`. So the win32-only tests of PR #53 ran in CI too.
+- Push run 46114628864 on the same `98d923e` shows "cancelled". The manual run cancelled it through the concurrency group `ci-<workflow>-<ref>`. It is not a failure.
+
+### Checks of the brief, round 2
+
+Only the new checks and the checks that ran again live are in detail. A2 to A22 have no code change of their own since round 1, and their CI tests passed again in the full suite at `98d923e`.
+
+| ID | Evidence in CI (simulated agent) | Live (real Claude) | Result |
+|---|---|---|---|
+| A1 | `s4/chat.spec.ts` "A1 and G11: …" | R2-L1 | PASS |
+| A2 to A22 | As in round 1. All passed in the full suite at `98d923e`, locally and in run 46114727699. | Round 1 (L1 to L6) | PASS |
+| A23 | `s10/title.spec.ts`: S10-1 (title during the turn, window and sidebar, after a restart), S10-2 (title outside a turn), S10-3 (title of a session that is not open). `s10/rename.spec.ts`: S10-14 (a title from Rename stays, also after a restart; a later agent title changes nothing). `s10/strip.spec.ts`: S10-10, S10-11, S10-12, S10-13, S10-15. vitest: S10-4 to S10-9, S10-16. | R2-L2 | PASS |
+| A24 | `s11/groups.spec.ts`: S11-1, S11-2, S11-3 (collapse with click, Enter, Space), S11-4 (the "+" of a group sets the folder of the composer), S11-16. `s11/folders.spec.ts`: S11-13 (collapse after a restart and a profile switch), S11-14 (the "+" menu), S11-15 (an added empty folder stays after a restart, and "Remove folder" removes it), S11-24 (the folder menu). vitest: S11-18, S11-19. | R2-L4 | PASS, with finding F4 (a test gap, covered live) |
+| A25 | `s11/status.spec.ts`: S11-5 (Working and its animation, none with reduced motion), S11-6 (New answer while another session is open; the open clears it), S11-7, S11-8, S11-9 (the mark after a restart), S11-10 (the hand, and no hand after a withdraw), S11-11 (the collapsed groups), S11-12. `s11/viewing.spec.ts`: S11-21. vitest: S11-17, S11-20, S11-22, S11-23. | R2-L3 | PASS |
+
+### Live run, round 2
+
+#### Setup, round 2
+
+- A Playwright harness launched the built app (`out/`) with the hidden-window arguments of the acceptance suite.
+- `AETHER_DATA_DIR` pointed to a new folder `<temp>\aether-live2-*\data`. The harness checked that `aether.db` was in that folder after the first start, before any prompt.
+- `APPDATA` pointed to a temporary folder. `USERPROFILE` stayed real, so Claude used the existing subscription sign-in (decision 0011).
+- The harness removed each `CLAUDE*`, `ANTHROPIC_*`, `GH_TOKEN` and `GITHUB_TOKEN` variable from the app environment. It wrote no `agents.json`, so the built-in Claude Code adapter ran.
+- The profile "Personal" came from an old `workspace.json` with no GitHub account and two drafts, one in `repo-a` and one in `repo-b`. Both are plain folders in the workspace directory.
+- Each new session started from the "+" of the group `repo-a` ("New session in repo-a").
+- The harness set the window focus with `emit('focus')`, as the S11 tests do, because the hidden window starts with no focus.
+- Evidence came from the window, screenshots (not attached: they show local paths), and read-only copies of the temporary database.
+- The harness lived in an ignored folder and is not part of this PR. The first attempt failed in the harness itself (a wrong locator), before any prompt. The second attempt ran all steps.
+
+#### Results, round 2
+
+| Run | Checks | What the validator saw | Result |
+|---|---|---|---|
+| R2-L1 | A1 (smoke) | "Say hello" got "Hello! What can I help you with?" in about 20 s, with the process start. No alert showed. The database held one user entry, one agent entry and one `agent_sessions` row for the session. | PASS |
+| R2-L2 | A23 | See "R2-L2 in detail". | PASS |
+| R2-L3 | A25 | See "R2-L3 in detail". | PASS |
+| R2-L4 | A24 (live parts) | See "R2-L4 in detail". | PASS |
+
+#### R2-L2 in detail (A23)
+
+1. A first message of 62 characters: "Write one short sentence about why autumn leaves change color."
+2. The strip and the sidebar row first showed the first line of the message.
+3. 2.0 s after Start session, while the turn still ran, the title strip showed "Why autumn leaves change color". The old sidebar row went away at the same time, and a row with the new title showed.
+4. The database had `title` "Why autumn leaves change color" and `title_source` `agent`.
+5. The short message "Say hello" (9 characters) also got a title: "Greeting exchange", 0.5 s after its turn ended, with `title_source` `agent`. This is the turn-end path of the adapter that the S10 spec describes.
+6. After a quit and a start, the sidebar showed the row "Why autumn leaves change color".
+7. Rename: the menu item "Rename" turned the title into a text field with the title selected. The CI test S10-14 covers the save, Escape and a blank title.
+
+#### R2-L3 in detail (A25)
+
+1. Session B started with "Count from 1 to 60 in words, …". The harness then opened the A23 session and set the window focus.
+2. While B worked, its row had the description "Working", one running animation, the chat icon in `rgb(238, 238, 241)` (`--text`), and the class `state-working`.
+3. At the end of B's turn, B's row had "New answer", the chat icon in `rgb(68, 147, 248)` (`--unread`, #4493f8), and `sessions.unread` = 1.
+4. A click on B's row cleared the description, and `sessions.unread` went back to 0.
+5. Session C started with "Use the Bash tool to run exactly this command in the current folder: mkdir gamma", in mode Ask. The harness opened the A23 session again.
+6. C's row went from "Working" to "Needs your answer": the hand icon (`lucide-hand`, class `state-attention`) in `rgb(210, 153, 34)` (`--attention`, #d29922).
+7. With the group `repo-a` collapsed, the group toggle had the description "Needs your answer", and the hand showed at the right of the group row.
+8. In C, the card showed "execute · mkdir gamma", "Run this command?", "Yes" and "No". "Yes" ran the command: the folder `gamma` exists. The hand went away, and C went back to the normal icon after the turn.
+
+#### R2-L4 in detail (A24)
+
+- Each group row showed a folder icon and the folder name. The session rows were indented under their group. The group with the newest session was first.
+- Hover on a group row showed the chevron and the "+".
+- The "+" of the group `repo-a` started four sessions. Each saved `source_path` is `repo-a`, and each row showed under the group `repo-a`. The database kept two folder rows, so no second group appeared.
+- The "+" of "Sessions" opened "Start session in" with `repo-a` and `repo-b`, "Add from GitHub" and "Add from URL" disabled with "Coming soon", and "Add local folder or repository".
+- A right click on `repo-b` opened "New session" and "Remove folder". "Remove folder" was disabled, with "Delete its sessions first", because `repo-b` has a draft.
+- A click on `repo-b` collapsed it. `folders.collapsed` was 1, and after a quit and a start `aria-expanded` was still false.
+- Not live: the add of an empty folder needs the native folder picker. CI covers it with S11-15 and S11-24, through the picker stub of S7.
+
+#### Probe against the mockups
+
+The validator compared the live screenshots with the two approved mockups, `s10-session-title.mockup.html` and `s11-sidebar-status.mockup.html`.
+
+| Mockup state | Live | Match |
+|---|---|---|
+| S10 1: started session, menu closed | Title in the strip, arrow after it, no header row, no trash button | Yes |
+| S10 2: menu open | "Rename" (pencil, R), "Fork" and "Archive" disabled with "Coming soon", a separator, "Delete" in red (trash, D) | Yes |
+| S10 3: draft, menu open | Title "New session", one red item "Discard draft" | Yes |
+| S10 4: long title | Not shown live. The CSS has `overflow: hidden`, `text-overflow: ellipsis` and `white-space: nowrap` on `.session-title`, and the arrow is a separate flex item. | Not probed (CSS read) |
+| S11 2: groups and status icons | Folder icons, indented rows, the blue chat icon of "New answer", the yellow hand | Yes |
+| S11 3: hover on a group | Chevron down and "+" at the right | Yes |
+| S11 4: collapsed group with the hand | Chevron right, the hand at the right. With the keyboard focus on the toggle, the "+" also shows next to the hand, as rule 6 says. | Yes |
+| S11 5: no sessions | Not shown live. CI covers it (S11-15, S11-16). | Not probed |
+| S11 6: the "+" menu | Same items, order and disabled states | Yes |
+| S11 7: right click on a folder | Same items. "Remove folder" disabled for a folder with a session, with its description. | Yes |
+
+### Review of PR #53
+
+The validator read `git diff 481930d..98d923e`: 12 files, 182 lines added, 20 removed. No locked test changed (the lock gate passed).
+
+| Item | What changed | Validator check | Result |
+|---|---|---|---|
+| M1 | The group "+" is in the row flow, 0 px wide at rest, 26 px on `:hover` and `:focus-within` | The button stays in the focus order (no `display: none`). Live: the "+" showed on hover and with focus, and the hand of a collapsed group stayed visible next to it. S11-2 passed. | No defect |
+| L2 | `replaySidebarEvents`: a gap in the replay of the recent events loads the list again | `reload` is `useProfiles.load`, a `useCallback` with no dependencies, so the layout effect does not run at each render. A new list reads the revision of the main process when it reads, and the events come in order. An event that `safeParse` drops is not in the buffer, so the next list covers it. `Transcript.forget` removes the revision only for a deleted session, and the list no longer holds that session. So the reload cannot loop. | No defect |
+| L7 | "Start session in" shows only when the profile has a folder | One JSX condition | No defect |
+| L8 | `Viewing.checkSeen` logs an error of `onSeen` and does not throw | Unit test added. Covers the focus event and `set-viewing`. | No defect |
+| L1 | `folderRowPath`: a new session and an imported draft take the path of the existing folder row of the same folder (on Windows, the case and the kind of slash do not count) | `createSessionHandler` returns only the ID, so no caller holds the old text. Trust and directory checks use `isSameFolder` and `isInsideFolder`, which ignore case on Windows. `folders.add` already used `isSameFolder`. The win32-only tests ran in CI. | No defect. See note N3. |
+
+### Data folder, round 2
+
+- The validator listed the real Aether data folder (303 entries, with sizes and times) before the live runs and after them. The two lists are equal.
+- The full acceptance suite checks the same rule (G11), and it passed.
+- The live sessions ran in the user's Claude folder, as in round 1. The validator did not change or clean that folder.
+- The validator removed its temporary folders. No app or agent process of the runs remained.
+
+### Findings, round 2
+
+No serious finding is open.
+
+| ID | Severity | Status | Finding | Evidence | Suggested route |
+|---|---|---|---|---|---|
+| F1 | Low | Open, from round 1 | The unit test "version 3 adds the trust answers …" can time out on a loaded CI runner. It did not fail in this round. | `src/building-blocks/migrations.test.ts` 202 has no change since round 1 | As in round 1 |
+| F2 | Low | Open, larger | `decisions-to-review.md` has no advisor decisions of S10, S11 or PR #53, in addition to S1 to S4, S6 and S7. The user reads this file at acceptance. | `decisions-to-review.md` has sections for S8, S9 and S5 only; `docs/process.md`, "Escalation" step 5 | Coordinator copies the decisions from PRs #48, #52 and #53 |
+| F3 | Low | Open, larger | The brief says 55 agent runs. `user-preferences.md` records 62, then 75. The S11 spec records the user's raise of the cap to 80 ("Add S11 to M1 and raise the cap to 80"). Neither the brief nor `user-preferences.md` has 80. | `brief.md`, "Budget"; `user-preferences.md` line 76; `stories/s11-sidebar-status.md`, "Status" | Coordinator updates both files |
+| F4 | Low | New | No acceptance test starts a session from the "+" of a group to the end. S11-4 stops at the composer and checks that no session is created. A24 says "starts a session from a group's '+'". The live run R2-L4 covers it. | `tests/acceptance/m1-chat/s11/groups.spec.ts` 150 | Test author adds the start and the check of the group of the new row, in a later story or a fix PR |
+| N1 | Note | Open, from round 1 | The Auto fallback notice cannot show live with today's models. | Round 1, L6 | None now |
+| N2 | Note | New | `plan.md` still shows S10, S11 and "Step 7 again for S10 and S11" as not done. | `plan.md` lines 83 to 85 | Coordinator ticks them after this PR |
+| N3 | Note | New | PR #53 L1 joins only new sessions to an existing folder row. Folder rows that migration 006 made from sessions whose paths differ only in case stay two groups. The PR says so, and adds no migration. | PR #53 "Notes"; `folders.store.ts` `sessionCount` compares the exact text | None now. A later story can merge such rows if a user meets the case. |
+
+### Role duties that do not apply, round 2
+
+- The m1 plan lists no red PR per gate and no G16 pushes. This run opened no red PR and tried no push.
+
+### Metrics, round 2
+
+| Metric | Value |
+|---|---|
+| Defects after acceptance | None yet: acceptance is step 8 |
+| Rejections | 0 |
+| Rework | PR #53: one fix PR after the S11 review (M1, L1, L2, L7, L8) |
+| Late finds by round | Step 7 round 1: no product finding. Step 7 round 2: no product finding; F4 is a test gap. |
+| Test disputes | No new dispute in round 2 |
+| Escalations | The user answers of 2026-11-28 in the S10 and S11 specs (header, menu, Rename, folders, unread, hand) |
+| Agent runs against budget | Validator: 2 of 2 in the brief. Milestone total: not in the files. Budget: 55 in the brief, 75 in `user-preferences.md`, 80 in the S11 spec (F3). |
