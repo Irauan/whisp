@@ -30,6 +30,7 @@ Principle: automated evidence replaces the user's attention. The user owns the s
 
 - Before step 3, the coordinator reads only the files and lists what it cannot answer. The user answers, and the files are updated.
 - Steps 3 to 6 repeat for each story. Independent stories run them in parallel. See "Parallel work".
+- Before step 7, the coordinator starts the app on the milestone head with a test data folder and asks the user for a hand test. Each finding becomes a fix PR or a new story before step 7. User decision, 2026-11-28 (m1 retrospective).
 - Step 7 runs once, after all stories are merged. It runs again only after a fix.
 - A story runs only the acceptance scenarios that it touches. The full acceptance suite runs only in step 7, on a PR to `main` and on `main`. User decision, 2026-11-27.
 - Step 7 turns each regression into a finding. The coordinator fixes it with a fix PR to the milestone branch. Step 7 then runs again.
@@ -120,6 +121,8 @@ Four roles are separate agents. Three work per story, and the validator works pe
 - **Validator**: validates the complete milestone against the brief, as a regression.
 
 A starting session does steps 0 to 2 with the user. A new coordinator session does the rest from the files.
+
+Every agent that writes files runs in its own worktree. Each worktree works on its own branch, which is also on GitHub. A worktree never checks out a branch that another worktree holds. User decision, 2026-11-28 (m1 retrospective).
 
 ## Decisions
 
@@ -234,6 +237,7 @@ The coordinator runs each step that does not wait for another step at the same t
 - Each story uses a worktree, a story branch and a PR to `milestone/<id>`.
 - The coordinator merges a story PR after CI and the reviewer pass. This merge is a squash.
 - Only the user merges a milestone PR to `main`.
+- Merges are squashes only. So a sync between `main` and a milestone is one commit on a branch made from the target, which holds the tree of the source. `git diff` against the source must be empty. A story that needs an unmerged story waits for its squash merge, or plans one rebuild on the milestone after it. User decision, 2026-11-28 (m1 retrospective).
 - A timer never merges.
 - AI uses the GitHub account and the SSH key of the user. 1Password asks the user to approve each signature and SSH connection, as it does now.
 - Each story needs at least two commits: the locked tests, then the code.
