@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Viewing } from './viewing.store'
 
 function setup() {
@@ -46,5 +46,21 @@ describe('Viewing', () => {
     expect(viewing.isSeen('a')).toBe(false)
     viewing.setViewed('a')
     expect(seen).toEqual(['a'])
+  })
+
+  it('logs an error of the unread write, and keeps its state: the focus event does not throw', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const viewing = new Viewing(() => {
+        throw new Error('database is locked')
+      })
+      viewing.setViewed('a')
+      expect(() => viewing.setFocused(true)).not.toThrow()
+      expect(() => viewing.setViewed('b')).not.toThrow()
+      expect(viewing.isSeen('b')).toBe(true)
+      expect(log).toHaveBeenCalledTimes(2)
+    } finally {
+      log.mockRestore()
+    }
   })
 })

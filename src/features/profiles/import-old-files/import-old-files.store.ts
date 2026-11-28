@@ -1,4 +1,5 @@
 import type { Database } from '../../../building-blocks/database'
+import { folderRowPath } from '../../../building-blocks/folder'
 import type { Mode } from '../../../building-blocks/mode'
 
 const IMPORTED = 'old_files_imported'
@@ -33,7 +34,9 @@ export class ImportStore {
     this.database.transaction(() => this.insert(draft))
   }
 
-  private insert(draft: DraftRow): void {
+  private insert(row: DraftRow): void {
+    // The draft takes the path of the folder row of the same folder, as `SessionStore.insert` does.
+    const draft = { ...row, sourcePath: folderRowPath(this.database, row.profileId, row.sourcePath) }
     this.database
       .prepare(
         `INSERT INTO sessions (id, profile_id, title, prompt, mode, source_path, model, attachments, created_at)

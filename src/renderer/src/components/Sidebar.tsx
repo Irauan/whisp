@@ -164,7 +164,8 @@ export function Sidebar({ sessions, folders, askingIds, view, onGo, onToggleFold
         </button>
       </div>
       <div id={SESSIONS_MENU} className="popover sessions-menu" popover="auto" role="group" aria-label="Start a session or add a folder">
-        <p className="popover-title">Start session in</p>
+        {/* The caption and the separator show only when the profile has a folder to start in. */}
+        {folders.length > 0 && <p className="popover-title">Start session in</p>}
         {folders.map((folder) => (
           <MenuOption key={folder.id} menu={SESSIONS_MENU} title={baseName(folder.path)} icon={<Folder size={16} />} onSelect={() => newSessionIn(folder)} />
         ))}
