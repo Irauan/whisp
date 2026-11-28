@@ -63,7 +63,7 @@ test.describe('S1: a picked command becomes a tag at the start of the text', () 
     // The text after the tag.
     await page.keyboard.type('now')
     // The text of "Prompt" is in the order of the screen: the tag first, then "now".
-    await expectComposerText(page, /^\s*compact\s+now\s*$/, `${check}: the tag "compact" must be at the start of "Prompt", and "now" must follow it.`)
+    await expectComposerText(page, /^\s*compact\s*now\s*$/, `${check}: the tag "compact" must be at the start of "Prompt", and "now" must follow it.`)
 
     await expect(sendButton(page), `${check}: "Send" must be enabled with the tag and "now".`).toBeEnabled()
     await sendButton(page).click()

@@ -125,7 +125,8 @@ export async function composerText(field: Locator): Promise<string> {
     const node = element as unknown as { tagName: string; value?: string; innerText: string }
     return node.tagName === 'TEXTAREA' || node.tagName === 'INPUT' ? (node.value ?? '') : node.innerText
   })
-  return text.replaceAll(/[​﻿]/g, '').replaceAll(' ', ' ')
+  // An editor can end its rendered text with a line break. It is not part of the text.
+  return text.replaceAll(/[​﻿]/g, '').replaceAll(' ', ' ').replace(/[\r\n]+$/, '')
 }
 
 /** Checks the text of the composer, with an auto-waiting poll. */
@@ -238,6 +239,9 @@ export async function startRunningSession(chat: ChatApp, page: Page, check: stri
   await reach(chat.control.waitForMessage('session/prompt'), `${check}: the agent did not get the first message.`)
   await expectInTranscript(page, REPLY, `${check}: the reply to the first message does not show.`)
   await expect(stopButton(page), `${check}: the first turn does not end.`).toHaveCount(0)
+  // The mouse stays where "Start session" was. A menu that opens under it would get a hover that
+  // the test did not make, so the mouse goes to the top left corner of the window.
+  await page.mouse.move(0, 0)
 }
 
 /** The text of a `session/prompt` request: its text blocks, joined. */

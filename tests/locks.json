@@ -236,7 +236,7 @@
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/m2-slash-menu/s1/fixture.ts": {
-    "sha256": "292b6ccf542d9a10d308a4d452c68b5c96379df332c25b88bd0a1591da007326",
+    "sha256": "870e223a41f3479c6b2cf4eaf923734917142d3f9921036e5b4ef1d0a0b1f2e3",
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/m2-slash-menu/s1/menu.spec.ts": {
@@ -244,7 +244,7 @@
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/m2-slash-menu/s1/pick.spec.ts": {
-    "sha256": "2ac68ed77a4fe0710fa9db05eee0e9aead54d64eef7e0d0bf4b161b91ceae4db",
+    "sha256": "85cdd14c752561df76e3672cfac250a34cdbe3b128aa0c896f2e5ef0db62177b",
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/m2-slash-menu/s1/profiles.spec.ts": {
@@ -256,7 +256,7 @@
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/m2-slash-menu/s1/updates.spec.ts": {
-    "sha256": "5ea108f4adecab3a3acdc893a275fa9d535ce3c241e8e56cb80d681a6b319b2a",
+    "sha256": "20a06327aeb7cb3fe2e928178e4c236ad76bd2200418e2d86db22606f1e1219b",
     "story": "m2-slash-menu/s1"
   },
   "tests/acceptance/support/hidden-windows.cjs": {

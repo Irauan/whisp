@@ -76,8 +76,10 @@ test.describe('S1: the open menu follows the list of the agent', () => {
     await startRunningSession(chat, page, check)
     await reach(chat.control.waitForGate('list'), `${check}: the agent did not reach the gate of its list.`)
 
-    await openMenu(page, check)
-    await expect(main(page).getByText(LOADING, { exact: true }), `${check}: the menu must show "${LOADING}" before the agent sends its list.`).toBeVisible()
+    // The menu shows the loading text. The test does not ask for the listbox before the rows come:
+    // a menu with no row can show its state text outside a listbox.
+    await typeInComposer(page, '/', check)
+    await expect(main(page).getByText(LOADING, { exact: true }), `${check}: typing "/" must show "${LOADING}" before the agent sends its list.`).toBeVisible()
     await expect(menuRows(page), `${check}: the menu must show no row before the list comes.`).toHaveCount(0)
 
     await chat.control.open('list')
