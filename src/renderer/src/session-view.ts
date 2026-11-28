@@ -63,8 +63,11 @@ export function applyChange(view: SessionSnapshot, change: Change): SessionSnaps
     case 'mode':
       return { ...view, liveMode: change.mode }
     case 'model':
-      // No other event changes the session row: the model of the refusal fallback shows at once.
+      // The model of the refusal fallback shows at once.
       return { ...view, session: { ...view.session, model: change.model } }
+    case 'title':
+      // The title of the agent, or of a rename, shows at once. The `model` and `title` events change the session row.
+      return { ...view, session: { ...view.session, title: change.title } }
   }
 }
 

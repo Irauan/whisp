@@ -359,5 +359,14 @@ describe('Transcript', () => {
       transcript.setModel('s1', 'claude-opus-5-5')
       expect(events.at(-1)?.change).toEqual({ type: 'model', model: 'claude-opus-5-5' })
     })
+
+    it('tells the window the new title, and sends nothing for a session that is gone', () => {
+      const { events, transcript } = setup()
+      transcript.setTitle('s1', 'Greeting test')
+      expect(events.map((event) => event.change)).toEqual([{ type: 'title', title: 'Greeting test' }])
+      transcript.forget('s1')
+      transcript.setTitle('s1', 'Late title')
+      expect(events).toHaveLength(1)
+    })
   })
 })

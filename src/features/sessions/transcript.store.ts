@@ -196,6 +196,12 @@ export class Transcript {
     this.emit(sessionId, { type: 'model', model })
   }
 
+  /** The session has another title now. The caller saved it first. Tells the window. */
+  setTitle(sessionId: string, title: string): void {
+    if (this.gone.has(sessionId)) return
+    this.emit(sessionId, { type: 'title', title })
+  }
+
   setStatus(sessionId: string, status: SessionStatus): void {
     if (this.gone.has(sessionId) || this.statusOf(sessionId) === status) return
     this.statuses.set(sessionId, status)

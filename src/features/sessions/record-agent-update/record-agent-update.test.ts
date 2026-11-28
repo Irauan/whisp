@@ -167,6 +167,57 @@ describe('record-agent-update: the live mode and the model', () => {
   })
 })
 
+describe('record-agent-update: the title', () => {
+  const titles = (events: SessionEvent[]) => events.flatMap((event) => (event.change.type === 'title' ? [event.change.title] : []))
+
+  it('cleans the title, saves it with the source agent, then tells the window', () => {
+    const { store, events, record } = setup()
+    record({ type: 'title', title: '  Greeting test  \nSecond line' })
+    expect(store.find('s1')?.title).toBe('Greeting test')
+    expect(store.titleSourceOf('s1')).toBe('agent')
+    expect(titles(events)).toEqual(['Greeting test'])
+  })
+
+  it('changes nothing for a blank title, for a blank first line, and for the saved title', () => {
+    const { store, events, record } = setup()
+    record({ type: 'title', title: 'Greeting test' })
+    const before = events.length
+    record({ type: 'title', title: '' }, { type: 'title', title: '\nGreeting' }, { type: 'title', title: ' Greeting test ' })
+    expect(events).toHaveLength(before)
+    expect(store.find('s1')?.title).toBe('Greeting test')
+  })
+
+  it('replaces an earlier title of the agent', () => {
+    const { store, record, events } = setup()
+    record({ type: 'title', title: 'First' }, { type: 'title', title: 'Second' })
+    expect(store.find('s1')?.title).toBe('Second')
+    expect(titles(events)).toEqual(['First', 'Second'])
+  })
+
+  it('never replaces a title that the user typed, and sends no event', () => {
+    const { store, events, record } = setup()
+    store.setTitle('s1', 'My name', 'user')
+    record({ type: 'title', title: 'Agent name' })
+    expect(store.find('s1')?.title).toBe('My name')
+    expect(events).toEqual([])
+  })
+
+  it('sends no event when the save fails, and the error goes up to the caller', () => {
+    const { store, events, record } = setup()
+    store.setTitle = () => {
+      throw new Error('disk full')
+    }
+    expect(() => record({ type: 'title', title: 'Greeting test' })).toThrow('disk full')
+    expect(events).toEqual([])
+  })
+
+  it('changes nothing for a session that does not exist', () => {
+    const { events, store } = setup()
+    recordAgentUpdateHandler({ transcript: undefined as never, store }, { sessionId: 'missing', update: { type: 'title', title: 'Late' } })
+    expect(events).toEqual([])
+  })
+})
+
 describe('record-agent-update: the requests of the agent', () => {
   const permission: PermissionRequest = {
     id: 'r1',

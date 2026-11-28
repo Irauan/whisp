@@ -1222,6 +1222,23 @@ describe('sessions.send-message, the idle release (S9)', () => {
     expect(processes.idleSince('s1')).toEqual(clock.now())
   })
 
+  it('restarts the idle time at a title of the agent outside a turn, as at any other update (S10-9)', async () => {
+    const result = setup()
+    const clock = movable(result)
+    const { processes, send, processOf } = result
+    const first = send('s1', 'One')
+    const agent = await processOf(0)
+    agent.becomeReady('a1')
+    await agent.ready
+    agent.turn.resolve(ok('end_turn'))
+    await first.finished
+    expect(processes.idleSince('s1')).toEqual(clock.now())
+
+    clock.advance(20 * 60_000)
+    agent.say({ type: 'title', title: 'Late title' })
+    expect(processes.idleSince('s1')).toEqual(clock.now())
+  })
+
   it('waits for the close of a process that the release closes before the gate and the start, then starts one new process that resumes (S9-3, rules 7 and 8)', async () => {
     const result = setup()
     const clock = movable(result)

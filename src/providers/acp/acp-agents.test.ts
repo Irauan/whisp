@@ -534,6 +534,16 @@ describe('translateUpdate', () => {
     expect(translateUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'image', data: '', mimeType: 'image/png' } })).toBeNull()
   })
 
+  it('gives a session_info_update with a string title as the title of the port, and no update for the other ones', () => {
+    expect(translateUpdate({ sessionUpdate: 'session_info_update', title: 'Greeting test', updatedAt: '2026-11-28T10:00:00.000Z', _meta: { a: 1 } })).toEqual({
+      type: 'title',
+      title: 'Greeting test'
+    })
+    expect(translateUpdate({ sessionUpdate: 'session_info_update', title: null, updatedAt: '2026-11-28T10:00:00.000Z' })).toBeNull()
+    expect(translateUpdate({ sessionUpdate: 'session_info_update', _meta: { promptSuggestion: 'Try the tests' } })).toBeNull()
+    expect(translateUpdate({ sessionUpdate: 'session_info_update', title: 7 as never })).toBeNull()
+  })
+
   it('gives an unknown tool status as null in an update, and as pending in a new call', () => {
     expect(translateUpdate({ sessionUpdate: 'tool_call_update', toolCallId: 'a', status: 'weird' as never })).toMatchObject({ status: null })
     expect(translateUpdate({ sessionUpdate: 'tool_call', toolCallId: 'a', title: 't', status: 'weird' as never })).toMatchObject({ status: 'pending' })

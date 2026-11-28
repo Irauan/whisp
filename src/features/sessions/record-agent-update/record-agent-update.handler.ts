@@ -1,6 +1,7 @@
 import type { AgentUpdate } from '../../../building-blocks/agent.port'
 import { closedWithout, type AgentRequestEvent } from '../cards'
 import { noticeOfModeChange } from '../entry'
+import { titleOf } from '../session'
 import type { SessionStore } from '../session.store'
 import type { Transcript } from '../transcript.store'
 
@@ -54,6 +55,16 @@ export function recordAgentUpdateHandler({ transcript, store }: RecordAgentUpdat
       store.setModel(sessionId, update.model)
       transcript.setModel(sessionId, update.model)
       return
+    case 'title': {
+      // Spec S10: clean first, then check for blank. A blank title, a title equal to the saved one, and a title
+      // for a session that is gone change nothing. The store saves first: a failed save sends no event.
+      const title = titleOf(update.title)
+      const saved = store.find(sessionId)?.title
+      if (title === '' || saved === undefined || title === saved) return
+      // A title of the agent never replaces a title of the user: the store refuses it, so no event goes out.
+      if (store.setTitle(sessionId, title, 'agent')) transcript.setTitle(sessionId, title)
+      return
+    }
   }
 }
 

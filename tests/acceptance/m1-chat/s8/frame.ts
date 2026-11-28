@@ -5,7 +5,7 @@
 // or a wait for the next animation frames of the window.
 //
 // The UI that these tests expect (spec `s8-plan-widget.md`). The S1 to S4, S7 and A11 contracts stay.
-// - Frame: the session window is a fixed frame. The header is at the top, the log "Transcript" is
+// - Frame: the session window is a fixed frame. The title strip is at the top, the log "Transcript" is
 //   the only scroll area, and the bottom dock is always in view.
 // - The log "Transcript" is the scroll element itself (overflow-y auto or scroll). No element
 //   around it scrolls, and the page does not scroll.
@@ -15,8 +15,10 @@
 // - Follow: while the log is at the bottom, it stays at the bottom when new entries and streamed
 //   text come. When the user scrolled up, the log keeps the position. When the user scrolls back to
 //   the bottom, it follows again.
-// - Header: the title (the heading of level 1) and the button "Delete session", nothing else. No
-//   facts row: no "Profile", no "Folder", no folder path.
+// - Header: the title (the heading of level 1) and the button "Session options", nothing else. No
+//   facts row: no "Profile", no "Folder", no folder path. S10 (user decision, 2026-11-28): the
+//   header row is gone. The title and "Session options" are in the title strip, always in view, and
+//   "Delete session" is an item of the menu "Session options".
 // - Composer: "Prompt" is a `<textarea>` with the placeholder "Reply to Claude". It is at least
 //   2 lines high. It grows with its content up to 8 lines (`COMPOSER_MAX_LINES`), then it scrolls
 //   inside. A control row sits inside the rounded box, below the text: at the left "Add context",

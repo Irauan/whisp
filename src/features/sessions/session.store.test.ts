@@ -127,6 +127,37 @@ describe('SessionStore: the agent runs of a session', () => {
     expect(store.find('s1')?.model).toBe('claude-opus-5-5')
     expect(store.setModel('missing', 'claude-opus-5-5')).toBe(false)
   })
+
+  it('saves the title with its source, starts with the source prompt, and refuses an unknown session and a bad source', () => {
+    const { store } = setup()
+    expect(store.titleSourceOf('s1')).toBe('prompt')
+    expect(store.titleSourceOf('missing')).toBeNull()
+    expect(store.setTitle('s1', 'Greeting test', 'agent')).toBe(true)
+    expect(store.find('s1')?.title).toBe('Greeting test')
+    expect(store.titleSourceOf('s1')).toBe('agent')
+    expect(store.setTitle('s1', 'My name', 'user')).toBe(true)
+    expect(store.titleSourceOf('s1')).toBe('user')
+    expect(store.setTitle('missing', 'Any', 'agent')).toBe(false)
+    expect(() => store.setTitle('s1', 'Other', 'robot' as never)).toThrow()
+    expect(() => store.setTitle('s1', 'Other', 'prompt' as never)).toThrow()
+    expect(store.find('s1')?.title).toBe('My name')
+  })
+
+  it('never lets a title of the agent replace a title of the user, and lets a later rename replace it', () => {
+    const { store } = setup()
+    expect(store.setTitle('s1', 'My name', 'user')).toBe(true)
+    expect(store.setTitle('s1', 'Agent name', 'agent')).toBe(false)
+    expect(store.find('s1')?.title).toBe('My name')
+    expect(store.titleSourceOf('s1')).toBe('user')
+    expect(store.setTitle('s1', 'Newer name', 'user')).toBe(true)
+    expect(store.find('s1')?.title).toBe('Newer name')
+  })
+
+  it('reads a row with an unknown title source as a defect', () => {
+    const { database, store } = setup()
+    database.prepare("UPDATE sessions SET title_source = 'robot' WHERE id = 's1'").run()
+    expect(() => store.titleSourceOf('s1')).toThrow()
+  })
 })
 
 describe('SessionStore: the entries of a session', () => {
